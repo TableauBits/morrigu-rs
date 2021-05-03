@@ -1,0 +1,16 @@
+[package]
+name = "morrigu"
+version = "0.1.0"
+authors = ["Ithyx <lamidey.m@gmail.com>"]
+edition = "2018"
+
+[lib]
+name = "morrigu"
+path = "src/morrigu/lib.rs"
+
+[[bin]]
+name = "sample_app"
+path = "src/sample_app/bin.rs"
+
+[dependencies]
+winit = "0.24.0"
