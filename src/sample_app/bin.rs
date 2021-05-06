@@ -1,9 +1,6 @@
-use morrigu::{
-    self,
-    core::{
-        application::Application,
-        layer::{Layer, Transition},
-    },
+use morrigu::core::{
+    application::Application,
+    layer::{Layer, Transition},
 };
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 
@@ -65,6 +62,6 @@ impl Layer for SampleLayerB {
 }
 
 pub fn main() {
-    let mut test = Application::new(Box::new(SampleLayerA {}));
-    test.run();
+    let mut test = Application::new();
+    test.run(Box::new(SampleLayerA {}));
 }

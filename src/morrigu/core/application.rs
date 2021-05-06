@@ -1,41 +1,36 @@
 use super::layer::{LayerRef, Transition};
 use super::timestep::Timestep;
+use crate::rendering::vk_renderer::{Renderer, WindowSpecification};
 use winit::{
     self,
-    dpi::PhysicalSize,
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     platform::run_return::EventLoopExtRunReturn,
 };
-
-pub struct WindowSpecification<'a> {
-    pub name: &'a str,
-    pub width: u32,
-    pub height: u32,
-}
 
 pub struct Application<'a> {
     running: bool,
     window: WindowSpecification<'a>,
     layers: Vec<LayerRef>,
     last_time: std::time::Instant,
+
+    renderer: Renderer,
 }
 
 impl<'a> Application<'a> {
-    pub fn new(base_layer: LayerRef) -> Application<'a> {
-        let mut new_app = Application {
+    pub fn new() -> Application<'a> {
+        Application {
             running: false,
             window: WindowSpecification {
                 name: "Morigu app",
+                version: (1, 0, 0),
                 width: 1280,
                 height: 720,
             },
             layers: Vec::new(),
             last_time: std::time::Instant::now(),
-        };
-        new_app.push_layer(base_layer);
-
-        new_app
+            renderer: Renderer::new(),
+        }
     }
 
     pub fn from_spec(spec: WindowSpecification<'a>) -> Application<'a> {
@@ -44,20 +39,16 @@ impl<'a> Application<'a> {
             window: spec,
             layers: Vec::new(),
             last_time: std::time::Instant::now(),
+            renderer: Renderer::new(),
         }
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self, base_layer: LayerRef) {
         self.running = true;
         let mut event_loop = EventLoop::new();
-        let _window = winit::window::WindowBuilder::new()
-            .with_title(self.window.name)
-            .with_inner_size(PhysicalSize {
-                width: self.window.width,
-                height: self.window.height,
-            })
-            .build(&event_loop);
+        self.renderer.init(&self.window, &event_loop);
 
+        self.push_layer(base_layer);
         event_loop.run_return(move |event, _, control_flow| {
             let transition = match event {
                 Event::WindowEvent {
