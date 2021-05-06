@@ -1,10 +1,17 @@
 use std::sync::Arc;
 use vulkano::{
     device::{Device, DeviceExtensions},
+    format::Format,
+    image::{ImageUsage, SwapchainImage},
     instance::{
-        ApplicationInfo, Instance, PhysicalDevice, PhysicalDeviceType, PhysicalDevicesIter, Version,
+        debug::{DebugCallback, MessageSeverity, MessageType},
+        ApplicationInfo, Instance, PhysicalDevice, PhysicalDeviceType, PhysicalDevicesIter,
+        Version,
     },
-    swapchain::Surface,
+    swapchain::{
+        Capabilities, ColorSpace, FullscreenExclusive, PresentMode, Surface, SurfaceTransform,
+        Swapchain,
+    },
 };
 use vulkano_win::{self, VkSurfaceBuild};
 use winit::{
@@ -20,21 +27,23 @@ pub struct WindowSpecification<'a> {
     pub height: u32,
 }
 
+#[derive(Default)]
 pub struct Renderer {
     instance: Option<Arc<Instance>>,
     surface: Option<Arc<Surface<Window>>>,
     device: Option<Arc<Device>>,
+    capabilities: Option<Capabilities>,
     queue: Option<Arc<vulkano::device::Queue>>,
+    swapchain: Option<Arc<Swapchain<Window>>>,
+    images: Vec<Arc<SwapchainImage<Window>>>,
+    sc_format: Option<Format>,
+
+    _debug_callback: Option<DebugCallback>,
 }
 
 impl Renderer {
     pub fn new() -> Renderer {
-        Renderer {
-            instance: None,
-            surface: None,
-            device: None,
-            queue: None,
-        }
+        Default::default()
     }
 
     pub fn init(&mut self, window: &WindowSpecification, event_loop: &EventLoop<()>) {
@@ -48,6 +57,8 @@ impl Renderer {
             window,
             event_loop,
         );
+
+        self.init_swapchain();
     }
 
     fn init_vulkan(
@@ -82,6 +93,25 @@ impl Renderer {
             )
             .expect("Failed to create Vulkan instance!"),
         );
+
+        self._debug_callback = DebugCallback::new(
+            self.instance.as_ref().unwrap(),
+            MessageSeverity {
+                error: true,
+                warning: true,
+                information: true,
+                verbose: true,
+            },
+            MessageType {
+                general: true,
+                validation: true,
+                performance: true,
+            },
+            |msg| {
+                println!("[VK]: {}", msg.description);
+            },
+        )
+        .ok();
     }
 
     fn init_device(&mut self, window: &WindowSpecification, event_loop: &EventLoop<()>) {
@@ -100,6 +130,8 @@ impl Renderer {
                 .build_vk_surface(&event_loop, self.instance.clone().unwrap())
                 .expect("Failed to create window!"),
         );
+
+        self.capabilities = self.surface.as_ref().unwrap().capabilities(physical).ok();
 
         // find a queue family that supports graphics and works with our surface
         let queue_family = physical
@@ -129,6 +161,42 @@ impl Renderer {
         .expect("Failed to create logical device!");
         self.device = Some(device);
         self.queue = Some(queues.next().expect("Device Queue list cannot be empty!"));
+    }
+
+    fn init_swapchain(&mut self) {
+        let supported_alpha = self
+            .capabilities
+            .as_ref()
+            .unwrap()
+            .supported_composite_alpha
+            .iter()
+            .next()
+            .unwrap();
+
+        self.sc_format = Some(self.capabilities.as_ref().unwrap().supported_formats[0].0);
+
+        let dims: [u32; 2] = self.surface.as_ref().unwrap().window().inner_size().into();
+
+        let (swapchain, images) = Swapchain::new(
+            self.device.as_ref().unwrap().clone(),
+            self.surface.as_ref().unwrap().clone(),
+            self.capabilities.as_ref().unwrap().min_image_count,
+            self.sc_format.unwrap(),
+            dims,
+            1,
+            ImageUsage::color_attachment(),
+            self.queue.as_ref().unwrap(),
+            SurfaceTransform::Identity,
+            supported_alpha,
+            PresentMode::Fifo,
+            FullscreenExclusive::Default,
+            true,
+            ColorSpace::SrgbNonLinear,
+        )
+        .expect("Failed to create swapchain!");
+
+        self.swapchain = Some(swapchain);
+        self.images = images;
     }
 }
 
