@@ -50,13 +50,18 @@ fn device_type_to_str(device_type: PhysicalDeviceType) -> &'static str {
     }
 }
 
+struct QueueInfo {
+    handle: vk::Queue,
+    family_index: u32,
+}
+
 pub struct Renderer {
     #[allow(dead_code)]
     debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
 
+    present_queue: QueueInfo,
     device: ash::Device,
     physical_device: vk::PhysicalDevice,
-    queue_family_index: u32,
     surface: vk::SurfaceKHR,
     instance: ash::Instance,
     entry: ash::Entry,
@@ -287,12 +292,16 @@ impl<'a> RendererBuilder<'a> {
         );
 
         let device = self.create_device(&instance, &physical_device, queue_family_index);
+        let present_queue = QueueInfo {
+            handle: unsafe { device.get_device_queue(queue_family_index, 0) },
+            family_index: queue_family_index,
+        };
 
         Renderer {
             debug_messenger,
+            present_queue,
             device,
             physical_device,
-            queue_family_index,
             surface,
             instance,
             entry,

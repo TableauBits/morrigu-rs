@@ -1,14 +1,22 @@
 mod renderer;
 
+use std::time::{Duration, Instant};
+
 use winit::{
     dpi::PhysicalSize,
-    event_loop::EventLoop,
+    event::{self, Event::WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    platform::run_return::EventLoopExtRunReturn,
     window::{Window, WindowBuilder},
 };
 
-use renderer::Renderer;
+use renderer::RendererBuilder;
 
-pub struct ApplicationBuilder<'a> {
+pub trait ApplicationState {
+    fn on_update(&mut self, dt: Duration);
+}
+
+pub struct ApplicationConfig<'a> {
     width: u32,
     height: u32,
     window_name: &'a str,
@@ -16,15 +24,9 @@ pub struct ApplicationBuilder<'a> {
     version: (u32, u32, u32),
 }
 
-pub struct Application {
-    event_loop: EventLoop<()>,
-    window: Window,
-    renderer: Renderer,
-}
-
-impl<'a> ApplicationBuilder<'a> {
-    pub fn new() -> ApplicationBuilder<'a> {
-        ApplicationBuilder {
+impl<'a> ApplicationConfig<'a> {
+    pub fn new() -> ApplicationConfig<'a> {
+        ApplicationConfig {
             width: 1280,
             height: 720,
             window_name: "Morrigu sample application",
@@ -54,8 +56,8 @@ impl<'a> ApplicationBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> Application {
-        let event_loop = EventLoop::new();
+    pub fn run(self, state: &mut impl ApplicationState) {
+        let mut event_loop = EventLoop::new();
 
         let window = WindowBuilder::new()
             .with_inner_size(PhysicalSize::new(self.width, self.height))
@@ -63,17 +65,28 @@ impl<'a> ApplicationBuilder<'a> {
             .build(&event_loop)
             .expect("Failed to create window!");
 
-        let renderer = renderer::RendererBuilder::new(&window)
+        let renderer = RendererBuilder::new(&window)
             .with_name(self.application_name)
             .with_version(self.version.0, self.version.1, self.version.2)
             .build();
 
-        Application {
-            event_loop,
-            window,
-            renderer,
-        }
+        let mut prev_time = Instant::now();
+
+        event_loop.run_return(|event, _, control_flow| {
+            *control_flow = ControlFlow::Wait;
+
+            let delta = prev_time.elapsed();
+            prev_time = Instant::now();
+
+            state.on_update(delta);
+
+            match event {
+                WindowEvent {
+                    event: event::WindowEvent::CloseRequested,
+                    ..
+                } => *control_flow = ControlFlow::Exit,
+                _ => (),
+            }
+        });
     }
 }
-
-impl Application {}
