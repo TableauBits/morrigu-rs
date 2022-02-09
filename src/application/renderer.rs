@@ -1,12 +1,8 @@
 use ash::{
-    extensions::{
-        ext::DebugUtils,
-        khr::{Surface, Swapchain},
-    },
+    extensions::khr::{Surface, Swapchain},
     vk::{self, PhysicalDeviceType},
     Entry, Instance,
 };
-use log::{debug, error, info, warn};
 use std::ffi::{CStr, CString};
 use winit::window::Window;
 
@@ -27,16 +23,16 @@ unsafe extern "system" fn vulkan_debug_callback(
 
     match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => {
-            debug!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
+            log::debug!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
         }
         vk::DebugUtilsMessageSeverityFlagsEXT::INFO => {
-            info!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
+            log::info!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
         }
         vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => {
-            warn!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
+            log::warn!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
         }
         _ => {
-            error!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
+            log::error!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
         }
     }
 
@@ -115,7 +111,7 @@ impl<'a> RendererBuilder<'a> {
                 [CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap()];
             raw_layer_names = layer_names.iter().map(|layer| layer.as_ptr()).collect();
 
-            raw_required_extensions.push(DebugUtils::name().as_ptr());
+            raw_required_extensions.push(ash::extensions::ext::DebugUtils::name().as_ptr());
         }
 
         let instance_info = vk::InstanceCreateInfo::builder()
@@ -132,8 +128,8 @@ impl<'a> RendererBuilder<'a> {
 
     fn create_debug_messenger(
         &self,
-        entry: &ash::Entry,
-        instance: &ash::Instance,
+        _entry: &ash::Entry,
+        _instance: &ash::Instance,
     ) -> Option<vk::DebugUtilsMessengerEXT> {
         #[allow(unused_assignments)]
         #[allow(unused_mut)]
@@ -154,7 +150,7 @@ impl<'a> RendererBuilder<'a> {
                 .build();
 
             debug_messenger = unsafe {
-                Some(DebugUtils::new(entry, instance)
+                Some(ash::extensions::ext::DebugUtils::new(_entry, _instance)
                 .create_debug_utils_messenger(&debug_info, None)
                 .expect("Failed to create debug messenger. Try compiling a release build instead?")
 					)
@@ -296,10 +292,10 @@ impl<'a> RendererBuilder<'a> {
         let device_vendor = vendor_id_to_str(device_properties.vendor_id);
         let device_type = device_type_to_str(device_properties.device_type);
         let device_supported_version = device_properties.api_version;
-        info!("Selected device: {device_name}");
-        debug!("\tVendor: {device_vendor}");
-        debug!("\tType: {device_type}");
-        debug!(
+        log::info!("Selected device: {device_name}");
+        log::debug!("\tVendor: {device_vendor}");
+        log::debug!("\tType: {device_type}");
+        log::debug!(
             "\tSupported API version: {}.{}.{} (requested {}.{}.{})",
             vk::api_version_major(device_supported_version),
             vk::api_version_minor(device_supported_version),
