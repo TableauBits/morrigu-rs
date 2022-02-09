@@ -13,6 +13,7 @@ impl ApplicationState for MachaApplication {
 
 fn init_logging() {
     #[allow(unused_assignments)]
+    #[allow(unused_mut)]
     let mut env = env_logger::Env::default().default_filter_or("info");
     #[cfg(debug_assertions)]
     {

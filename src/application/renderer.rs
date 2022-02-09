@@ -100,12 +100,14 @@ impl<'a> RendererBuilder<'a> {
 
         let required_extensions = ash_window::enumerate_required_extensions(self.window_handle)
             .expect("Failed to query extensions!");
+        #[allow(unused_mut)]
         let mut raw_required_extensions = required_extensions
             .iter()
             .map(|extension| extension.as_ptr())
             .collect::<Vec<_>>();
 
         #[allow(unused_assignments)]
+        #[allow(unused_mut)]
         let mut raw_layer_names = vec![];
         #[cfg(debug_assertions)]
         {
@@ -134,6 +136,7 @@ impl<'a> RendererBuilder<'a> {
         instance: &ash::Instance,
     ) -> Option<vk::DebugUtilsMessengerEXT> {
         #[allow(unused_assignments)]
+        #[allow(unused_mut)]
         let mut debug_messenger = None;
         #[cfg(debug_assertions)]
         {
