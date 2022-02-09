@@ -7,7 +7,7 @@ use winit::{
     event::{self, Event::WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     platform::run_return::EventLoopExtRunReturn,
-    window::{Window, WindowBuilder},
+    window::WindowBuilder,
 };
 
 use renderer::RendererBuilder;
@@ -25,7 +25,7 @@ pub struct ApplicationConfig<'a> {
 }
 
 impl<'a> ApplicationConfig<'a> {
-    pub fn new() -> ApplicationConfig<'a> {
+    pub fn new() -> Self {
         ApplicationConfig {
             width: 1280,
             height: 720,
@@ -88,5 +88,11 @@ impl<'a> ApplicationConfig<'a> {
                 _ => (),
             }
         });
+    }
+}
+
+impl<'a> Default for ApplicationConfig<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }

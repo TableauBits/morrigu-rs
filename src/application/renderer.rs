@@ -6,6 +6,7 @@ use ash::{
     vk::{self, PhysicalDeviceType},
     Entry, Instance,
 };
+use log::{debug, error, info, warn};
 use std::ffi::{CStr, CString};
 use winit::window::Window;
 
@@ -24,7 +25,21 @@ unsafe extern "system" fn vulkan_debug_callback(
         CStr::from_ptr(callback_data_deref.p_message).to_string_lossy()
     };
 
-    println!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}");
+    match message_severity {
+        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => {
+            debug!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
+        }
+        vk::DebugUtilsMessageSeverityFlagsEXT::INFO => {
+            info!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
+        }
+        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => {
+            warn!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
+        }
+        _ => {
+            error!("{message_severity:?} ({message_type:?}): [ID: {message_id_str}] {message}")
+        }
+    }
+
     vk::FALSE
 }
 
@@ -46,7 +61,7 @@ fn device_type_to_str(device_type: PhysicalDeviceType) -> &'static str {
         PhysicalDeviceType::DISCRETE_GPU => "discrete GPU",
         PhysicalDeviceType::VIRTUAL_GPU => "virtual GPU",
         PhysicalDeviceType::CPU => "CPU",
-        PhysicalDeviceType::OTHER | _ => "other",
+        _ => "other",
     }
 }
 
@@ -150,7 +165,7 @@ impl<'a> RendererBuilder<'a> {
         &self,
         entry: &ash::Entry,
         instance: &ash::Instance,
-        surface: &vk::SurfaceKHR,
+        surface: vk::SurfaceKHR,
         required_version: u32,
     ) -> (vk::PhysicalDevice, u32) {
         let physical_devices = unsafe { instance.enumerate_physical_devices() }
@@ -177,7 +192,7 @@ impl<'a> RendererBuilder<'a> {
                         surface_wrapper.get_physical_device_surface_support(
                             raw_physical_device,
                             queue_index as u32,
-                            surface.clone(),
+                            surface,
                         )
                     }
                     .expect("Failed to query surface compatibility!");
@@ -206,7 +221,7 @@ impl<'a> RendererBuilder<'a> {
     fn create_device(
         &self,
         instance: &ash::Instance,
-        physical_device: &vk::PhysicalDevice,
+        physical_device: vk::PhysicalDevice,
         queue_family_index: u32,
     ) -> ash::Device {
         let raw_extensions_name = [Swapchain::name().as_ptr()];
@@ -224,13 +239,13 @@ impl<'a> RendererBuilder<'a> {
             .queue_create_infos(&queue_infos)
             .build();
 
-        unsafe { instance.create_device(physical_device.clone(), &device_create_info, None) }
+        unsafe { instance.create_device(physical_device, &device_create_info, None) }
             .expect("Failed to create logial device!")
     }
 }
 
 impl<'a> RendererBuilder<'a> {
-    pub fn new(window_handle: &'a Window) -> RendererBuilder<'a> {
+    pub fn new(window_handle: &'a Window) -> Self {
         RendererBuilder {
             window_handle,
             application_name: CString::new("").unwrap(),
@@ -262,7 +277,7 @@ impl<'a> RendererBuilder<'a> {
         let (physical_device, queue_family_index) = self.select_physical_device(
             &entry,
             &instance,
-            &surface,
+            surface,
             vk::make_api_version(
                 0,
                 required_api_version.0,
@@ -278,10 +293,10 @@ impl<'a> RendererBuilder<'a> {
         let device_vendor = vendor_id_to_str(device_properties.vendor_id);
         let device_type = device_type_to_str(device_properties.device_type);
         let device_supported_version = device_properties.api_version;
-        println!("Selected device: {device_name}");
-        println!("\tVendor: {device_vendor}");
-        println!("\tType: {device_type}");
-        println!(
+        info!("Selected device: {device_name}");
+        debug!("\tVendor: {device_vendor}");
+        debug!("\tType: {device_type}");
+        debug!(
             "\tSupported API version: {}.{}.{} (requested {}.{}.{})",
             vk::api_version_major(device_supported_version),
             vk::api_version_minor(device_supported_version),
@@ -291,7 +306,7 @@ impl<'a> RendererBuilder<'a> {
             required_api_version.2,
         );
 
-        let device = self.create_device(&instance, &physical_device, queue_family_index);
+        let device = self.create_device(&instance, physical_device, queue_family_index);
         let present_queue = QueueInfo {
             handle: unsafe { device.get_device_queue(queue_family_index, 0) },
             family_index: queue_family_index,
