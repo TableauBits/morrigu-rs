@@ -66,20 +66,30 @@ struct QueueInfo {
     family_index: u32,
 }
 
+struct SurfaceInfo {
+    handle: vk::SurfaceKHR,
+    format: vk::SurfaceFormatKHR,
+    capabilities: vk::SurfaceCapabilitiesKHR,
+}
+
 pub struct Renderer {
     #[allow(dead_code)]
     debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
 
+    swapchain: vk::SwapchainKHR,
     present_queue: QueueInfo,
     device: ash::Device,
     physical_device: vk::PhysicalDevice,
-    surface: vk::SurfaceKHR,
+    surface: SurfaceInfo,
     instance: ash::Instance,
     entry: ash::Entry,
 }
 
 pub struct RendererBuilder<'a> {
     window_handle: &'a Window,
+    width: u32,
+    height: u32,
+    preferred_present_mode: vk::PresentModeKHR,
     application_name: CString,
     application_version: u32,
 }
@@ -162,15 +172,13 @@ impl<'a> RendererBuilder<'a> {
 
     fn select_physical_device(
         &self,
-        entry: &ash::Entry,
-        instance: &ash::Instance,
         surface: vk::SurfaceKHR,
+        instance: &ash::Instance,
+        surface_wrapper: &Surface,
         required_version: u32,
     ) -> (vk::PhysicalDevice, u32) {
         let physical_devices = unsafe { instance.enumerate_physical_devices() }
             .expect("Failed to query physical devices!");
-
-        let surface_wrapper = Surface::new(entry, instance);
 
         let device_selector =
             |physical_device: &vk::PhysicalDevice| -> Option<(vk::PhysicalDevice, u32)> {
@@ -241,15 +249,100 @@ impl<'a> RendererBuilder<'a> {
         unsafe { instance.create_device(physical_device, &device_create_info, None) }
             .expect("Failed to create logial device!")
     }
+
+    fn select_surface_format(
+        &self,
+        surface_formats: Vec<vk::SurfaceFormatKHR>,
+    ) -> vk::SurfaceFormatKHR {
+        surface_formats
+            .iter()
+            .cloned()
+            .find(|&surface_format| {
+                surface_format.format == vk::Format::B8G8R8A8_SRGB
+                    && surface_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
+            })
+            .unwrap_or(surface_formats[0])
+    }
+
+    fn create_swapchain(
+        &self,
+        instance: &ash::Instance,
+        physical_device: vk::PhysicalDevice,
+        device: &ash::Device,
+        surface: &SurfaceInfo,
+        surface_wrapper: &Surface,
+    ) -> (vk::SwapchainKHR, Swapchain) {
+        let mut requested_image_count = surface.capabilities.min_image_count + 1;
+        if surface.capabilities.max_image_count > 0
+            && requested_image_count > surface.capabilities.max_image_count
+        {
+            requested_image_count = surface.capabilities.max_image_count;
+        }
+
+        let surface_extent = match surface.capabilities.current_extent.width {
+            std::u32::MAX => vk::Extent2D {
+                width: self.width,
+                height: self.height,
+            },
+            _ => surface.capabilities.current_extent,
+        };
+
+        let present_modes = unsafe {
+            surface_wrapper
+                .get_physical_device_surface_present_modes(physical_device, surface.handle)
+        }
+        .expect("Failed to query surface present modes!");
+        let present_mode = present_modes
+            .iter()
+            .cloned()
+            .find(|&mode| mode == self.preferred_present_mode)
+            .unwrap_or(vk::PresentModeKHR::FIFO);
+
+        let swapchain_wrapper = Swapchain::new(instance, device);
+
+        let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
+            .surface(surface.handle)
+            .min_image_count(requested_image_count)
+            .image_color_space(surface.format.color_space)
+            .image_format(surface.format.format)
+            .image_extent(surface_extent)
+            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .pre_transform(surface.capabilities.current_transform)
+            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+            .present_mode(present_mode)
+            .clipped(true)
+            .image_array_layers(1)
+            .build();
+
+        let swapchain = unsafe { swapchain_wrapper.create_swapchain(&swapchain_create_info, None) }
+            .expect("Failed to create swapchain!");
+
+        (swapchain, swapchain_wrapper)
+    }
 }
 
 impl<'a> RendererBuilder<'a> {
     pub fn new(window_handle: &'a Window) -> Self {
         RendererBuilder {
             window_handle,
+            width: 1280,
+            height: 720,
+            preferred_present_mode: vk::PresentModeKHR::MAILBOX,
             application_name: CString::new("").unwrap(),
             application_version: 0,
         }
+    }
+
+    pub fn with_dimensions(mut self, width: u32, height: u32) -> Self {
+        self.width = width;
+        self.height = height;
+        self
+    }
+
+    pub fn with_preferred_present_mode(mut self, present_mode: vk::PresentModeKHR) -> Self {
+        self.preferred_present_mode = present_mode;
+        self
     }
 
     pub fn with_name(mut self, name: &'a str) -> Self {
@@ -267,16 +360,17 @@ impl<'a> RendererBuilder<'a> {
         let instance = self.create_instance(&entry);
         let debug_messenger = self.create_debug_messenger(&entry, &instance);
 
-        let surface = unsafe {
+        let surface_handle = unsafe {
             ash_window::create_surface(&entry, &instance, &self.window_handle, None)
                 .expect("Failed to create rendering surface!")
         };
+        let surface_wrapper = Surface::new(&entry, &instance);
 
         let required_api_version = (1, 0, 0);
         let (physical_device, queue_family_index) = self.select_physical_device(
-            &entry,
+            surface_handle,
             &instance,
-            surface,
+            &surface_wrapper,
             vk::make_api_version(
                 0,
                 required_api_version.0,
@@ -284,6 +378,22 @@ impl<'a> RendererBuilder<'a> {
                 required_api_version.2,
             ),
         );
+        let surface_format = self.select_surface_format(
+            unsafe {
+                surface_wrapper.get_physical_device_surface_formats(physical_device, surface_handle)
+            }
+            .expect("Failed to query physical device formats!"),
+        );
+        let surface_capabilities = unsafe {
+            surface_wrapper
+                .get_physical_device_surface_capabilities(physical_device, surface_handle)
+        }
+        .expect("Failed to query physical device capabilities!");
+        let surface = SurfaceInfo {
+            handle: surface_handle,
+            format: surface_format,
+            capabilities: surface_capabilities,
+        };
 
         let device_properties = unsafe { instance.get_physical_device_properties(physical_device) };
         let device_name = unsafe { CStr::from_ptr(device_properties.device_name.as_ptr()) }
@@ -311,7 +421,16 @@ impl<'a> RendererBuilder<'a> {
             family_index: queue_family_index,
         };
 
+        let (swapchain, swapchain_swapper) = self.create_swapchain(
+            &instance,
+            physical_device,
+            &device,
+            &surface,
+            &surface_wrapper,
+        );
+
         Renderer {
+            swapchain,
             debug_messenger,
             present_queue,
             device,

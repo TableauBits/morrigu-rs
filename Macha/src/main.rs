@@ -1,4 +1,4 @@
-use morrigu::application::{ApplicationConfig, ApplicationState};
+use morrigu::application::{ApplicationBuilder, ApplicationState};
 
 struct MachaApplication {
     frame_count: i32,
@@ -26,10 +26,10 @@ fn main() {
     init_logging();
 
     let mut state = MachaApplication { frame_count: 0 };
-    ApplicationConfig::new()
+    ApplicationBuilder::new()
         .with_window_name("Macha editor")
         .with_dimensions(1280, 720)
         .with_application_name("Macha")
         .with_application_version(0, 1, 0)
-        .run(&mut state);
+        .build_and_run(&mut state);
 }

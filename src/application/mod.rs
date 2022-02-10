@@ -2,6 +2,7 @@ mod renderer;
 
 use std::time::{Duration, Instant};
 
+use ash::vk;
 use winit::{
     dpi::PhysicalSize,
     event::{self, Event::WindowEvent},
@@ -16,22 +17,24 @@ pub trait ApplicationState {
     fn on_update(&mut self, dt: Duration);
 }
 
-pub struct ApplicationConfig<'a> {
+pub struct ApplicationBuilder<'a> {
     width: u32,
     height: u32,
     window_name: &'a str,
     application_name: &'a str,
     version: (u32, u32, u32),
+    preferred_present_mode: vk::PresentModeKHR,
 }
 
-impl<'a> ApplicationConfig<'a> {
+impl<'a> ApplicationBuilder<'a> {
     pub fn new() -> Self {
-        ApplicationConfig {
+        ApplicationBuilder {
             width: 1280,
             height: 720,
             window_name: "Morrigu sample application",
             application_name: "Morrigu sample application",
             version: (0, 0, 0),
+            preferred_present_mode: vk::PresentModeKHR::MAILBOX,
         }
     }
 
@@ -56,7 +59,12 @@ impl<'a> ApplicationConfig<'a> {
         self
     }
 
-    pub fn run(self, state: &mut impl ApplicationState) {
+    pub fn with_preferred_present_mode(mut self, present_mode: vk::PresentModeKHR) -> Self {
+        self.preferred_present_mode = present_mode;
+        self
+    }
+
+    pub fn build_and_run(self, state: &mut impl ApplicationState) {
         let mut event_loop = EventLoop::new();
 
         let window = WindowBuilder::new()
@@ -66,6 +74,8 @@ impl<'a> ApplicationConfig<'a> {
             .expect("Failed to create window!");
 
         let renderer = RendererBuilder::new(&window)
+            .with_dimensions(self.width, self.height)
+            .with_preferred_present_mode(self.preferred_present_mode)
             .with_name(self.application_name)
             .with_version(self.version.0, self.version.1, self.version.2)
             .build();
@@ -91,7 +101,7 @@ impl<'a> ApplicationConfig<'a> {
     }
 }
 
-impl<'a> Default for ApplicationConfig<'a> {
+impl<'a> Default for ApplicationBuilder<'a> {
     fn default() -> Self {
         Self::new()
     }
