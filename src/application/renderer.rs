@@ -1,5 +1,8 @@
 use ash::{
-    extensions::khr::{Surface, Swapchain},
+    extensions::{
+        ext::DebugUtils,
+        khr::{Surface, Swapchain},
+    },
     vk::{self, PhysicalDeviceType},
     Entry, Instance,
 };
@@ -70,19 +73,59 @@ struct SurfaceInfo {
     handle: vk::SurfaceKHR,
     format: vk::SurfaceFormatKHR,
     capabilities: vk::SurfaceCapabilitiesKHR,
+    loader: Surface,
+}
+
+struct SwapchainInfo {
+    handle: vk::SwapchainKHR,
+    loader: Swapchain,
+}
+
+#[allow(dead_code)]
+struct DebugMessengerInfo {
+    handle: vk::DebugUtilsMessengerEXT,
+    loader: DebugUtils,
 }
 
 pub struct Renderer {
-    #[allow(dead_code)]
-    debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
-
-    swapchain: vk::SwapchainKHR,
-    present_queue: QueueInfo,
-    device: ash::Device,
-    physical_device: vk::PhysicalDevice,
-    surface: SurfaceInfo,
-    instance: ash::Instance,
     entry: ash::Entry,
+    instance: ash::Instance,
+    surface: SurfaceInfo,
+    physical_device: vk::PhysicalDevice,
+    device: ash::Device,
+    present_queue: QueueInfo,
+    swapchain: SwapchainInfo,
+    command_pool: vk::CommandPool,
+    primary_command_buffer: vk::CommandBuffer,
+
+    #[allow(dead_code)]
+    debug_messenger: Option<DebugMessengerInfo>,
+}
+
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .device_wait_idle()
+                .expect("Failed to wait for device!");
+            self.device.destroy_command_pool(self.command_pool, None);
+            self.swapchain
+                .loader
+                .destroy_swapchain(self.swapchain.handle, None);
+            self.device.destroy_device(None);
+            self.surface
+                .loader
+                .destroy_surface(self.surface.handle, None);
+
+            if let Some(debug_messenger) = &self.debug_messenger {
+                debug_messenger
+                    .loader
+                    .destroy_debug_utils_messenger(debug_messenger.handle, None);
+            }
+
+            self.instance.destroy_instance(None);
+        }
+    }
 }
 
 pub struct RendererBuilder<'a> {
@@ -140,7 +183,7 @@ impl<'a> RendererBuilder<'a> {
         &self,
         _entry: &ash::Entry,
         _instance: &ash::Instance,
-    ) -> Option<vk::DebugUtilsMessengerEXT> {
+    ) -> Option<DebugMessengerInfo> {
         #[allow(unused_assignments)]
         #[allow(unused_mut)]
         let mut debug_messenger = None;
@@ -159,12 +202,17 @@ impl<'a> RendererBuilder<'a> {
                 .pfn_user_callback(Some(vulkan_debug_callback))
                 .build();
 
-            debug_messenger = unsafe {
-                Some(ash::extensions::ext::DebugUtils::new(_entry, _instance)
-                .create_debug_utils_messenger(&debug_info, None)
-                .expect("Failed to create debug messenger. Try compiling a release build instead?")
-					)
-            };
+            let debug_messenger_loader = DebugUtils::new(_entry, _instance);
+            let debug_messenger_handle =
+                unsafe { debug_messenger_loader.create_debug_utils_messenger(&debug_info, None) }
+                    .expect(
+                        "Failed to create debug messenger. Try compiling a release build instead?",
+                    );
+
+            debug_messenger = Some(DebugMessengerInfo {
+                handle: debug_messenger_handle,
+                loader: debug_messenger_loader,
+            });
         }
 
         debug_messenger
@@ -271,7 +319,7 @@ impl<'a> RendererBuilder<'a> {
         device: &ash::Device,
         surface: &SurfaceInfo,
         surface_wrapper: &Surface,
-    ) -> (vk::SwapchainKHR, Swapchain) {
+    ) -> SwapchainInfo {
         let mut requested_image_count = surface.capabilities.min_image_count + 1;
         if surface.capabilities.max_image_count > 0
             && requested_image_count > surface.capabilities.max_image_count
@@ -318,7 +366,10 @@ impl<'a> RendererBuilder<'a> {
         let swapchain = unsafe { swapchain_wrapper.create_swapchain(&swapchain_create_info, None) }
             .expect("Failed to create swapchain!");
 
-        (swapchain, swapchain_wrapper)
+        SwapchainInfo {
+            handle: swapchain,
+            loader: swapchain_wrapper,
+        }
     }
 }
 
@@ -364,13 +415,13 @@ impl<'a> RendererBuilder<'a> {
             ash_window::create_surface(&entry, &instance, &self.window_handle, None)
                 .expect("Failed to create rendering surface!")
         };
-        let surface_wrapper = Surface::new(&entry, &instance);
+        let surface_loader = Surface::new(&entry, &instance);
 
         let required_api_version = (1, 0, 0);
         let (physical_device, queue_family_index) = self.select_physical_device(
             surface_handle,
             &instance,
-            &surface_wrapper,
+            &surface_loader,
             vk::make_api_version(
                 0,
                 required_api_version.0,
@@ -380,19 +431,19 @@ impl<'a> RendererBuilder<'a> {
         );
         let surface_format = self.select_surface_format(
             unsafe {
-                surface_wrapper.get_physical_device_surface_formats(physical_device, surface_handle)
+                surface_loader.get_physical_device_surface_formats(physical_device, surface_handle)
             }
             .expect("Failed to query physical device formats!"),
         );
         let surface_capabilities = unsafe {
-            surface_wrapper
-                .get_physical_device_surface_capabilities(physical_device, surface_handle)
+            surface_loader.get_physical_device_surface_capabilities(physical_device, surface_handle)
         }
         .expect("Failed to query physical device capabilities!");
         let surface = SurfaceInfo {
             handle: surface_handle,
             format: surface_format,
             capabilities: surface_capabilities,
+            loader: surface_loader,
         };
 
         let device_properties = unsafe { instance.get_physical_device_properties(physical_device) };
@@ -421,23 +472,40 @@ impl<'a> RendererBuilder<'a> {
             family_index: queue_family_index,
         };
 
-        let (swapchain, swapchain_swapper) = self.create_swapchain(
+        let swapchain = self.create_swapchain(
             &instance,
             physical_device,
             &device,
             &surface,
-            &surface_wrapper,
+            &surface.loader,
         );
 
+        let command_pool_create_info = vk::CommandPoolCreateInfo::builder()
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+            .queue_family_index(present_queue.family_index);
+        let command_pool = unsafe { device.create_command_pool(&command_pool_create_info, None) }
+            .expect("Failed to create renderer command pool!");
+        let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool(command_pool)
+            .command_buffer_count(1)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .build();
+        let primary_command_buffer =
+            unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }
+                .expect("Failed to allocate primary command buffer!")[0];
+
         Renderer {
-            swapchain,
-            debug_messenger,
-            present_queue,
-            device,
-            physical_device,
-            surface,
-            instance,
             entry,
+            instance,
+            surface,
+            physical_device,
+            device,
+            present_queue,
+            swapchain,
+            command_pool,
+            primary_command_buffer,
+
+            debug_messenger,
         }
     }
 }
