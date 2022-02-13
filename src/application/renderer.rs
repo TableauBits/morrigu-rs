@@ -78,6 +78,8 @@ struct SurfaceInfo {
 
 struct SwapchainInfo {
     handle: vk::SwapchainKHR,
+    images: Vec<vk::Image>,
+    image_views: Vec<vk::ImageView>,
     loader: Swapchain,
 }
 
@@ -101,33 +103,6 @@ pub struct Renderer {
     #[allow(dead_code)]
     debug_messenger: Option<DebugMessengerInfo>,
 }
-
-impl Drop for Renderer {
-    fn drop(&mut self) {
-        unsafe {
-            self.device
-                .device_wait_idle()
-                .expect("Failed to wait for device!");
-            self.device.destroy_command_pool(self.command_pool, None);
-            self.swapchain
-                .loader
-                .destroy_swapchain(self.swapchain.handle, None);
-            self.device.destroy_device(None);
-            self.surface
-                .loader
-                .destroy_surface(self.surface.handle, None);
-
-            if let Some(debug_messenger) = &self.debug_messenger {
-                debug_messenger
-                    .loader
-                    .destroy_debug_utils_messenger(debug_messenger.handle, None);
-            }
-
-            self.instance.destroy_instance(None);
-        }
-    }
-}
-
 pub struct RendererBuilder<'a> {
     window_handle: &'a Window,
     width: u32,
@@ -222,7 +197,7 @@ impl<'a> RendererBuilder<'a> {
         &self,
         surface: vk::SurfaceKHR,
         instance: &ash::Instance,
-        surface_wrapper: &Surface,
+        surface_loader: &Surface,
         required_version: u32,
     ) -> (vk::PhysicalDevice, u32) {
         let physical_devices = unsafe { instance.enumerate_physical_devices() }
@@ -244,7 +219,7 @@ impl<'a> RendererBuilder<'a> {
                         .queue_flags
                         .contains(vk::QueueFlags::GRAPHICS);
                     let is_compatible_with_surface = unsafe {
-                        surface_wrapper.get_physical_device_surface_support(
+                        surface_loader.get_physical_device_surface_support(
                             raw_physical_device,
                             queue_index as u32,
                             surface,
@@ -318,7 +293,7 @@ impl<'a> RendererBuilder<'a> {
         physical_device: vk::PhysicalDevice,
         device: &ash::Device,
         surface: &SurfaceInfo,
-        surface_wrapper: &Surface,
+        surface_loader: &Surface,
     ) -> SwapchainInfo {
         let mut requested_image_count = surface.capabilities.min_image_count + 1;
         if surface.capabilities.max_image_count > 0
@@ -336,7 +311,7 @@ impl<'a> RendererBuilder<'a> {
         };
 
         let present_modes = unsafe {
-            surface_wrapper
+            surface_loader
                 .get_physical_device_surface_present_modes(physical_device, surface.handle)
         }
         .expect("Failed to query surface present modes!");
@@ -346,7 +321,7 @@ impl<'a> RendererBuilder<'a> {
             .find(|&mode| mode == self.preferred_present_mode)
             .unwrap_or(vk::PresentModeKHR::FIFO);
 
-        let swapchain_wrapper = Swapchain::new(instance, device);
+        let swapchain_loader = Swapchain::new(instance, device);
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
             .surface(surface.handle)
@@ -363,12 +338,41 @@ impl<'a> RendererBuilder<'a> {
             .image_array_layers(1)
             .build();
 
-        let swapchain = unsafe { swapchain_wrapper.create_swapchain(&swapchain_create_info, None) }
+        let swapchain = unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }
             .expect("Failed to create swapchain!");
+
+        let image_view_creator = |&image: &vk::Image| {
+            let create_view_info = vk::ImageViewCreateInfo::builder()
+                .view_type(vk::ImageViewType::TYPE_2D)
+                .format(surface.format.format)
+                .components(vk::ComponentMapping {
+                    r: vk::ComponentSwizzle::R,
+                    g: vk::ComponentSwizzle::G,
+                    b: vk::ComponentSwizzle::B,
+                    a: vk::ComponentSwizzle::A,
+                })
+                .subresource_range(vk::ImageSubresourceRange {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                })
+                .image(image)
+                .build();
+            unsafe { device.create_image_view(&create_view_info, None) }
+                .expect("Failed to ceate swapchain image views!")
+        };
+
+        let swapchain_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }
+            .expect("Failed to get swapchain images!");
+        let swapchain_image_views = swapchain_images.iter().map(image_view_creator).collect();
 
         SwapchainInfo {
             handle: swapchain,
-            loader: swapchain_wrapper,
+            images: swapchain_images,
+            image_views: swapchain_image_views,
+            loader: swapchain_loader,
         }
     }
 }
@@ -506,6 +510,37 @@ impl<'a> RendererBuilder<'a> {
             primary_command_buffer,
 
             debug_messenger,
+        }
+    }
+}
+
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .device_wait_idle()
+                .expect("Failed to wait for device!");
+
+            for image_view in &self.swapchain.image_views {
+                self.device.destroy_image_view(*image_view, None);
+            }
+
+            self.device.destroy_command_pool(self.command_pool, None);
+            self.swapchain
+                .loader
+                .destroy_swapchain(self.swapchain.handle, None);
+            self.device.destroy_device(None);
+            self.surface
+                .loader
+                .destroy_surface(self.surface.handle, None);
+
+            if let Some(debug_messenger) = &self.debug_messenger {
+                debug_messenger
+                    .loader
+                    .destroy_debug_utils_messenger(debug_messenger.handle, None);
+            }
+
+            self.instance.destroy_instance(None);
         }
     }
 }
