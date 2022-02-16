@@ -6,8 +6,11 @@ use ash::{
     vk::{self, PhysicalDeviceType},
     Entry, Instance,
 };
+use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use std::ffi::{CStr, CString};
 use winit::window::Window;
+
+use crate::application::allocated_types::AllocatedImage;
 
 #[cfg(debug_assertions)]
 unsafe extern "system" fn vulkan_debug_callback(
@@ -80,6 +83,7 @@ struct SwapchainInfo {
     handle: vk::SwapchainKHR,
     images: Vec<vk::Image>,
     image_views: Vec<vk::ImageView>,
+    depth_image: AllocatedImage,
     loader: Swapchain,
 }
 
@@ -90,19 +94,21 @@ struct DebugMessengerInfo {
 }
 
 pub struct Renderer {
-    entry: ash::Entry,
-    instance: ash::Instance,
-    surface: SurfaceInfo,
-    physical_device: vk::PhysicalDevice,
-    device: ash::Device,
-    present_queue: QueueInfo,
-    swapchain: SwapchainInfo,
-    command_pool: vk::CommandPool,
-    primary_command_buffer: vk::CommandBuffer,
-
     #[allow(dead_code)]
     debug_messenger: Option<DebugMessengerInfo>,
+
+    primary_command_buffer: vk::CommandBuffer,
+    command_pool: vk::CommandPool,
+    swapchain: SwapchainInfo,
+    present_queue: QueueInfo,
+    gpu_allocator: Option<Allocator>,
+    device: ash::Device,
+    physical_device: vk::PhysicalDevice,
+    surface: SurfaceInfo,
+    instance: ash::Instance,
+    entry: ash::Entry,
 }
+
 pub struct RendererBuilder<'a> {
     window_handle: &'a Window,
     width: u32,
@@ -273,6 +279,22 @@ impl<'a> RendererBuilder<'a> {
             .expect("Failed to create logial device!")
     }
 
+    fn create_allocator(
+        &self,
+        instance: ash::Instance,
+        physical_device: vk::PhysicalDevice,
+        device: ash::Device,
+    ) -> Allocator {
+        Allocator::new(&AllocatorCreateDesc {
+            instance,
+            physical_device,
+            device,
+            debug_settings: Default::default(),
+            buffer_device_address: false,
+        })
+        .expect("Failed to create GPU allocator !")
+    }
+
     fn select_surface_format(
         &self,
         surface_formats: Vec<vk::SurfaceFormatKHR>,
@@ -294,6 +316,7 @@ impl<'a> RendererBuilder<'a> {
         device: &ash::Device,
         surface: &SurfaceInfo,
         surface_loader: &Surface,
+        allocator: &mut Allocator,
     ) -> SwapchainInfo {
         let mut requested_image_count = surface.capabilities.min_image_count + 1;
         if surface.capabilities.max_image_count > 0
@@ -368,10 +391,20 @@ impl<'a> RendererBuilder<'a> {
             .expect("Failed to get swapchain images!");
         let swapchain_image_views = swapchain_images.iter().map(image_view_creator).collect();
 
+        let depth_extent = vk::Extent3D::builder()
+            .width(surface_extent.width)
+            .height(surface_extent.height)
+            .depth(1)
+            .build();
+        let depth_image = AllocatedImage::builder(depth_extent)
+            .depth_image_default()
+            .build(device, allocator);
+
         SwapchainInfo {
             handle: swapchain,
             images: swapchain_images,
             image_views: swapchain_image_views,
+            depth_image,
             loader: swapchain_loader,
         }
     }
@@ -476,12 +509,16 @@ impl<'a> RendererBuilder<'a> {
             family_index: queue_family_index,
         };
 
+        let mut gpu_allocator =
+            self.create_allocator(instance.clone(), physical_device, device.clone());
+
         let swapchain = self.create_swapchain(
             &instance,
             physical_device,
             &device,
             &surface,
             &surface.loader,
+            &mut gpu_allocator,
         );
 
         let command_pool_create_info = vk::CommandPoolCreateInfo::builder()
@@ -499,17 +536,18 @@ impl<'a> RendererBuilder<'a> {
                 .expect("Failed to allocate primary command buffer!")[0];
 
         Renderer {
-            entry,
-            instance,
-            surface,
-            physical_device,
-            device,
-            present_queue,
-            swapchain,
-            command_pool,
-            primary_command_buffer,
-
             debug_messenger,
+
+            primary_command_buffer,
+            command_pool,
+            swapchain,
+            present_queue,
+            gpu_allocator: Some(gpu_allocator),
+            device,
+            physical_device,
+            surface,
+            instance,
+            entry,
         }
     }
 }
@@ -526,10 +564,22 @@ impl Drop for Renderer {
             }
 
             self.device.destroy_command_pool(self.command_pool, None);
+
+            if let Some(gpu_allocator) = self.gpu_allocator.as_mut() {
+                let swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
+                swapchain_depth_image.destroy(&self.device, gpu_allocator);
+            }
+
             self.swapchain
                 .loader
                 .destroy_swapchain(self.swapchain.handle, None);
+
+            if let Some(gpu_allocator) = self.gpu_allocator.take() {
+                drop(gpu_allocator);
+            }
+
             self.device.destroy_device(None);
+
             self.surface
                 .loader
                 .destroy_surface(self.surface.handle, None);

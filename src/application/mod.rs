@@ -1,3 +1,4 @@
+mod allocated_types;
 mod renderer;
 
 use std::time::{Duration, Instant};
