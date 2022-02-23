@@ -93,12 +93,21 @@ struct DebugMessengerInfo {
     loader: DebugUtils,
 }
 
+struct SyncObjects {
+    render_fence: vk::Fence,
+    present_semaphore: vk::Semaphore,
+    render_semaphore: vk::Semaphore,
+}
+
 pub struct Renderer {
     #[allow(dead_code)]
     debug_messenger: Option<DebugMessengerInfo>,
 
+    sync_objects: SyncObjects,
     primary_command_buffer: vk::CommandBuffer,
     command_pool: vk::CommandPool,
+    swapchain_framebuffers: Vec<vk::Framebuffer>,
+    primary_render_pass: vk::RenderPass,
     swapchain: SwapchainInfo,
     present_queue: QueueInfo,
     gpu_allocator: Option<Allocator>,
@@ -111,11 +120,12 @@ pub struct Renderer {
 
 pub struct RendererBuilder<'a> {
     window_handle: &'a Window,
+    application_name: CString,
+    application_version: u32,
     width: u32,
     height: u32,
     preferred_present_mode: vk::PresentModeKHR,
-    application_name: CString,
-    application_version: u32,
+    input_attachments: Vec<(vk::AttachmentDescription, vk::AttachmentReference)>,
 }
 
 impl<'a> RendererBuilder<'a> {
@@ -129,7 +139,7 @@ impl<'a> RendererBuilder<'a> {
             .api_version(vk::make_api_version(0, 1, 2, 0));
 
         let required_extensions = ash_window::enumerate_required_extensions(self.window_handle)
-            .expect("Failed to query extensions!");
+            .expect("Failed to query extensions");
         #[allow(unused_mut)]
         let mut raw_required_extensions = required_extensions
             .iter()
@@ -156,7 +166,7 @@ impl<'a> RendererBuilder<'a> {
         unsafe {
             entry
                 .create_instance(&instance_info, None)
-                .expect("Failed to create Vulkan instance!")
+                .expect("Failed to create Vulkan instance")
         }
     }
 
@@ -207,7 +217,7 @@ impl<'a> RendererBuilder<'a> {
         required_version: u32,
     ) -> (vk::PhysicalDevice, u32) {
         let physical_devices = unsafe { instance.enumerate_physical_devices() }
-            .expect("Failed to query physical devices!");
+            .expect("Failed to query physical devices");
 
         let device_selector =
             |physical_device: &vk::PhysicalDevice| -> Option<(vk::PhysicalDevice, u32)> {
@@ -231,7 +241,7 @@ impl<'a> RendererBuilder<'a> {
                             surface,
                         )
                     }
-                    .expect("Failed to query surface compatibility!");
+                    .expect("Failed to query surface compatibility");
 
                     if supports_required_version && supports_graphics && is_compatible_with_surface
                     {
@@ -251,7 +261,7 @@ impl<'a> RendererBuilder<'a> {
             .map(device_selector)
             .flatten()
             .next()
-            .expect("Unable to find a suitable physical device!")
+            .expect("Unable to find a suitable physical device")
     }
 
     fn create_device(
@@ -276,7 +286,7 @@ impl<'a> RendererBuilder<'a> {
             .build();
 
         unsafe { instance.create_device(physical_device, &device_create_info, None) }
-            .expect("Failed to create logial device!")
+            .expect("Failed to create logial device")
     }
 
     fn create_allocator(
@@ -292,7 +302,7 @@ impl<'a> RendererBuilder<'a> {
             debug_settings: Default::default(),
             buffer_device_address: false,
         })
-        .expect("Failed to create GPU allocator !")
+        .expect("Failed to create GPU allocator")
     }
 
     fn select_surface_format(
@@ -337,7 +347,7 @@ impl<'a> RendererBuilder<'a> {
             surface_loader
                 .get_physical_device_surface_present_modes(physical_device, surface.handle)
         }
-        .expect("Failed to query surface present modes!");
+        .expect("Failed to query surface present modes");
         let present_mode = present_modes
             .iter()
             .cloned()
@@ -362,7 +372,7 @@ impl<'a> RendererBuilder<'a> {
             .build();
 
         let swapchain = unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }
-            .expect("Failed to create swapchain!");
+            .expect("Failed to create swapchain");
 
         let image_view_creator = |&image: &vk::Image| {
             let create_view_info = vk::ImageViewCreateInfo::builder()
@@ -384,11 +394,11 @@ impl<'a> RendererBuilder<'a> {
                 .image(image)
                 .build();
             unsafe { device.create_image_view(&create_view_info, None) }
-                .expect("Failed to ceate swapchain image views!")
+                .expect("Failed to ceate swapchain image views")
         };
 
         let swapchain_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }
-            .expect("Failed to get swapchain images!");
+            .expect("Failed to get swapchain images");
         let swapchain_image_views = swapchain_images.iter().map(image_view_creator).collect();
 
         let depth_extent = vk::Extent3D::builder()
@@ -408,17 +418,139 @@ impl<'a> RendererBuilder<'a> {
             loader: swapchain_loader,
         }
     }
+
+    fn create_render_passes(
+        &self,
+        surface: &SurfaceInfo,
+        depth_image: &AllocatedImage,
+        device: &ash::Device,
+    ) -> vk::RenderPass {
+        let color_attachment = vk::AttachmentDescription {
+            format: surface.format.format,
+            samples: vk::SampleCountFlags::TYPE_1,
+            load_op: vk::AttachmentLoadOp::CLEAR,
+            store_op: vk::AttachmentStoreOp::STORE,
+            initial_layout: vk::ImageLayout::UNDEFINED,
+            final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+            ..Default::default()
+        };
+        let depth_attachment = vk::AttachmentDescription {
+            format: depth_image.format,
+            samples: vk::SampleCountFlags::TYPE_1,
+            load_op: vk::AttachmentLoadOp::CLEAR,
+            store_op: vk::AttachmentStoreOp::STORE,
+            stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+            stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+            initial_layout: vk::ImageLayout::UNDEFINED,
+            final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+            ..Default::default()
+        };
+
+        let color_attachment_ref = vk::AttachmentReference {
+            attachment: 0,
+            layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        };
+        let depth_attachment_ref = vk::AttachmentReference {
+            attachment: 1,
+            layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+
+        let input_attachment_ref: Vec<vk::AttachmentReference> = self
+            .input_attachments
+            .clone()
+            .iter()
+            .map(|pair| pair.1)
+            .collect();
+
+        let subpass_description = vk::SubpassDescription::builder()
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+            .input_attachments(&input_attachment_ref)
+            .color_attachments(&[color_attachment_ref])
+            .depth_stencil_attachment(&depth_attachment_ref)
+            .build();
+
+        let mut attachment_descriptions = vec![color_attachment, depth_attachment];
+        attachment_descriptions.append(
+            &mut self
+                .input_attachments
+                .clone()
+                .iter()
+                .map(|pair| pair.0)
+                .collect::<Vec<vk::AttachmentDescription>>(),
+        );
+
+        let renderpass_info = vk::RenderPassCreateInfo::builder()
+            .attachments(&attachment_descriptions)
+            .subpasses(&[subpass_description])
+            .build();
+
+        unsafe { device.create_render_pass(&renderpass_info, None) }
+            .expect("Failed to create render pass")
+    }
+
+    fn create_framebuffers(
+        &self,
+        render_pass: vk::RenderPass,
+        swapchain: &SwapchainInfo,
+        device: &ash::Device,
+    ) -> Vec<vk::Framebuffer> {
+        let mut framebuffer_create_info = vk::FramebufferCreateInfo::builder()
+            .render_pass(render_pass)
+            .width(self.width)
+            .height(self.height)
+            .layers(1)
+            .build();
+        framebuffer_create_info.attachment_count = 2;
+
+        let mut framebuffers = vec![];
+        for swapchain_image_view in swapchain.image_views.clone() {
+            framebuffer_create_info.p_attachments =
+                [swapchain_image_view, swapchain.depth_image.view].as_ptr();
+            framebuffers.push(
+                unsafe { device.create_framebuffer(&framebuffer_create_info, None) }
+                    .expect("Failed to create framebuffer"),
+            );
+        }
+
+        framebuffers
+    }
+
+    fn create_sync_objects(&self, device: &ash::Device) -> SyncObjects {
+        let render_fence = unsafe {
+            device.create_fence(
+                &vk::FenceCreateInfo {
+                    flags: vk::FenceCreateFlags::SIGNALED,
+                    ..Default::default()
+                },
+                None,
+            )
+        }
+        .expect("Failed to create render fence");
+        let present_semaphore =
+            unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None) }
+                .expect("Failed to create present semaphore");
+        let render_semaphore =
+            unsafe { device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None) }
+                .expect("Failed to create render semaphore");
+
+        SyncObjects {
+            present_semaphore,
+            render_fence,
+            render_semaphore,
+        }
+    }
 }
 
 impl<'a> RendererBuilder<'a> {
     pub fn new(window_handle: &'a Window) -> Self {
         RendererBuilder {
             window_handle,
+            application_name: CString::new("").unwrap(),
+            application_version: 0,
             width: 1280,
             height: 720,
             preferred_present_mode: vk::PresentModeKHR::MAILBOX,
-            application_name: CString::new("").unwrap(),
-            application_version: 0,
+            input_attachments: vec![],
         }
     }
 
@@ -434,7 +566,7 @@ impl<'a> RendererBuilder<'a> {
     }
 
     pub fn with_name(mut self, name: &'a str) -> Self {
-        self.application_name = CString::new(name).expect("Invalid application name!");
+        self.application_name = CString::new(name).expect("Invalid application name");
         self
     }
 
@@ -450,7 +582,7 @@ impl<'a> RendererBuilder<'a> {
 
         let surface_handle = unsafe {
             ash_window::create_surface(&entry, &instance, &self.window_handle, None)
-                .expect("Failed to create rendering surface!")
+                .expect("Failed to create rendering surface")
         };
         let surface_loader = Surface::new(&entry, &instance);
 
@@ -470,12 +602,12 @@ impl<'a> RendererBuilder<'a> {
             unsafe {
                 surface_loader.get_physical_device_surface_formats(physical_device, surface_handle)
             }
-            .expect("Failed to query physical device formats!"),
+            .expect("Failed to query physical device formats"),
         );
         let surface_capabilities = unsafe {
             surface_loader.get_physical_device_surface_capabilities(physical_device, surface_handle)
         }
-        .expect("Failed to query physical device capabilities!");
+        .expect("Failed to query physical device capabilities");
         let surface = SurfaceInfo {
             handle: surface_handle,
             format: surface_format,
@@ -521,11 +653,17 @@ impl<'a> RendererBuilder<'a> {
             &mut gpu_allocator,
         );
 
+        let primary_render_pass =
+            self.create_render_passes(&surface, &swapchain.depth_image, &device);
+
+        let swapchain_framebuffers =
+            self.create_framebuffers(primary_render_pass, &swapchain, &device);
+
         let command_pool_create_info = vk::CommandPoolCreateInfo::builder()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(present_queue.family_index);
         let command_pool = unsafe { device.create_command_pool(&command_pool_create_info, None) }
-            .expect("Failed to create renderer command pool!");
+            .expect("Failed to create renderer command pool");
         let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
             .command_pool(command_pool)
             .command_buffer_count(1)
@@ -533,13 +671,18 @@ impl<'a> RendererBuilder<'a> {
             .build();
         let primary_command_buffer =
             unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }
-                .expect("Failed to allocate primary command buffer!")[0];
+                .expect("Failed to allocate primary command buffer")[0];
+
+        let sync_objects = self.create_sync_objects(&device);
 
         Renderer {
             debug_messenger,
 
+            sync_objects,
             primary_command_buffer,
             command_pool,
+            swapchain_framebuffers,
+            primary_render_pass,
             swapchain,
             present_queue,
             gpu_allocator: Some(gpu_allocator),
@@ -557,17 +700,31 @@ impl Drop for Renderer {
         unsafe {
             self.device
                 .device_wait_idle()
-                .expect("Failed to wait for device!");
+                .expect("Failed to wait for device");
 
-            for image_view in &self.swapchain.image_views {
-                self.device.destroy_image_view(*image_view, None);
-            }
+            self.device
+                .destroy_semaphore(self.sync_objects.render_semaphore, None);
+            self.device
+                .destroy_semaphore(self.sync_objects.present_semaphore, None);
+            self.device
+                .destroy_fence(self.sync_objects.render_fence, None);
 
             self.device.destroy_command_pool(self.command_pool, None);
+
+            for framebuffer in &self.swapchain_framebuffers {
+                self.device.destroy_framebuffer(*framebuffer, None);
+            }
+
+            self.device
+                .destroy_render_pass(self.primary_render_pass, None);
 
             if let Some(gpu_allocator) = self.gpu_allocator.as_mut() {
                 let swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
                 swapchain_depth_image.destroy(&self.device, gpu_allocator);
+            }
+
+            for image_view in &self.swapchain.image_views {
+                self.device.destroy_image_view(*image_view, None);
             }
 
             self.swapchain

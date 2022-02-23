@@ -1,12 +1,11 @@
-use morrigu::application::{ApplicationBuilder, ApplicationState};
+use morrigu::application::{renderer::Renderer, ApplicationBuilder, ApplicationState};
 
 struct MachaApplication {
     frame_count: i32,
 }
 
 impl ApplicationState for MachaApplication {
-    fn on_update(&mut self, _: std::time::Duration) {
-        // println!("frame {} -> {}ms", self.frame_count, dt.as_millis());
+    fn on_update(&mut self, _dt: std::time::Duration, _renderer: &mut Renderer) {
         self.frame_count += 1;
     }
 }

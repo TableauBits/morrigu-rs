@@ -1,5 +1,5 @@
 mod allocated_types;
-mod renderer;
+pub mod renderer;
 
 use std::time::{Duration, Instant};
 
@@ -12,10 +12,10 @@ use winit::{
     window::WindowBuilder,
 };
 
-use renderer::RendererBuilder;
+use renderer::{Renderer, RendererBuilder};
 
 pub trait ApplicationState {
-    fn on_update(&mut self, dt: Duration);
+    fn on_update(&mut self, dt: Duration, renderer: &mut Renderer);
 }
 
 pub struct ApplicationBuilder<'a> {
@@ -25,6 +25,7 @@ pub struct ApplicationBuilder<'a> {
     application_name: &'a str,
     version: (u32, u32, u32),
     preferred_present_mode: vk::PresentModeKHR,
+    input_attachments: Vec<(vk::AttachmentDescription, vk::AttachmentReference)>,
 }
 
 impl<'a> ApplicationBuilder<'a> {
@@ -32,10 +33,11 @@ impl<'a> ApplicationBuilder<'a> {
         ApplicationBuilder {
             width: 1280,
             height: 720,
-            window_name: "Morrigu sample application",
-            application_name: "Morrigu sample application",
+            window_name: "Morrigu application",
+            application_name: "Morrigu application",
             version: (0, 0, 0),
             preferred_present_mode: vk::PresentModeKHR::MAILBOX,
+            input_attachments: vec![],
         }
     }
 
@@ -65,6 +67,17 @@ impl<'a> ApplicationBuilder<'a> {
         self
     }
 
+    // NOT SUPPORTED YET
+    /*
+    pub fn with_input_attachments(
+        mut self,
+        input_attachments: Vec<(vk::AttachmentDescription, vk::AttachmentReference)>,
+    ) -> Self {
+        self.input_attachments = input_attachments;
+        self
+    }
+    */
+
     pub fn build_and_run(self, state: &mut impl ApplicationState) {
         let mut event_loop = EventLoop::new();
 
@@ -72,9 +85,9 @@ impl<'a> ApplicationBuilder<'a> {
             .with_inner_size(PhysicalSize::new(self.width, self.height))
             .with_title(self.window_name)
             .build(&event_loop)
-            .expect("Failed to create window!");
+            .expect("Failed to create window");
 
-        let renderer = RendererBuilder::new(&window)
+        let mut renderer = RendererBuilder::new(&window)
             .with_dimensions(self.width, self.height)
             .with_preferred_present_mode(self.preferred_present_mode)
             .with_name(self.application_name)
@@ -89,7 +102,7 @@ impl<'a> ApplicationBuilder<'a> {
             let delta = prev_time.elapsed();
             prev_time = Instant::now();
 
-            state.on_update(delta);
+            state.on_update(delta, &mut renderer);
 
             match event {
                 WindowEvent {
