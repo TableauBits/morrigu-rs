@@ -261,7 +261,27 @@ impl<'a> RendererBuilder<'a> {
             .map(device_selector)
             .flatten()
             .next()
-            .expect("Unable to find a suitable physical device")
+            .expect(
+                format!(
+                    "Unable to find a suitable physical device. Candidates were {:#?}",
+                    physical_devices
+                        .iter()
+                        .map(|physical_device| -> &str {
+                            unsafe {
+                                CStr::from_ptr(
+                                    instance
+                                        .get_physical_device_properties(*physical_device)
+                                        .device_name
+                                        .as_ptr(),
+                                )
+                                .to_str()
+                                .unwrap_or("Invalid name")
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                )
+                .as_str(),
+            )
     }
 
     fn create_device(

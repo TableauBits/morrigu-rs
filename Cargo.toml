@@ -10,9 +10,9 @@ name = "morrigu"
 [dependencies]
 log = "0.4.14"
 winit = "0.26.1"
-ash = { version = "0.35.1", features = ["linked", "debug"] }
-ash-window = "0.9.0"
-gpu-allocator = "0.16.0"
+ash = { version = "0.36", features = ["linked", "debug"] }
+ash-window = "0.9.1"
+gpu-allocator = "0.17.0"
 
 [workspace]
 members = [".", "Macha"]
