@@ -8,11 +8,11 @@ edition = "2021"
 name = "morrigu"
 
 [dependencies]
-log = "0.4.14"
-winit = "0.26.1"
+log = "0.4"
+winit = "0.26"
 ash = { version = "0.36", features = ["linked", "debug"] }
-ash-window = "0.9.1"
-gpu-allocator = "0.17.0"
+ash-window = "0.9"
+gpu-allocator = "0.17"
 
 [workspace]
 members = [".", "Macha"]
