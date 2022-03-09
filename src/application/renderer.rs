@@ -7,10 +7,17 @@ use ash::{
     Entry, Instance,
 };
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
-use std::ffi::{CStr, CString};
+use std::{
+    ffi::{CStr, CString},
+    mem::size_of,
+};
 use winit::window::Window;
 
-use crate::application::allocated_types::AllocatedImage;
+use nalgebra_glm as glm;
+
+use crate::application::allocated_types::{
+    AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage,
+};
 
 #[cfg(debug_assertions)]
 unsafe extern "system" fn vulkan_debug_callback(
@@ -67,6 +74,10 @@ fn device_type_to_str(device_type: PhysicalDeviceType) -> &'static str {
     }
 }
 
+struct TimeData {
+    time: glm::Vec4,
+}
+
 struct QueueInfo {
     handle: vk::Queue,
     family_index: u32,
@@ -99,10 +110,18 @@ struct SyncObjects {
     render_semaphore: vk::Semaphore,
 }
 
+struct DescriptorInfo {
+    handle: vk::DescriptorSet,
+    layout: vk::DescriptorSetLayout,
+    buffer: Option<AllocatedBuffer>,
+}
+
 pub struct Renderer {
     #[allow(dead_code)]
     debug_messenger: Option<DebugMessengerInfo>,
 
+    descriptors: [DescriptorInfo; 2],
+    descriptor_pool: vk::DescriptorPool,
     sync_objects: SyncObjects,
     primary_command_buffer: vk::CommandBuffer,
     command_pool: vk::CommandPool,
@@ -428,7 +447,8 @@ impl<'a> RendererBuilder<'a> {
             .build();
         let depth_image = AllocatedImage::builder(depth_extent)
             .depth_image_default()
-            .build(device, allocator);
+            .build(device, allocator)
+            .expect("Failed to build depth image");
 
         SwapchainInfo {
             handle: swapchain,
@@ -558,6 +578,89 @@ impl<'a> RendererBuilder<'a> {
             render_fence,
             render_semaphore,
         }
+    }
+
+    fn create_descriptors(
+        &self,
+        device: &ash::Device,
+        allocator: &mut Allocator,
+    ) -> (vk::DescriptorPool, [DescriptorInfo; 2]) {
+        let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
+            .max_sets(2)
+            .pool_sizes(&[vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count: 2,
+            }])
+            .build();
+        let descriptor_pool = unsafe { device.create_descriptor_pool(&descriptor_pool_info, None) }
+            .expect("Failed to create descriptor pool");
+
+        let level_0_bindings = [vk::DescriptorSetLayoutBinding {
+            binding: 0,
+            descriptor_count: 1,
+            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            ..Default::default()
+        }];
+        let level_0_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&level_0_bindings)
+            .build();
+        let level_0_layout =
+            unsafe { device.create_descriptor_set_layout(&level_0_layout_info, None) }
+                .expect("Failed to create descriptor set 0 layout");
+        let level_0_allocation_info = vk::DescriptorSetAllocateInfo::builder()
+            .descriptor_pool(descriptor_pool)
+            .set_layouts(&[level_0_layout])
+            .build();
+        let level_0_handle = unsafe { device.allocate_descriptor_sets(&level_0_allocation_info) }
+            .expect("Failed to allocate level 0 descriptor")[0];
+        let time_buffer_size: u64 = size_of::<TimeData>().try_into().unwrap();
+        let time_buffer = AllocatedBufferBuilder::uniform_buffer_default(time_buffer_size)
+            .build(&device, allocator)
+            .expect("Failed to create time buffer");
+        let time_buffer_info = vk::DescriptorBufferInfo {
+            buffer: time_buffer.handle,
+            offset: 0,
+            range: time_buffer_size,
+        };
+        let time_set_write = vk::WriteDescriptorSet {
+            dst_set: level_0_handle,
+            dst_binding: 0,
+            descriptor_count: 1,
+            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+            p_buffer_info: &time_buffer_info,
+            ..Default::default()
+        };
+        unsafe { device.update_descriptor_sets(&[time_set_write], &[]) };
+
+        let level_1_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&[])
+            .build();
+        let level_1_layout =
+            unsafe { device.create_descriptor_set_layout(&level_1_layout_info, None) }
+                .expect("Failed to create descriptor set 0 layout");
+        let level_1_allocation_info = vk::DescriptorSetAllocateInfo::builder()
+            .descriptor_pool(descriptor_pool)
+            .set_layouts(&[level_1_layout])
+            .build();
+        let level_1_handle = unsafe { device.allocate_descriptor_sets(&level_1_allocation_info) }
+            .expect("Failed to allocate level 1 descriptor")[0];
+
+        (
+            descriptor_pool,
+            [
+                DescriptorInfo {
+                    handle: level_0_handle,
+                    layout: level_0_layout,
+                    buffer: Some(time_buffer),
+                },
+                DescriptorInfo {
+                    handle: level_1_handle,
+                    layout: level_1_layout,
+                    buffer: None,
+                },
+            ],
+        )
     }
 }
 
@@ -695,9 +798,13 @@ impl<'a> RendererBuilder<'a> {
 
         let sync_objects = self.create_sync_objects(&device);
 
+        let (descriptor_pool, descriptors) = self.create_descriptors(&device, &mut gpu_allocator);
+
         Renderer {
             debug_messenger,
 
+            descriptors,
+            descriptor_pool,
             sync_objects,
             primary_command_buffer,
             command_pool,
@@ -721,6 +828,18 @@ impl Drop for Renderer {
             self.device
                 .device_wait_idle()
                 .expect("Failed to wait for device");
+
+            self.device
+                .destroy_descriptor_set_layout(self.descriptors[1].layout, None);
+            if let Some(gpu_allocator) = self.gpu_allocator.as_mut() {
+                if let Some(time_buffer) = self.descriptors[0].buffer.take() {
+                    time_buffer.destroy(&self.device, gpu_allocator);
+                }
+            }
+            self.device
+                .destroy_descriptor_set_layout(self.descriptors[0].layout, None);
+            self.device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
 
             self.device
                 .destroy_semaphore(self.sync_objects.render_semaphore, None);

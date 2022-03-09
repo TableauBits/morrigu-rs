@@ -1,5 +1,73 @@
 use ash::vk;
-use gpu_allocator::vulkan::{Allocation, Allocator};
+use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
+
+#[derive(Default)]
+pub struct AllocatedBuffer {
+    pub handle: vk::Buffer,
+    allocation: Allocation,
+}
+
+impl AllocatedBuffer {
+    pub fn destroy(self, device: &ash::Device, allocator: &mut Allocator) {
+        allocator
+            .free(self.allocation)
+            .expect("Failed to free buffer memory");
+        unsafe { device.destroy_buffer(self.handle, None) };
+    }
+}
+
+pub struct AllocatedBufferBuilder {
+    pub size: u64,
+    pub usage: vk::BufferUsageFlags,
+    pub memory_location: gpu_allocator::MemoryLocation,
+}
+
+impl AllocatedBufferBuilder {
+    pub fn uniform_buffer_default(size: u64) -> AllocatedBufferBuilder {
+        AllocatedBufferBuilder {
+            size,
+            usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+            memory_location: gpu_allocator::MemoryLocation::CpuToGpu,
+        }
+    }
+
+    pub fn with_usage(mut self, usage: vk::BufferUsageFlags) -> Self {
+        self.usage = usage;
+        self
+    }
+
+    pub fn with_memory_location(mut self, memory_location: gpu_allocator::MemoryLocation) -> Self {
+        self.memory_location = memory_location;
+        self
+    }
+
+    pub fn build(
+        self,
+        device: &ash::Device,
+        allocator: &mut Allocator,
+    ) -> Result<AllocatedBuffer, Box<dyn std::error::Error>> {
+        let buffer_info = vk::BufferCreateInfo {
+            size: self.size,
+            usage: self.usage,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+
+        let handle = unsafe { device.create_buffer(&buffer_info, None) }?;
+
+        let memory_req = unsafe { device.get_buffer_memory_requirements(handle) };
+        let allocation = allocator.allocate(&AllocationCreateDesc {
+            name: "buffer",
+            requirements: memory_req,
+            location: self.memory_location,
+            linear: true,
+        })?;
+
+        unsafe { device.bind_buffer_memory(handle, allocation.memory(), allocation.offset()) }?;
+
+        Ok(AllocatedBuffer { handle, allocation })
+    }
+}
 
 #[derive(Default)]
 pub struct AllocatedImage {
@@ -20,8 +88,8 @@ impl AllocatedImage {
 }
 
 pub struct AllocatedImageBuilder<'a> {
-    image_create_info_builder: vk::ImageCreateInfoBuilder<'a>,
-    image_view_create_info_builder: vk::ImageViewCreateInfoBuilder<'a>,
+    pub image_create_info_builder: vk::ImageCreateInfoBuilder<'a>,
+    pub image_view_create_info_builder: vk::ImageViewCreateInfoBuilder<'a>,
 }
 
 impl<'a> AllocatedImageBuilder<'a> {
@@ -65,37 +133,31 @@ impl<'a> AllocatedImageBuilder<'a> {
     pub fn build(
         self,
         device: &ash::Device,
-        allocator: &mut gpu_allocator::vulkan::Allocator,
-    ) -> AllocatedImage {
+        allocator: &mut Allocator,
+    ) -> Result<AllocatedImage, Box<dyn std::error::Error>> {
         let create_info = self.image_create_info_builder.build();
         let handle =
             unsafe { device.create_image(&create_info, None) }.expect("Failed to create image");
 
         let memory_requirements = unsafe { device.get_image_memory_requirements(handle) };
+        let allocation = allocator.allocate(&AllocationCreateDesc {
+            name: "Image allocation",
+            requirements: memory_requirements,
+            location: gpu_allocator::MemoryLocation::GpuOnly,
+            linear: false,
+        })?;
 
-        let allocation = allocator
-            .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-                name: "Image allocation",
-                requirements: memory_requirements,
-                location: gpu_allocator::MemoryLocation::GpuOnly,
-                linear: false,
-            })
-            .expect("Failed to allocate image memory");
-
-        unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }
-            .expect("Failed to bind image memory");
+        unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }?;
 
         let view_create_info = self.image_view_create_info_builder.image(handle).build();
+        let view = unsafe { device.create_image_view(&view_create_info, None) }?;
 
-        let view = unsafe { device.create_image_view(&view_create_info, None) }
-            .expect("Failed to create image view");
-
-        AllocatedImage {
+        Ok(AllocatedImage {
             view,
             allocation,
             handle,
             format: create_info.format,
-        }
+        })
     }
 }
 
