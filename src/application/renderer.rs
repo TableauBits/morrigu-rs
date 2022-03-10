@@ -962,6 +962,13 @@ impl Renderer {
             Ok(_) => (),
         };
     }
+
+    pub fn on_resize(&mut self, width: u32, height: u32) {
+        self.width = width;
+        self.height = height;
+    }
+
+    fn recreate_swapchain(&mut self) {}
 }
 
 impl Drop for Renderer {

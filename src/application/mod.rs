@@ -3,10 +3,12 @@ pub mod renderer;
 
 use std::time::{Duration, Instant};
 
+pub use winit::event::{self, Event};
+
 use ash::vk;
 use winit::{
     dpi::PhysicalSize,
-    event::{self, Event::WindowEvent},
+    event::Event::WindowEvent,
     event_loop::{ControlFlow, EventLoop},
     platform::run_return::EventLoopExtRunReturn,
     window::WindowBuilder,
@@ -16,6 +18,7 @@ use renderer::{Renderer, RendererBuilder};
 
 pub trait ApplicationState {
     fn on_update(&mut self, dt: Duration, renderer: &mut Renderer);
+    fn on_event(&mut self, event: Event<()>, renderer: &mut Renderer);
 }
 
 pub struct ApplicationBuilder<'a> {
@@ -78,7 +81,7 @@ impl<'a> ApplicationBuilder<'a> {
     }
     */
 
-    pub fn build_and_run(self, state: &mut impl ApplicationState) {
+    pub fn build_and_run(mut self, state: &mut impl ApplicationState) {
         let mut event_loop = EventLoop::new();
 
         let window = WindowBuilder::new()
@@ -99,21 +102,28 @@ impl<'a> ApplicationBuilder<'a> {
         event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
 
-            let delta = prev_time.elapsed();
-            prev_time = Instant::now();
-
-            if renderer.begin_frame() {
-                state.on_update(delta, &mut renderer);
-                renderer.end_frame();
-            }
-
             match event {
                 WindowEvent {
                     event: event::WindowEvent::CloseRequested,
                     ..
                 } => *control_flow = ControlFlow::Exit,
+                WindowEvent {
+                    event: event::WindowEvent::Resized(PhysicalSize { width, height, .. }),
+                    ..
+                } => renderer.on_resize(width, height),
+                Event::MainEventsCleared => {
+                    let delta = prev_time.elapsed();
+                    prev_time = Instant::now();
+
+                    if renderer.begin_frame() {
+                        state.on_update(delta, &mut renderer);
+                        renderer.end_frame();
+                    }
+                }
                 _ => (),
             }
+
+            state.on_event(event, &mut renderer);
         });
     }
 }
