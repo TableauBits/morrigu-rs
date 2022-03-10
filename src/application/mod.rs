@@ -97,12 +97,15 @@ impl<'a> ApplicationBuilder<'a> {
         let mut prev_time = Instant::now();
 
         event_loop.run_return(|event, _, control_flow| {
-            *control_flow = ControlFlow::Wait;
+            *control_flow = ControlFlow::Poll;
 
             let delta = prev_time.elapsed();
             prev_time = Instant::now();
 
-            state.on_update(delta, &mut renderer);
+            if renderer.begin_frame() {
+                state.on_update(delta, &mut renderer);
+                renderer.end_frame();
+            }
 
             match event {
                 WindowEvent {

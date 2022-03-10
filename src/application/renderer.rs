@@ -117,6 +117,12 @@ struct DescriptorInfo {
 }
 
 pub struct Renderer {
+    pub clear_color: [f32; 4],
+
+    width: u32,
+    height: u32,
+    next_image_index: u32,
+
     #[allow(dead_code)]
     debug_messenger: Option<DebugMessengerInfo>,
 
@@ -277,11 +283,10 @@ impl<'a> RendererBuilder<'a> {
 
         physical_devices
             .iter()
-            .map(device_selector)
-            .flatten()
+            .filter_map(device_selector)
             .next()
-            .expect(
-                format!(
+            .unwrap_or_else(|| {
+                panic!(
                     "Unable to find a suitable physical device. Candidates were {:#?}",
                     physical_devices
                         .iter()
@@ -299,8 +304,7 @@ impl<'a> RendererBuilder<'a> {
                         })
                         .collect::<Vec<_>>()
                 )
-                .as_str(),
-            )
+            })
     }
 
     fn create_device(
@@ -616,7 +620,7 @@ impl<'a> RendererBuilder<'a> {
             .expect("Failed to allocate level 0 descriptor")[0];
         let time_buffer_size: u64 = size_of::<TimeData>().try_into().unwrap();
         let time_buffer = AllocatedBufferBuilder::uniform_buffer_default(time_buffer_size)
-            .build(&device, allocator)
+            .build(device, allocator)
             .expect("Failed to create time buffer");
         let time_buffer_info = vk::DescriptorBufferInfo {
             buffer: time_buffer.handle,
@@ -801,6 +805,12 @@ impl<'a> RendererBuilder<'a> {
         let (descriptor_pool, descriptors) = self.create_descriptors(&device, &mut gpu_allocator);
 
         Renderer {
+            clear_color: [0.0_f32, 0.0_f32, 0.0_f32, 1.0_f32],
+
+            width: self.width,
+            height: self.height,
+            next_image_index: 0,
+
             debug_messenger,
 
             descriptors,
@@ -819,6 +829,138 @@ impl<'a> RendererBuilder<'a> {
             instance,
             entry,
         }
+    }
+}
+
+impl Renderer {
+    pub fn begin_frame(&mut self) -> bool {
+        unsafe {
+            self.device
+                .wait_for_fences(&[self.sync_objects.render_fence], true, u64::MAX)
+        }
+        .expect("Failed to wait for the render fence");
+        unsafe { self.device.reset_fences(&[self.sync_objects.render_fence]) }
+            .expect("Failed to reset the render fence");
+
+        let next_image_index_maybe = unsafe {
+            self.swapchain.loader.acquire_next_image(
+                self.swapchain.handle,
+                u64::MAX,
+                self.sync_objects.present_semaphore,
+                vk::Fence::null(),
+            )
+        };
+        match next_image_index_maybe {
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                let fence_reset = vk::SubmitInfo::default();
+                unsafe {
+                    self.device.queue_submit(
+                        self.present_queue.handle,
+                        &[fence_reset],
+                        self.sync_objects.render_fence,
+                    )
+                }
+                .expect("Failed to reset fence");
+
+                log::debug!(
+                    "Returning early from begin_frame due to encountered VK_ERROR_OUT_OF_DATE_KHR"
+                );
+
+                false
+            }
+            Err(err) => panic!("Failed to acquire next swapchain image: {:?}", err),
+            Ok((next_image_index, _)) => {
+                self.next_image_index = next_image_index;
+                let next_image_index: usize = next_image_index
+                    .try_into()
+                    .expect("Unsupported architecture");
+
+                unsafe {
+                    self.device.begin_command_buffer(
+                        self.primary_command_buffer,
+                        &vk::CommandBufferBeginInfo {
+                            flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
+                            ..Default::default()
+                        },
+                    )
+                }
+                .expect("Failed to start command buffer");
+
+                let color_clear = vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: self.clear_color,
+                    },
+                };
+                let depth_clear = vk::ClearValue {
+                    depth_stencil: vk::ClearDepthStencilValue {
+                        depth: 1.0_f32,
+                        stencil: 0,
+                    },
+                };
+                let rp_begin_info = vk::RenderPassBeginInfo::builder()
+                    .render_pass(self.primary_render_pass)
+                    .framebuffer(self.swapchain_framebuffers[next_image_index])
+                    .render_area(vk::Rect2D {
+                        extent: vk::Extent2D {
+                            width: self.width,
+                            height: self.height,
+                        },
+                        ..Default::default()
+                    })
+                    .clear_values(&[color_clear, depth_clear])
+                    .build();
+
+                unsafe {
+                    self.device.cmd_begin_render_pass(
+                        self.primary_command_buffer,
+                        &rp_begin_info,
+                        vk::SubpassContents::INLINE,
+                    )
+                };
+
+                true
+            }
+        }
+    }
+
+    pub fn end_frame(&self) {
+        unsafe { self.device.cmd_end_render_pass(self.primary_command_buffer) };
+        unsafe { self.device.end_command_buffer(self.primary_command_buffer) }
+            .expect("Failed to record command buffer");
+
+        let submit_info = vk::SubmitInfo::builder()
+            .wait_semaphores(&[self.sync_objects.present_semaphore])
+            .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
+            .command_buffers(&[self.primary_command_buffer])
+            .signal_semaphores(&[self.sync_objects.render_semaphore])
+            .build();
+        unsafe {
+            self.device.queue_submit(
+                self.present_queue.handle,
+                &[submit_info],
+                self.sync_objects.render_fence,
+            )
+        }
+        .expect("Failed to submit command buffer to present queue");
+
+        let present_info = vk::PresentInfoKHR::builder()
+            .wait_semaphores(&[self.sync_objects.render_semaphore])
+            .swapchains(&[self.swapchain.handle])
+            .image_indices(&[self.next_image_index])
+            .build();
+        let result = unsafe {
+            self.swapchain
+                .loader
+                .queue_present(self.present_queue.handle, &present_info)
+        };
+
+        match result {
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                log::debug!("Ignoring VK_ERROR_OUT_OF_DATE_KHR in end_frame")
+            }
+            Err(err) => panic!("Failed to present new image, {:?}", err),
+            Ok(_) => (),
+        };
     }
 }
 

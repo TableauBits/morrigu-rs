@@ -5,8 +5,11 @@ struct MachaApplication {
 }
 
 impl ApplicationState for MachaApplication {
-    fn on_update(&mut self, _dt: std::time::Duration, _renderer: &mut Renderer) {
+    fn on_update(&mut self, dt: std::time::Duration, _renderer: &mut Renderer) {
         self.frame_count += 1;
+        if dt.as_millis() > 15 {
+            println!("frame {} handled in {}ms", self.frame_count, dt.as_millis());
+        }
     }
 }
 
