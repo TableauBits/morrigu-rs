@@ -186,8 +186,7 @@ impl<'a> RendererBuilder<'a> {
         let instance_info = vk::InstanceCreateInfo::builder()
             .application_info(&app_info)
             .enabled_layer_names(&raw_layer_names)
-            .enabled_extension_names(&raw_required_extensions)
-            .build();
+            .enabled_extension_names(&raw_required_extensions);
         unsafe {
             entry
                 .create_instance(&instance_info, None)
@@ -215,8 +214,7 @@ impl<'a> RendererBuilder<'a> {
                         | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE
                         | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION,
                 )
-                .pfn_user_callback(Some(vulkan_debug_callback))
-                .build();
+                .pfn_user_callback(Some(vulkan_debug_callback));
 
             let debug_messenger_loader = DebugUtils::new(_entry, _instance);
             let debug_messenger_handle =
@@ -317,16 +315,14 @@ impl<'a> RendererBuilder<'a> {
         let features = vk::PhysicalDeviceFeatures::default();
         let priorities = [1.0];
 
-        let queue_infos = [vk::DeviceQueueCreateInfo::builder()
+        let queue_info = vk::DeviceQueueCreateInfo::builder()
             .queue_family_index(queue_family_index)
-            .queue_priorities(&priorities)
-            .build()];
+            .queue_priorities(&priorities);
 
         let device_create_info = vk::DeviceCreateInfo::builder()
             .enabled_features(&features)
             .enabled_extension_names(&raw_extensions_name)
-            .queue_create_infos(&queue_infos)
-            .build();
+            .queue_create_infos(std::slice::from_ref(&queue_info));
 
         unsafe { instance.create_device(physical_device, &device_create_info, None) }
             .expect("Failed to create logial device")
@@ -411,8 +407,7 @@ impl<'a> RendererBuilder<'a> {
             .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
             .present_mode(present_mode)
             .clipped(true)
-            .image_array_layers(1)
-            .build();
+            .image_array_layers(1);
 
         let swapchain = unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }
             .expect("Failed to create swapchain");
@@ -434,8 +429,7 @@ impl<'a> RendererBuilder<'a> {
                     base_array_layer: 0,
                     layer_count: 1,
                 })
-                .image(image)
-                .build();
+                .image(image);
             unsafe { device.create_image_view(&create_view_info, None) }
                 .expect("Failed to ceate swapchain image views")
         };
@@ -444,11 +438,11 @@ impl<'a> RendererBuilder<'a> {
             .expect("Failed to get swapchain images");
         let swapchain_image_views = swapchain_images.iter().map(image_view_creator).collect();
 
-        let depth_extent = vk::Extent3D::builder()
-            .width(surface_extent.width)
-            .height(surface_extent.height)
-            .depth(1)
-            .build();
+        let depth_extent = vk::Extent3D {
+            width: surface_extent.width,
+            height: surface_extent.height,
+            depth: 1,
+        };
         let depth_image = AllocatedImage::builder(depth_extent)
             .depth_image_default()
             .build(device, allocator)
@@ -490,10 +484,10 @@ impl<'a> RendererBuilder<'a> {
             ..Default::default()
         };
 
-        let color_attachment_ref = vk::AttachmentReference {
+        let color_attachment_refs = [vk::AttachmentReference {
             attachment: 0,
             layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        };
+        }];
         let depth_attachment_ref = vk::AttachmentReference {
             attachment: 1,
             layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -509,9 +503,8 @@ impl<'a> RendererBuilder<'a> {
         let subpass_description = vk::SubpassDescription::builder()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
             .input_attachments(&input_attachment_ref)
-            .color_attachments(&[color_attachment_ref])
-            .depth_stencil_attachment(&depth_attachment_ref)
-            .build();
+            .color_attachments(&color_attachment_refs)
+            .depth_stencil_attachment(&depth_attachment_ref);
 
         let mut attachment_descriptions = vec![color_attachment, depth_attachment];
         attachment_descriptions.append(
@@ -525,8 +518,7 @@ impl<'a> RendererBuilder<'a> {
 
         let renderpass_info = vk::RenderPassCreateInfo::builder()
             .attachments(&attachment_descriptions)
-            .subpasses(&[subpass_description])
-            .build();
+            .subpasses(std::slice::from_ref(&subpass_description));
 
         unsafe { device.create_render_pass(&renderpass_info, None) }
             .expect("Failed to create render pass")
@@ -542,8 +534,7 @@ impl<'a> RendererBuilder<'a> {
             .render_pass(render_pass)
             .width(self.width)
             .height(self.height)
-            .layers(1)
-            .build();
+            .layers(1);
         framebuffer_create_info.attachment_count = 2;
 
         let mut framebuffers = vec![];
@@ -594,8 +585,7 @@ impl<'a> RendererBuilder<'a> {
             .pool_sizes(&[vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::UNIFORM_BUFFER,
                 descriptor_count: 2,
-            }])
-            .build();
+            }]);
         let descriptor_pool = unsafe { device.create_descriptor_pool(&descriptor_pool_info, None) }
             .expect("Failed to create descriptor pool");
 
@@ -606,16 +596,14 @@ impl<'a> RendererBuilder<'a> {
             stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
             ..Default::default()
         }];
-        let level_0_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&level_0_bindings)
-            .build();
+        let level_0_layout_info =
+            vk::DescriptorSetLayoutCreateInfo::builder().bindings(&level_0_bindings);
         let level_0_layout =
             unsafe { device.create_descriptor_set_layout(&level_0_layout_info, None) }
                 .expect("Failed to create descriptor set 0 layout");
         let level_0_allocation_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(descriptor_pool)
-            .set_layouts(&[level_0_layout])
-            .build();
+            .set_layouts(std::slice::from_ref(&level_0_layout));
         let level_0_handle = unsafe { device.allocate_descriptor_sets(&level_0_allocation_info) }
             .expect("Failed to allocate level 0 descriptor")[0];
         let time_buffer_size: u64 = size_of::<TimeData>().try_into().unwrap();
@@ -637,16 +625,13 @@ impl<'a> RendererBuilder<'a> {
         };
         unsafe { device.update_descriptor_sets(&[time_set_write], &[]) };
 
-        let level_1_layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&[])
-            .build();
+        let level_1_layout_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&[]);
         let level_1_layout =
             unsafe { device.create_descriptor_set_layout(&level_1_layout_info, None) }
                 .expect("Failed to create descriptor set 0 layout");
         let level_1_allocation_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(descriptor_pool)
-            .set_layouts(&[level_1_layout])
-            .build();
+            .set_layouts(std::slice::from_ref(&level_1_layout));
         let level_1_handle = unsafe { device.allocate_descriptor_sets(&level_1_allocation_info) }
             .expect("Failed to allocate level 1 descriptor")[0];
 
@@ -794,8 +779,7 @@ impl<'a> RendererBuilder<'a> {
         let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
             .command_pool(command_pool)
             .command_buffer_count(1)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .build();
+            .level(vk::CommandBufferLevel::PRIMARY);
         let primary_command_buffer =
             unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }
                 .expect("Failed to allocate primary command buffer")[0];
@@ -886,17 +870,19 @@ impl Renderer {
                 }
                 .expect("Failed to start command buffer");
 
-                let color_clear = vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: self.clear_color,
+                let clear_values = [
+                    vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: self.clear_color.clone(),
+                        },
                     },
-                };
-                let depth_clear = vk::ClearValue {
-                    depth_stencil: vk::ClearDepthStencilValue {
-                        depth: 1.0_f32,
-                        stencil: 0,
+                    vk::ClearValue {
+                        depth_stencil: vk::ClearDepthStencilValue {
+                            depth: 1.0_f32,
+                            stencil: 0,
+                        },
                     },
-                };
+                ];
                 let rp_begin_info = vk::RenderPassBeginInfo::builder()
                     .render_pass(self.primary_render_pass)
                     .framebuffer(self.swapchain_framebuffers[next_image_index])
@@ -907,8 +893,7 @@ impl Renderer {
                         },
                         ..Default::default()
                     })
-                    .clear_values(&[color_clear, depth_clear])
-                    .build();
+                    .clear_values(&clear_values);
 
                 unsafe {
                     self.device.cmd_begin_render_pass(
@@ -929,25 +914,23 @@ impl Renderer {
             .expect("Failed to record command buffer");
 
         let submit_info = vk::SubmitInfo::builder()
-            .wait_semaphores(&[self.sync_objects.present_semaphore])
+            .wait_semaphores(std::slice::from_ref(&self.sync_objects.present_semaphore))
             .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
-            .command_buffers(&[self.primary_command_buffer])
-            .signal_semaphores(&[self.sync_objects.render_semaphore])
-            .build();
+            .command_buffers(std::slice::from_ref(&self.primary_command_buffer))
+            .signal_semaphores(std::slice::from_ref(&self.sync_objects.render_semaphore));
         unsafe {
             self.device.queue_submit(
                 self.present_queue.handle,
-                &[submit_info],
+                &[submit_info.build()],
                 self.sync_objects.render_fence,
             )
         }
         .expect("Failed to submit command buffer to present queue");
 
         let present_info = vk::PresentInfoKHR::builder()
-            .wait_semaphores(&[self.sync_objects.render_semaphore])
-            .swapchains(&[self.swapchain.handle])
-            .image_indices(&[self.next_image_index])
-            .build();
+            .wait_semaphores(std::slice::from_ref(&self.sync_objects.render_semaphore))
+            .swapchains(std::slice::from_ref(&self.swapchain.handle))
+            .image_indices(std::slice::from_ref(&self.next_image_index));
         let result = unsafe {
             self.swapchain
                 .loader

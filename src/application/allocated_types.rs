@@ -131,13 +131,12 @@ impl<'a> AllocatedImageBuilder<'a> {
     }
 
     pub fn build(
-        self,
+        mut self,
         device: &ash::Device,
         allocator: &mut Allocator,
     ) -> Result<AllocatedImage, Box<dyn std::error::Error>> {
-        let create_info = self.image_create_info_builder.build();
-        let handle =
-            unsafe { device.create_image(&create_info, None) }.expect("Failed to create image");
+        let handle = unsafe { device.create_image(&self.image_create_info_builder, None) }
+            .expect("Failed to create image");
 
         let memory_requirements = unsafe { device.get_image_memory_requirements(handle) };
         let allocation = allocator.allocate(&AllocationCreateDesc {
@@ -149,14 +148,15 @@ impl<'a> AllocatedImageBuilder<'a> {
 
         unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }?;
 
-        let view_create_info = self.image_view_create_info_builder.image(handle).build();
-        let view = unsafe { device.create_image_view(&view_create_info, None) }?;
+        self.image_view_create_info_builder = self.image_view_create_info_builder.image(handle);
+
+        let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }?;
 
         Ok(AllocatedImage {
             view,
             allocation,
             handle,
-            format: create_info.format,
+            format: self.image_create_info_builder.format,
         })
     }
 }

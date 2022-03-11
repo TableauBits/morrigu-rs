@@ -18,7 +18,7 @@ impl ApplicationState for MachaState {
                 event: event::DeviceEvent::Button { button, state },
                 ..
             } => {
-                log::info!("Mouse movement detected: {:?}, {:?}", button, state);
+                log::info!("Mouse button detected: {:?}, {:?}", button, state);
             }
             _ => (),
         }

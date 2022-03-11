@@ -81,7 +81,7 @@ impl<'a> ApplicationBuilder<'a> {
     }
     */
 
-    pub fn build_and_run(mut self, state: &mut impl ApplicationState) {
+    pub fn build_and_run(self, state: &mut impl ApplicationState) {
         let mut event_loop = EventLoop::new();
 
         let window = WindowBuilder::new()

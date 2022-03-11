@@ -17,3 +17,6 @@ nalgebra-glm = "0.16"
 
 [workspace]
 members = [".", "Macha"]
+
+[profile.release]
+debug = true
