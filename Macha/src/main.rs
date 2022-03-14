@@ -1,24 +1,28 @@
-use morrigu::application::{event, renderer::Renderer, ApplicationBuilder, ApplicationState};
+use morrigu::application::{
+    event, renderer::Renderer, ApplicationBuilder, ApplicationState, Window,
+};
 
 struct MachaState {
     frame_count: i32,
 }
 
 impl ApplicationState for MachaState {
-    fn on_update(&mut self, dt: std::time::Duration, _renderer: &mut Renderer) {
+    fn on_update(&mut self, dt: std::time::Duration, _renderer: &mut Renderer, window: &Window) {
         self.frame_count += 1;
         if dt.as_millis() > 15 {
-            log::warn!("frame {} handled in {}ms", self.frame_count, dt.as_millis());
+            let string = format!("frame {} handled in {}ms", self.frame_count, dt.as_millis());
+            log::warn!("{}", string);
+            window.set_title(&string);
         }
     }
 
-    fn on_event(&mut self, event: event::Event<()>, _renderer: &mut Renderer) {
+    fn on_event(&mut self, event: event::Event<()>, _renderer: &mut Renderer, _window: &Window) {
         match event {
             event::Event::DeviceEvent {
                 event: event::DeviceEvent::Button { button, state },
                 ..
             } => {
-                log::info!("Mouse button detected: {:?}, {:?}", button, state);
+                log::debug!("Mouse button detected: {:?}, {:?}", button, state);
             }
             _ => (),
         }

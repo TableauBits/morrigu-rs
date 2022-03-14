@@ -86,7 +86,6 @@ struct QueueInfo {
 struct SurfaceInfo {
     handle: vk::SurfaceKHR,
     format: vk::SurfaceFormatKHR,
-    capabilities: vk::SurfaceCapabilitiesKHR,
     loader: Surface,
 }
 
@@ -95,6 +94,7 @@ struct SwapchainInfo {
     images: Vec<vk::Image>,
     image_views: Vec<vk::ImageView>,
     depth_image: AllocatedImage,
+    preferred_present_mode: vk::PresentModeKHR,
     loader: Swapchain,
 }
 
@@ -119,8 +119,10 @@ struct DescriptorInfo {
 pub struct Renderer {
     pub clear_color: [f32; 4],
 
-    width: u32,
-    height: u32,
+    window_width: u32,
+    window_height: u32,
+    framebuffer_width: u32,
+    framebuffer_height: u32,
     next_image_index: u32,
 
     #[allow(dead_code)]
@@ -151,6 +153,134 @@ pub struct RendererBuilder<'a> {
     height: u32,
     preferred_present_mode: vk::PresentModeKHR,
     input_attachments: Vec<(vk::AttachmentDescription, vk::AttachmentReference)>,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn create_swapchain(
+    width: u32,
+    height: u32,
+    preferred_present_mode: vk::PresentModeKHR,
+    instance: &ash::Instance,
+    physical_device: vk::PhysicalDevice,
+    device: &ash::Device,
+    surface: &SurfaceInfo,
+    surface_loader: &Surface,
+    allocator: &mut Allocator,
+) -> SwapchainInfo {
+    let capabilities = unsafe {
+        surface_loader.get_physical_device_surface_capabilities(physical_device, surface.handle)
+    }
+    .expect("Failed to query surface capabilities");
+    let mut requested_image_count = capabilities.min_image_count + 1;
+    if capabilities.max_image_count > 0 && requested_image_count > capabilities.max_image_count {
+        requested_image_count = capabilities.max_image_count;
+    }
+
+    let surface_extent = match capabilities.current_extent.width {
+        std::u32::MAX => vk::Extent2D { width, height },
+        _ => capabilities.current_extent,
+    };
+
+    let present_modes = unsafe {
+        surface_loader.get_physical_device_surface_present_modes(physical_device, surface.handle)
+    }
+    .expect("Failed to query surface present modes");
+    let present_mode = present_modes
+        .iter()
+        .cloned()
+        .find(|&mode| mode == preferred_present_mode)
+        .unwrap_or(vk::PresentModeKHR::FIFO);
+
+    let swapchain_loader = Swapchain::new(instance, device);
+
+    let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
+        .surface(surface.handle)
+        .min_image_count(requested_image_count)
+        .image_color_space(surface.format.color_space)
+        .image_format(surface.format.format)
+        .image_extent(surface_extent)
+        .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+        .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+        .pre_transform(capabilities.current_transform)
+        .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+        .present_mode(present_mode)
+        .clipped(true)
+        .image_array_layers(1);
+
+    let swapchain = unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }
+        .expect("Failed to create swapchain");
+
+    let image_view_creator = |&image: &vk::Image| {
+        let create_view_info = vk::ImageViewCreateInfo::builder()
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(surface.format.format)
+            .components(vk::ComponentMapping {
+                r: vk::ComponentSwizzle::R,
+                g: vk::ComponentSwizzle::G,
+                b: vk::ComponentSwizzle::B,
+                a: vk::ComponentSwizzle::A,
+            })
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .image(image);
+        unsafe { device.create_image_view(&create_view_info, None) }
+            .expect("Failed to ceate swapchain image views")
+    };
+
+    let swapchain_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }
+        .expect("Failed to get swapchain images");
+    let swapchain_image_views = swapchain_images.iter().map(image_view_creator).collect();
+
+    let depth_extent = vk::Extent3D {
+        width,
+        height,
+        depth: 1,
+    };
+    let depth_image = AllocatedImage::builder(depth_extent)
+        .depth_image_default()
+        .build(device, allocator)
+        .expect("Failed to build depth image");
+
+    SwapchainInfo {
+        handle: swapchain,
+        images: swapchain_images,
+        image_views: swapchain_image_views,
+        depth_image,
+        preferred_present_mode,
+        loader: swapchain_loader,
+    }
+}
+
+fn create_framebuffers(
+    width: u32,
+    height: u32,
+    render_pass: vk::RenderPass,
+    swapchain: &SwapchainInfo,
+    device: &ash::Device,
+) -> Vec<vk::Framebuffer> {
+    let mut framebuffer_create_info = vk::FramebufferCreateInfo::builder()
+        .render_pass(render_pass)
+        .width(width)
+        .height(height)
+        .layers(1);
+    framebuffer_create_info.attachment_count = 2;
+
+    let mut framebuffers = vec![];
+    for swapchain_image_view in swapchain.image_views.clone() {
+        framebuffer_create_info.p_attachments =
+            [swapchain_image_view, swapchain.depth_image.view].as_ptr();
+        framebuffers.push(
+            unsafe { device.create_framebuffer(&framebuffer_create_info, None) }
+                .expect("Failed to create framebuffer"),
+        );
+    }
+
+    framebuffers
 }
 
 impl<'a> RendererBuilder<'a> {
@@ -358,105 +488,6 @@ impl<'a> RendererBuilder<'a> {
             .unwrap_or(surface_formats[0])
     }
 
-    fn create_swapchain(
-        &self,
-        instance: &ash::Instance,
-        physical_device: vk::PhysicalDevice,
-        device: &ash::Device,
-        surface: &SurfaceInfo,
-        surface_loader: &Surface,
-        allocator: &mut Allocator,
-    ) -> SwapchainInfo {
-        let mut requested_image_count = surface.capabilities.min_image_count + 1;
-        if surface.capabilities.max_image_count > 0
-            && requested_image_count > surface.capabilities.max_image_count
-        {
-            requested_image_count = surface.capabilities.max_image_count;
-        }
-
-        let surface_extent = match surface.capabilities.current_extent.width {
-            std::u32::MAX => vk::Extent2D {
-                width: self.width,
-                height: self.height,
-            },
-            _ => surface.capabilities.current_extent,
-        };
-
-        let present_modes = unsafe {
-            surface_loader
-                .get_physical_device_surface_present_modes(physical_device, surface.handle)
-        }
-        .expect("Failed to query surface present modes");
-        let present_mode = present_modes
-            .iter()
-            .cloned()
-            .find(|&mode| mode == self.preferred_present_mode)
-            .unwrap_or(vk::PresentModeKHR::FIFO);
-
-        let swapchain_loader = Swapchain::new(instance, device);
-
-        let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
-            .surface(surface.handle)
-            .min_image_count(requested_image_count)
-            .image_color_space(surface.format.color_space)
-            .image_format(surface.format.format)
-            .image_extent(surface_extent)
-            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .pre_transform(surface.capabilities.current_transform)
-            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-            .present_mode(present_mode)
-            .clipped(true)
-            .image_array_layers(1);
-
-        let swapchain = unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }
-            .expect("Failed to create swapchain");
-
-        let image_view_creator = |&image: &vk::Image| {
-            let create_view_info = vk::ImageViewCreateInfo::builder()
-                .view_type(vk::ImageViewType::TYPE_2D)
-                .format(surface.format.format)
-                .components(vk::ComponentMapping {
-                    r: vk::ComponentSwizzle::R,
-                    g: vk::ComponentSwizzle::G,
-                    b: vk::ComponentSwizzle::B,
-                    a: vk::ComponentSwizzle::A,
-                })
-                .subresource_range(vk::ImageSubresourceRange {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    base_mip_level: 0,
-                    level_count: 1,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                })
-                .image(image);
-            unsafe { device.create_image_view(&create_view_info, None) }
-                .expect("Failed to ceate swapchain image views")
-        };
-
-        let swapchain_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }
-            .expect("Failed to get swapchain images");
-        let swapchain_image_views = swapchain_images.iter().map(image_view_creator).collect();
-
-        let depth_extent = vk::Extent3D {
-            width: surface_extent.width,
-            height: surface_extent.height,
-            depth: 1,
-        };
-        let depth_image = AllocatedImage::builder(depth_extent)
-            .depth_image_default()
-            .build(device, allocator)
-            .expect("Failed to build depth image");
-
-        SwapchainInfo {
-            handle: swapchain,
-            images: swapchain_images,
-            image_views: swapchain_image_views,
-            depth_image,
-            loader: swapchain_loader,
-        }
-    }
-
     fn create_render_passes(
         &self,
         surface: &SurfaceInfo,
@@ -522,32 +553,6 @@ impl<'a> RendererBuilder<'a> {
 
         unsafe { device.create_render_pass(&renderpass_info, None) }
             .expect("Failed to create render pass")
-    }
-
-    fn create_framebuffers(
-        &self,
-        render_pass: vk::RenderPass,
-        swapchain: &SwapchainInfo,
-        device: &ash::Device,
-    ) -> Vec<vk::Framebuffer> {
-        let mut framebuffer_create_info = vk::FramebufferCreateInfo::builder()
-            .render_pass(render_pass)
-            .width(self.width)
-            .height(self.height)
-            .layers(1);
-        framebuffer_create_info.attachment_count = 2;
-
-        let mut framebuffers = vec![];
-        for swapchain_image_view in swapchain.image_views.clone() {
-            framebuffer_create_info.p_attachments =
-                [swapchain_image_view, swapchain.depth_image.view].as_ptr();
-            framebuffers.push(
-                unsafe { device.create_framebuffer(&framebuffer_create_info, None) }
-                    .expect("Failed to create framebuffer"),
-            );
-        }
-
-        framebuffers
     }
 
     fn create_sync_objects(&self, device: &ash::Device) -> SyncObjects {
@@ -716,14 +721,9 @@ impl<'a> RendererBuilder<'a> {
             }
             .expect("Failed to query physical device formats"),
         );
-        let surface_capabilities = unsafe {
-            surface_loader.get_physical_device_surface_capabilities(physical_device, surface_handle)
-        }
-        .expect("Failed to query physical device capabilities");
         let surface = SurfaceInfo {
             handle: surface_handle,
             format: surface_format,
-            capabilities: surface_capabilities,
             loader: surface_loader,
         };
 
@@ -756,7 +756,10 @@ impl<'a> RendererBuilder<'a> {
         let mut gpu_allocator =
             self.create_allocator(instance.clone(), physical_device, device.clone());
 
-        let swapchain = self.create_swapchain(
+        let swapchain = create_swapchain(
+            self.width,
+            self.height,
+            self.preferred_present_mode,
             &instance,
             physical_device,
             &device,
@@ -768,8 +771,13 @@ impl<'a> RendererBuilder<'a> {
         let primary_render_pass =
             self.create_render_passes(&surface, &swapchain.depth_image, &device);
 
-        let swapchain_framebuffers =
-            self.create_framebuffers(primary_render_pass, &swapchain, &device);
+        let swapchain_framebuffers = create_framebuffers(
+            self.width,
+            self.height,
+            primary_render_pass,
+            &swapchain,
+            &device,
+        );
 
         let command_pool_create_info = vk::CommandPoolCreateInfo::builder()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
@@ -791,8 +799,10 @@ impl<'a> RendererBuilder<'a> {
         Renderer {
             clear_color: [0.0_f32, 0.0_f32, 0.0_f32, 1.0_f32],
 
-            width: self.width,
-            height: self.height,
+            window_width: self.width,
+            window_height: self.height,
+            framebuffer_width: self.width,
+            framebuffer_height: self.height,
             next_image_index: 0,
 
             debug_messenger,
@@ -835,7 +845,9 @@ impl Renderer {
             )
         };
         match next_image_index_maybe {
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Ok((_, true)) => {
+                self.recreate_swapchain();
+
                 let fence_reset = vk::SubmitInfo::default();
                 unsafe {
                     self.device.queue_submit(
@@ -846,14 +858,10 @@ impl Renderer {
                 }
                 .expect("Failed to reset fence");
 
-                log::debug!(
-                    "Returning early from begin_frame due to encountered VK_ERROR_OUT_OF_DATE_KHR"
-                );
-
                 false
             }
             Err(err) => panic!("Failed to acquire next swapchain image: {:?}", err),
-            Ok((next_image_index, _)) => {
+            Ok((next_image_index, false)) => {
                 self.next_image_index = next_image_index;
                 let next_image_index: usize = next_image_index
                     .try_into()
@@ -873,7 +881,7 @@ impl Renderer {
                 let clear_values = [
                     vk::ClearValue {
                         color: vk::ClearColorValue {
-                            float32: self.clear_color.clone(),
+                            float32: self.clear_color,
                         },
                     },
                     vk::ClearValue {
@@ -888,8 +896,8 @@ impl Renderer {
                     .framebuffer(self.swapchain_framebuffers[next_image_index])
                     .render_area(vk::Rect2D {
                         extent: vk::Extent2D {
-                            width: self.width,
-                            height: self.height,
+                            width: self.framebuffer_width,
+                            height: self.framebuffer_height,
                         },
                         ..Default::default()
                     })
@@ -938,20 +946,73 @@ impl Renderer {
         };
 
         match result {
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                log::debug!("Ignoring VK_ERROR_OUT_OF_DATE_KHR in end_frame")
-            }
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Ok(_) => (),
             Err(err) => panic!("Failed to present new image, {:?}", err),
-            Ok(_) => (),
         };
     }
 
     pub fn on_resize(&mut self, width: u32, height: u32) {
-        self.width = width;
-        self.height = height;
+        self.window_width = width;
+        self.window_height = height;
     }
 
-    fn recreate_swapchain(&mut self) {}
+    fn recreate_swapchain(&mut self) {
+        let allocator = self
+            .gpu_allocator
+            .as_mut()
+            .expect("No GPU allocator was created yet");
+
+        unsafe { self.device.device_wait_idle() }.expect("Failed to wait for device");
+
+        // 1. Destroy all VK objects that will need to be recreated with the new swapchain.
+        //    - all framebuffers
+        for framebuffer in &self.swapchain_framebuffers {
+            unsafe { self.device.destroy_framebuffer(*framebuffer, None) };
+        }
+
+        //    - the depth image
+        let swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
+        swapchain_depth_image.destroy(&self.device, allocator);
+
+        //    - the swapchain image views
+        for image_view in &self.swapchain.image_views {
+            unsafe { self.device.destroy_image_view(*image_view, None) };
+        }
+
+        //    - and finally the swapchain itself
+        unsafe {
+            self.swapchain
+                .loader
+                .destroy_swapchain(self.swapchain.handle, None)
+        };
+
+        // 2. Recreate all necessary VK objects
+        //    - the swapchain itself
+        //    - the swapchain image views
+        //    - the depth image
+        self.swapchain = create_swapchain(
+            self.window_width,
+            self.window_height,
+            self.swapchain.preferred_present_mode,
+            &self.instance,
+            self.physical_device,
+            &self.device,
+            &self.surface,
+            &self.surface.loader,
+            allocator,
+        );
+
+        //    - and finally the framebuffers
+        self.swapchain_framebuffers = create_framebuffers(
+            self.window_width,
+            self.window_height,
+            self.primary_render_pass,
+            &self.swapchain,
+            &self.device,
+        );
+        self.framebuffer_width = self.window_width;
+        self.framebuffer_height = self.window_height;
+    }
 }
 
 impl Drop for Renderer {

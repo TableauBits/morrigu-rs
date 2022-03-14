@@ -1,9 +1,12 @@
-mod allocated_types;
+pub mod allocated_types;
 pub mod renderer;
 
 use std::time::{Duration, Instant};
 
-pub use winit::event::{self, Event};
+pub use winit::{
+    event::{self, Event},
+    window::Window,
+};
 
 use ash::vk;
 use winit::{
@@ -17,8 +20,8 @@ use winit::{
 use renderer::{Renderer, RendererBuilder};
 
 pub trait ApplicationState {
-    fn on_update(&mut self, dt: Duration, renderer: &mut Renderer);
-    fn on_event(&mut self, event: Event<()>, renderer: &mut Renderer);
+    fn on_update(&mut self, dt: Duration, renderer: &mut Renderer, window: &Window);
+    fn on_event(&mut self, event: Event<()>, renderer: &mut Renderer, window: &Window);
 }
 
 pub struct ApplicationBuilder<'a> {
@@ -28,7 +31,7 @@ pub struct ApplicationBuilder<'a> {
     application_name: &'a str,
     version: (u32, u32, u32),
     preferred_present_mode: vk::PresentModeKHR,
-    input_attachments: Vec<(vk::AttachmentDescription, vk::AttachmentReference)>,
+    // input_attachments: Vec<(vk::AttachmentDescription, vk::AttachmentReference)>,
 }
 
 impl<'a> ApplicationBuilder<'a> {
@@ -40,7 +43,7 @@ impl<'a> ApplicationBuilder<'a> {
             application_name: "Morrigu application",
             version: (0, 0, 0),
             preferred_present_mode: vk::PresentModeKHR::MAILBOX,
-            input_attachments: vec![],
+            // input_attachments: vec![],
         }
     }
 
@@ -116,14 +119,14 @@ impl<'a> ApplicationBuilder<'a> {
                     prev_time = Instant::now();
 
                     if renderer.begin_frame() {
-                        state.on_update(delta, &mut renderer);
+                        state.on_update(delta, &mut renderer, &window);
                         renderer.end_frame();
                     }
                 }
                 _ => (),
             }
 
-            state.on_event(event, &mut renderer);
+            state.on_event(event, &mut renderer, &window);
         });
     }
 }
