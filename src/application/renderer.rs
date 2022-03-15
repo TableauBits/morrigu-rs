@@ -828,6 +828,10 @@ impl<'a> RendererBuilder<'a> {
 
 impl Renderer {
     pub fn begin_frame(&mut self) -> bool {
+        if self.window_width <= 0 || self.window_height <= 0 {
+            return false;
+        }
+
         unsafe {
             self.device
                 .wait_for_fences(&[self.sync_objects.render_fence], true, u64::MAX)
