@@ -1,3 +1,5 @@
+use crate::allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage};
+
 use ash::{
     extensions::{
         ext::DebugUtils,
@@ -7,16 +9,12 @@ use ash::{
     Entry, Instance,
 };
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
-use std::{
-    ffi::{CStr, CString},
-    mem::size_of,
-};
+use nalgebra_glm as glm;
 use winit::window::Window;
 
-use nalgebra_glm as glm;
-
-use crate::application::allocated_types::{
-    AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage,
+use std::{
+    ffi::{CStr, CString},
+    mem,
 };
 
 #[cfg(debug_assertions)]
@@ -611,7 +609,7 @@ impl<'a> RendererBuilder<'a> {
             .set_layouts(std::slice::from_ref(&level_0_layout));
         let level_0_handle = unsafe { device.allocate_descriptor_sets(&level_0_allocation_info) }
             .expect("Failed to allocate level 0 descriptor")[0];
-        let time_buffer_size: u64 = size_of::<TimeData>().try_into().unwrap();
+        let time_buffer_size: u64 = mem::size_of::<TimeData>().try_into().unwrap();
         let time_buffer = AllocatedBufferBuilder::uniform_buffer_default(time_buffer_size)
             .build(device, allocator)
             .expect("Failed to create time buffer");
@@ -827,8 +825,12 @@ impl<'a> RendererBuilder<'a> {
 }
 
 impl Renderer {
+    pub fn device(&self) -> &ash::Device {
+        &self.device
+    }
+
     pub fn begin_frame(&mut self) -> bool {
-        if self.window_width <= 0 || self.window_height <= 0 {
+        if self.window_width == 0 || self.window_height == 0 {
             return false;
         }
 
@@ -1017,6 +1019,8 @@ impl Renderer {
         self.framebuffer_width = self.window_width;
         self.framebuffer_height = self.window_height;
     }
+
+    pub fn create_shader_module() {}
 }
 
 impl Drop for Renderer {

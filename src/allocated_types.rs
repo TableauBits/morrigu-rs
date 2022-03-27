@@ -1,6 +1,8 @@
 use ash::vk;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 
+use crate::error::Error;
+
 #[derive(Default)]
 pub struct AllocatedBuffer {
     pub handle: vk::Buffer,
@@ -45,7 +47,7 @@ impl AllocatedBufferBuilder {
         self,
         device: &ash::Device,
         allocator: &mut Allocator,
-    ) -> Result<AllocatedBuffer, Box<dyn std::error::Error>> {
+    ) -> Result<AllocatedBuffer, Error> {
         let buffer_info = vk::BufferCreateInfo {
             size: self.size,
             usage: self.usage,
@@ -134,7 +136,7 @@ impl<'a> AllocatedImageBuilder<'a> {
         mut self,
         device: &ash::Device,
         allocator: &mut Allocator,
-    ) -> Result<AllocatedImage, Box<dyn std::error::Error>> {
+    ) -> Result<AllocatedImage, Error> {
         let handle = unsafe { device.create_image(&self.image_create_info_builder, None) }
             .expect("Failed to create image");
 

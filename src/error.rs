@@ -1,0 +1,35 @@
+use std::{io, str::FromStr};
+
+use ash::vk;
+
+#[derive(Debug)]
+pub enum Error {
+    VulkanError(vk::Result),
+    IOError(io::Error),
+    AllocationError(gpu_allocator::AllocationError),
+    GenericError(String),
+}
+
+impl From<io::Error> for Error {
+    fn from(error: io::Error) -> Self {
+        Error::IOError(error)
+    }
+}
+
+impl From<vk::Result> for Error {
+    fn from(error: vk::Result) -> Self {
+        Error::VulkanError(error)
+    }
+}
+
+impl From<gpu_allocator::AllocationError> for Error {
+    fn from(error: gpu_allocator::AllocationError) -> Self {
+        Error::AllocationError(error)
+    }
+}
+
+impl From<&str> for Error {
+    fn from(error: &str) -> Self {
+        Error::GenericError(String::from_str(error).expect("Failed to parse error message"))
+    }
+}

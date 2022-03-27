@@ -1,12 +1,29 @@
-use morrigu::application::{
-    event, renderer::Renderer, ApplicationBuilder, ApplicationState, Window,
+use morrigu::{
+    application::{event, ApplicationBuilder, ApplicationState, Window},
+    renderer::Renderer,
+    shader::Shader,
 };
+
+use std::path::Path;
 
 struct MachaState {
     frame_count: i32,
 }
 
 impl ApplicationState for MachaState {
+    fn on_attach(&mut self, renderer: &mut Renderer, _window: &Window) {
+        let test_shader = Shader::from_path(
+            renderer.device(),
+            Path::new("assets/gen/shaders/test/test.frag"),
+            Path::new("assets/gen/shaders/test/test.vert"),
+        )
+        .expect("Failed to create shader !");
+
+        println!("{:?}", test_shader.reflection_entry_points);
+
+        test_shader.destroy(renderer.device());
+    }
+
     fn on_update(&mut self, dt: std::time::Duration, _renderer: &mut Renderer, window: &Window) {
         self.frame_count += 1;
         if dt.as_millis() > 15 {
@@ -27,6 +44,8 @@ impl ApplicationState for MachaState {
             _ => (),
         }
     }
+
+    fn on_drop(&mut self, _renderer: &mut Renderer, _window: &Window) {}
 }
 
 fn init_logging() {

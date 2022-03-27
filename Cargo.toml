@@ -13,6 +13,7 @@ winit = "0.26"
 ash = { version = "0.36", features = ["linked", "debug"] }
 ash-window = "0.9"
 gpu-allocator = "0.17"
+spirv-reflect = "0.2.3"
 nalgebra-glm = "0.16"
 
 [workspace]

@@ -1,12 +1,9 @@
-pub mod allocated_types;
-pub mod renderer;
-
-use std::time::{Duration, Instant};
-
 pub use winit::{
     event::{self, Event},
     window::Window,
 };
+
+use crate::renderer::{Renderer, RendererBuilder};
 
 use ash::vk;
 use winit::{
@@ -17,11 +14,13 @@ use winit::{
     window::WindowBuilder,
 };
 
-use renderer::{Renderer, RendererBuilder};
+use std::time::{Duration, Instant};
 
 pub trait ApplicationState {
+    fn on_attach(&mut self, renderer: &mut Renderer, window: &Window);
     fn on_update(&mut self, dt: Duration, renderer: &mut Renderer, window: &Window);
     fn on_event(&mut self, event: Event<()>, renderer: &mut Renderer, window: &Window);
+    fn on_drop(&mut self, renderer: &mut Renderer, window: &Window);
 }
 
 pub struct ApplicationBuilder<'a> {
@@ -99,6 +98,8 @@ impl<'a> ApplicationBuilder<'a> {
             .with_name(self.application_name)
             .with_version(self.version.0, self.version.1, self.version.2)
             .build();
+
+        state.on_attach(&mut renderer, &window);
 
         let mut prev_time = Instant::now();
 
