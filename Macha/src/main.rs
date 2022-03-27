@@ -14,8 +14,8 @@ impl ApplicationState for MachaState {
     fn on_attach(&mut self, renderer: &mut Renderer, _window: &Window) {
         let test_shader = Shader::from_path(
             renderer.device(),
-            Path::new("assets/gen/shaders/test/test.frag"),
             Path::new("assets/gen/shaders/test/test.vert"),
+            Path::new("assets/gen/shaders/test/test.frag"),
         )
         .expect("Failed to create shader !");
 
