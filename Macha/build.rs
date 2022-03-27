@@ -78,9 +78,12 @@ fn compile_shader(entry: Result<DirEntry, io::Error>) {
 
 fn main() {
     println!("cargo:rerun-if-changed=assets/src/shaders/");
+    println!("cargo:rerun-if-changed=assets/gen/shaders/");
     println!("Running build script");
 
-    std::fs::remove_dir_all("assets/gen/shaders").expect("Failed to clean shader output folder");
+    if let Err(error) = std::fs::remove_dir_all("assets/gen/shaders") {
+        println!("cargo:warning=Failed to clean shader output folder {error}");
+    }
     std::fs::create_dir_all("assets/gen/shaders").expect("Failed to create shader output folder");
     recursive_compile("assets/src/shaders");
 }
