@@ -1,12 +1,33 @@
 #version 450
 
-layout(location = 0) out vec3 fragColor;
+layout(location = 0) in vec3 v_Position;
+layout(location = 1) in vec3 v_Normal;
+layout(location = 2) in vec2 v_UV;
 
-vec2 positions[3] = vec2[](vec2(0.0, -0.5), vec2(0.5, 0.5), vec2(-0.5, 0.5));
-vec3 colors[3] =
-    vec3[](vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0));
+struct Nested {
+  float member;
+};
+
+struct Outer {
+  mat4 layered1;
+  Nested member1;
+};
+
+layout(push_constant) uniform CameraData {
+  mat4 viewProjection;
+  vec4 worldPos;
+}
+pc_CameraData;
+
+layout(set = 3, binding = 0) uniform ModelData { mat4 modelMatrix; }
+u_ModelData;
+layout(set = 3, binding = 7) uniform TestNesting { Outer outer; }
+u_test;
+
+layout(location = 0) out vec2 fs_UVPassThrough;
 
 void main() {
-  gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
-  fragColor = colors[gl_VertexIndex];
+  mat4 transform = pc_CameraData.viewProjection * u_test.outer.layered1;
+  gl_Position = transform * vec4(v_Position, 1);
+  fs_UVPassThrough = v_UV;
 }

@@ -1,7 +1,27 @@
 #version 450
 
-layout(location = 0) in vec3 fragColor;
+layout(location = 0) in vec2 vs_UVPassthrough;
 
-layout(location = 0) out vec4 outColor;
+layout(set = 3, binding = 1) uniform LerpInfo {
+  float tBegin;
+  float tEnd;
+}
+u_LerpInfo;
 
-void main() { outColor = vec4(fragColor, 1.0); }
+layout(set = 3, binding = 2) uniform Colors {
+  vec4 fromColor;
+  vec4 toColor;
+}
+u_Colors;
+
+layout(location = 0) out vec4 f_Color;
+
+float inverseMix(float a, float b, float v) { return (v - a) / (b - a); }
+
+void main() {
+  float t =
+      clamp(inverseMix(u_LerpInfo.tBegin, u_LerpInfo.tEnd, vs_UVPassthrough.y),
+            0.f, 1.f);
+
+  f_Color = mix(u_Colors.fromColor, u_Colors.toColor, t);
+}

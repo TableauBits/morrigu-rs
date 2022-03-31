@@ -1,18 +1,16 @@
 use crate::error::Error;
 
 use ash::{vk, Device};
-use spirv_reflect::types::variable;
+use spirv_reflect::types::ReflectDescriptorBinding;
 
-use std::{
-    fs::{self},
-    path::Path,
-};
+use std::{fs, path::Path};
 
 pub struct Shader {
     vertex_module: vk::ShaderModule,
     fragment_module: vk::ShaderModule,
 
-    pub reflection_entry_points: Vec<variable::ReflectEntryPoint>,
+    pub vertex_bindings: Vec<ReflectDescriptorBinding>,
+    pub fragment_bindings: Vec<ReflectDescriptorBinding>,
 }
 
 impl Shader {
@@ -60,13 +58,22 @@ impl Shader {
         let vertex_module = Self::create_shader_module(device, vertex_spirv)?;
         let fragment_module = Self::create_shader_module(device, fragment_spirv)?;
 
-        let reflection_module = spirv_reflect::ShaderModule::load_u32_data(vertex_spirv)?;
-        let reflection_entry_points = reflection_module.enumerate_entry_points()?;
+        let vertex_reflection_module = spirv_reflect::ShaderModule::load_u32_data(vertex_spirv)?;
+        let vertex_entry_point = vertex_reflection_module.enumerate_entry_points()?[0].clone();
+        let vertex_bindings = vertex_reflection_module
+            .enumerate_descriptor_bindings(Some(vertex_entry_point.name.as_str()))?;
+
+        let fragment_reflection_module =
+            spirv_reflect::ShaderModule::load_u32_data(fragment_spirv)?;
+        let fragment_entry_point = fragment_reflection_module.enumerate_entry_points()?[0].clone();
+        let fragment_bindings = fragment_reflection_module
+            .enumerate_descriptor_bindings(Some(fragment_entry_point.name.as_str()))?;
 
         Ok(Self {
             vertex_module,
             fragment_module,
-            reflection_entry_points,
+            vertex_bindings,
+            fragment_bindings,
         })
     }
 

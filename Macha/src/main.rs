@@ -19,7 +19,8 @@ impl ApplicationState for MachaState {
         )
         .expect("Failed to create shader !");
 
-        println!("{:?}", test_shader.reflection_entry_points);
+        log::trace!("{:#?}", test_shader.vertex_bindings);
+        log::trace!("{:#?}", test_shader.fragment_bindings);
 
         test_shader.destroy(renderer.device());
     }
@@ -49,14 +50,21 @@ impl ApplicationState for MachaState {
 }
 
 fn init_logging() {
-    #[allow(unused_assignments)]
-    #[allow(unused_mut)]
-    let mut env = env_logger::Env::default().default_filter_or("info");
     #[cfg(debug_assertions)]
-    {
-        env = env_logger::Env::default().default_filter_or("debug");
-    }
-    env_logger::Builder::from_env(env).init();
+    let log_level = ("trace", flexi_logger::Duplicate::Debug);
+    #[cfg(not(debug_assertions))]
+    let log_level = ("info", flexi_logger::Duplicate::Info);
+
+    let file_spec = flexi_logger::FileSpec::default().suppress_timestamp();
+
+    let _logger = flexi_logger::Logger::try_with_env_or_str(log_level.0)
+        .expect("Failed to setup logging")
+        .log_to_file(file_spec)
+        .write_mode(flexi_logger::WriteMode::BufferAndFlush)
+        .duplicate_to_stdout(log_level.1)
+        .set_palette("b9;3;2;8;7".to_string())
+        .start()
+        .expect("Failed to build logger");
 }
 
 fn main() {
