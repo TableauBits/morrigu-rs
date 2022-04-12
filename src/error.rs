@@ -1,4 +1,4 @@
-use std::{io, str::FromStr};
+use std::{io, num::TryFromIntError, str::FromStr};
 
 use ash::vk;
 
@@ -7,6 +7,8 @@ pub enum Error {
     VulkanError(vk::Result),
     IOError(io::Error),
     AllocationError(gpu_allocator::AllocationError),
+    UnsupportedPlatform(TryFromIntError),
+    ImageError(image::ImageError),
     GenericError(String),
 }
 
@@ -25,6 +27,18 @@ impl From<vk::Result> for Error {
 impl From<gpu_allocator::AllocationError> for Error {
     fn from(error: gpu_allocator::AllocationError) -> Self {
         Error::AllocationError(error)
+    }
+}
+
+impl From<TryFromIntError> for Error {
+    fn from(error: TryFromIntError) -> Self {
+        Self::UnsupportedPlatform(error)
+    }
+}
+
+impl From<image::ImageError> for Error {
+    fn from(error: image::ImageError) -> Self {
+        Self::ImageError(error)
     }
 }
 

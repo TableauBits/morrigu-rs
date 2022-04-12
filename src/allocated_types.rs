@@ -1,7 +1,7 @@
 use ash::vk;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 
-use crate::error::Error;
+use crate::{error::Error, utils::CommandUploader};
 
 #[derive(Default)]
 pub struct AllocatedBuffer {
@@ -10,6 +10,11 @@ pub struct AllocatedBuffer {
 }
 
 impl AllocatedBuffer {
+    /// This defaults to a uniform buffer usage
+    pub fn builder(size: u64) -> AllocatedBufferBuilder {
+        AllocatedBufferBuilder::default(size)
+    }
+
     pub fn destroy(self, device: &ash::Device, allocator: &mut Allocator) {
         allocator
             .free(self.allocation)
@@ -25,10 +30,23 @@ pub struct AllocatedBufferBuilder {
 }
 
 impl AllocatedBufferBuilder {
-    pub fn uniform_buffer_default(size: u64) -> AllocatedBufferBuilder {
-        AllocatedBufferBuilder {
+    /// This is equivalent to `uniform_buffer_default`
+    pub fn default(size: u64) -> Self {
+        Self::uniform_buffer_default(size)
+    }
+
+    pub fn uniform_buffer_default(size: u64) -> Self {
+        Self {
             size,
             usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+            memory_location: gpu_allocator::MemoryLocation::CpuToGpu,
+        }
+    }
+
+    pub fn staging_buffer_default(size: u64) -> Self {
+        Self {
+            size,
+            usage: vk::BufferUsageFlags::TRANSFER_SRC,
             memory_location: gpu_allocator::MemoryLocation::CpuToGpu,
         }
     }
@@ -74,7 +92,7 @@ impl AllocatedBufferBuilder {
 #[derive(Default)]
 pub struct AllocatedImage {
     pub view: vk::ImageView,
-    allocation: Allocation,
+    pub allocation: Allocation,
     pub handle: vk::Image,
     pub format: vk::Format,
 }
@@ -105,24 +123,24 @@ impl<'a> AllocatedImageBuilder<'a> {
         }
     }
 
-    pub fn depth_image_default(mut self) -> Self {
+    pub fn texture_default(mut self) -> Self {
         self.image_create_info_builder = self
             .image_create_info_builder
             .image_type(vk::ImageType::TYPE_2D)
-            .format(vk::Format::D16_UNORM)
+            .format(vk::Format::R8G8B8A8_SRGB)
             .mip_levels(1)
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+            .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         self.image_view_create_info_builder = self
             .image_view_create_info_builder
             .view_type(vk::ImageViewType::TYPE_2D)
-            .format(vk::Format::D16_UNORM)
+            .format(vk::Format::R8G8B8A8_SRGB)
             .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::DEPTH,
+                aspect_mask: vk::ImageAspectFlags::COLOR,
                 base_mip_level: 0,
                 level_count: 1,
                 base_array_layer: 0,
@@ -134,8 +152,11 @@ impl<'a> AllocatedImageBuilder<'a> {
 
     pub fn build(
         mut self,
+        data: &[u8],
         device: &ash::Device,
+        graphics_queue: vk::Queue,
         allocator: &mut Allocator,
+        command_uploader: &CommandUploader,
     ) -> Result<AllocatedImage, Error> {
         let handle = unsafe { device.create_image(&self.image_create_info_builder, None) }
             .expect("Failed to create image");
@@ -147,11 +168,92 @@ impl<'a> AllocatedImageBuilder<'a> {
             location: gpu_allocator::MemoryLocation::GpuOnly,
             linear: false,
         })?;
-
         unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }?;
 
-        self.image_view_create_info_builder = self.image_view_create_info_builder.image(handle);
+        let mut staging_buffer = AllocatedBufferBuilder::staging_buffer_default(u64::try_from(
+            data.len() * std::mem::size_of::<u8>(), // Multiplication is redundant, but just in case :3 (technically a byte is not necessarily 8 bits)
+        )?)
+        .build(device, allocator)?;
 
+        let slice = staging_buffer
+            .allocation
+            .mapped_slice_mut()
+            .ok_or(gpu_allocator::AllocationError::FailedToMap)?;
+        // copy_from_slice panics if slices are of diffrent lengths, so we have to set a limit
+        // just in case the allocation decides to allocate more
+        slice[..data.len()].copy_from_slice(data);
+
+        command_uploader.immediate_command(
+            device,
+            graphics_queue,
+            |cmd_buffer: &vk::CommandBuffer| {
+                let range = vk::ImageSubresourceRange::builder()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1);
+                let transfer_dst_barrier = vk::ImageMemoryBarrier::builder()
+                    .src_access_mask(vk::AccessFlags::NONE)
+                    .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                    .old_layout(vk::ImageLayout::UNDEFINED)
+                    .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .image(handle)
+                    .subresource_range(*range);
+                unsafe {
+                    device.cmd_pipeline_barrier(
+                        *cmd_buffer,
+                        vk::PipelineStageFlags::TOP_OF_PIPE,
+                        vk::PipelineStageFlags::TRANSFER,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        std::slice::from_ref(&transfer_dst_barrier),
+                    )
+                };
+
+                let copy_region = vk::BufferImageCopy::builder()
+                    .image_subresource(vk::ImageSubresourceLayers {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        mip_level: 0,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    })
+                    .image_extent(self.image_create_info_builder.extent);
+                unsafe {
+                    device.cmd_copy_buffer_to_image(
+                        *cmd_buffer,
+                        staging_buffer.handle,
+                        handle,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        std::slice::from_ref(&copy_region),
+                    )
+                };
+
+                let shader_read_barrier = vk::ImageMemoryBarrier::builder()
+                    .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                    .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                    .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .image(handle)
+                    .subresource_range(*range);
+                unsafe {
+                    device.cmd_pipeline_barrier(
+                        *cmd_buffer,
+                        vk::PipelineStageFlags::TRANSFER,
+                        vk::PipelineStageFlags::FRAGMENT_SHADER,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        std::slice::from_ref(&shader_read_barrier),
+                    )
+                };
+            },
+        )?;
+
+        staging_buffer.destroy(device, allocator);
+
+        self.image_view_create_info_builder = self.image_view_create_info_builder.image(handle);
         let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }?;
 
         Ok(AllocatedImage {

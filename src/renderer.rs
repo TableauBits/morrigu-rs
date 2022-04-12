@@ -1,4 +1,7 @@
-use crate::allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage};
+use crate::{
+    allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage},
+    utils::CommandUploader,
+};
 
 use ash::{
     extensions::{
@@ -76,9 +79,9 @@ struct TimeData {
     time: glm::Vec4,
 }
 
-struct QueueInfo {
-    handle: vk::Queue,
-    family_index: u32,
+pub struct QueueInfo {
+    pub handle: vk::Queue,
+    pub family_index: u32,
 }
 
 struct SurfaceInfo {
@@ -126,6 +129,8 @@ pub struct Renderer {
     #[allow(dead_code)]
     debug_messenger: Option<DebugMessengerInfo>,
 
+    pub command_uploader: CommandUploader,
+
     descriptors: [DescriptorInfo; 2],
     descriptor_pool: vk::DescriptorPool,
     sync_objects: SyncObjects,
@@ -134,9 +139,9 @@ pub struct Renderer {
     swapchain_framebuffers: Vec<vk::Framebuffer>,
     primary_render_pass: vk::RenderPass,
     swapchain: SwapchainInfo,
-    present_queue: QueueInfo,
-    gpu_allocator: Option<Allocator>,
-    device: ash::Device,
+    pub graphics_queue: QueueInfo,
+    pub allocator: Allocator,
+    pub device: ash::Device,
     physical_device: vk::PhysicalDevice,
     surface: SurfaceInfo,
     instance: ash::Instance,
@@ -161,9 +166,11 @@ fn create_swapchain(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
     device: &ash::Device,
+    graphics_queue: vk::Queue,
     surface: &SurfaceInfo,
     surface_loader: &Surface,
     allocator: &mut Allocator,
+    command_uploader: &CommandUploader,
 ) -> SwapchainInfo {
     let capabilities = unsafe {
         surface_loader.get_physical_device_surface_capabilities(physical_device, surface.handle)
@@ -239,16 +246,63 @@ fn create_swapchain(
         height,
         depth: 1,
     };
-    let depth_image = AllocatedImage::builder(depth_extent)
-        .depth_image_default()
-        .build(device, allocator)
-        .expect("Failed to build depth image");
+
+    let depth_image_create_info_builder = vk::ImageCreateInfo::builder()
+        .extent(depth_extent)
+        .image_type(vk::ImageType::TYPE_2D)
+        .format(vk::Format::D32_SFLOAT)
+        .mip_levels(1)
+        .array_layers(1)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .tiling(vk::ImageTiling::OPTIMAL)
+        .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE);
+    let depth_image_handle = unsafe { device.create_image(&depth_image_create_info_builder, None) }
+        .expect("Failed to create image");
+
+    let memory_requirements = unsafe { device.get_image_memory_requirements(depth_image_handle) };
+    let depth_allocation = allocator
+        .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
+            name: "Image allocation",
+            requirements: memory_requirements,
+            location: gpu_allocator::MemoryLocation::GpuOnly,
+            linear: false,
+        })
+        .expect("Failed to allocate depth image");
+    unsafe {
+        device.bind_image_memory(
+            depth_image_handle,
+            depth_allocation.memory(),
+            depth_allocation.offset(),
+        )
+    }
+    .expect("Failed to bind depth image memory");
+
+    let depth_image_view_create_info_builder = vk::ImageViewCreateInfo::builder()
+        .view_type(vk::ImageViewType::TYPE_2D)
+        .format(vk::Format::D32_SFLOAT)
+        .subresource_range(vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::DEPTH,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        })
+        .image(depth_image_handle);
+    let depth_image_view =
+        unsafe { device.create_image_view(&depth_image_view_create_info_builder, None) }
+            .expect("Failed to create depth image view");
 
     SwapchainInfo {
         handle: swapchain,
         images: swapchain_images,
         image_views: swapchain_image_views,
-        depth_image,
+        depth_image: AllocatedImage {
+            handle: depth_image_handle,
+            view: depth_image_view,
+            allocation: depth_allocation,
+            format: depth_image_create_info_builder.format,
+        },
         preferred_present_mode,
         loader: swapchain_loader,
     }
@@ -409,8 +463,7 @@ impl<'a> RendererBuilder<'a> {
 
         physical_devices
             .iter()
-            .filter_map(device_selector)
-            .next()
+            .find_map(device_selector)
             .unwrap_or_else(|| {
                 panic!(
                     "Unable to find a suitable physical device. Candidates were {:#?}",
@@ -751,6 +804,9 @@ impl<'a> RendererBuilder<'a> {
             family_index: queue_family_index,
         };
 
+        let command_uploader = CommandUploader::new(&device, queue_family_index)
+            .expect("Failed to create a command uploader");
+
         let mut gpu_allocator =
             self.create_allocator(instance.clone(), physical_device, device.clone());
 
@@ -761,9 +817,11 @@ impl<'a> RendererBuilder<'a> {
             &instance,
             physical_device,
             &device,
+            present_queue.handle,
             &surface,
             &surface.loader,
             &mut gpu_allocator,
+            &command_uploader,
         );
 
         let primary_render_pass =
@@ -805,6 +863,7 @@ impl<'a> RendererBuilder<'a> {
 
             debug_messenger,
 
+            command_uploader,
             descriptors,
             descriptor_pool,
             sync_objects,
@@ -813,8 +872,8 @@ impl<'a> RendererBuilder<'a> {
             swapchain_framebuffers,
             primary_render_pass,
             swapchain,
-            present_queue,
-            gpu_allocator: Some(gpu_allocator),
+            graphics_queue: present_queue,
+            allocator: gpu_allocator,
             device,
             physical_device,
             surface,
@@ -825,10 +884,6 @@ impl<'a> RendererBuilder<'a> {
 }
 
 impl Renderer {
-    pub fn device(&self) -> &ash::Device {
-        &self.device
-    }
-
     pub fn begin_frame(&mut self) -> bool {
         if self.window_width == 0 || self.window_height == 0 {
             return false;
@@ -857,7 +912,7 @@ impl Renderer {
                 let fence_reset = vk::SubmitInfo::default();
                 unsafe {
                     self.device.queue_submit(
-                        self.present_queue.handle,
+                        self.graphics_queue.handle,
                         &[fence_reset],
                         self.sync_objects.render_fence,
                     )
@@ -934,7 +989,7 @@ impl Renderer {
             .signal_semaphores(std::slice::from_ref(&self.sync_objects.render_semaphore));
         unsafe {
             self.device.queue_submit(
-                self.present_queue.handle,
+                self.graphics_queue.handle,
                 &[submit_info.build()],
                 self.sync_objects.render_fence,
             )
@@ -948,7 +1003,7 @@ impl Renderer {
         let result = unsafe {
             self.swapchain
                 .loader
-                .queue_present(self.present_queue.handle, &present_info)
+                .queue_present(self.graphics_queue.handle, &present_info)
         };
 
         match result {
@@ -963,11 +1018,6 @@ impl Renderer {
     }
 
     fn recreate_swapchain(&mut self) {
-        let allocator = self
-            .gpu_allocator
-            .as_mut()
-            .expect("No GPU allocator was created yet");
-
         unsafe { self.device.device_wait_idle() }.expect("Failed to wait for device");
 
         // 1. Destroy all VK objects that will need to be recreated with the new swapchain.
@@ -978,7 +1028,7 @@ impl Renderer {
 
         //    - the depth image
         let swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
-        swapchain_depth_image.destroy(&self.device, allocator);
+        swapchain_depth_image.destroy(&self.device, &mut self.allocator);
 
         //    - the swapchain image views
         for image_view in &self.swapchain.image_views {
@@ -1003,9 +1053,11 @@ impl Renderer {
             &self.instance,
             self.physical_device,
             &self.device,
+            self.graphics_queue.handle,
             &self.surface,
             &self.surface.loader,
-            allocator,
+            &mut self.allocator,
+            &self.command_uploader,
         );
 
         //    - and finally the framebuffers
@@ -1032,10 +1084,8 @@ impl Drop for Renderer {
 
             self.device
                 .destroy_descriptor_set_layout(self.descriptors[1].layout, None);
-            if let Some(gpu_allocator) = self.gpu_allocator.as_mut() {
-                if let Some(time_buffer) = self.descriptors[0].buffer.take() {
-                    time_buffer.destroy(&self.device, gpu_allocator);
-                }
+            if let Some(time_buffer) = self.descriptors[0].buffer.take() {
+                time_buffer.destroy(&self.device, &mut self.allocator);
             }
             self.device
                 .destroy_descriptor_set_layout(self.descriptors[0].layout, None);
@@ -1058,10 +1108,8 @@ impl Drop for Renderer {
             self.device
                 .destroy_render_pass(self.primary_render_pass, None);
 
-            if let Some(gpu_allocator) = self.gpu_allocator.as_mut() {
-                let swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
-                swapchain_depth_image.destroy(&self.device, gpu_allocator);
-            }
+            let swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
+            swapchain_depth_image.destroy(&self.device, &mut self.allocator);
 
             for image_view in &self.swapchain.image_views {
                 self.device.destroy_image_view(*image_view, None);
@@ -1071,9 +1119,10 @@ impl Drop for Renderer {
                 .loader
                 .destroy_swapchain(self.swapchain.handle, None);
 
-            if let Some(gpu_allocator) = self.gpu_allocator.take() {
-                drop(gpu_allocator);
-            }
+            drop(&mut self.allocator);
+
+            let command_uploader = std::mem::take(&mut self.command_uploader);
+            command_uploader.destroy(&self.device);
 
             self.device.destroy_device(None);
 

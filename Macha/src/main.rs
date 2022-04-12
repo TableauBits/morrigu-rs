@@ -2,6 +2,7 @@ use morrigu::{
     application::{event, ApplicationBuilder, ApplicationState, Window},
     renderer::Renderer,
     shader::Shader,
+    texture::Texture,
 };
 
 use std::path::Path;
@@ -13,16 +14,23 @@ struct MachaState {
 impl ApplicationState for MachaState {
     fn on_attach(&mut self, renderer: &mut Renderer, _window: &Window) {
         let test_shader = Shader::from_path(
-            renderer.device(),
             Path::new("assets/gen/shaders/test/test.vert"),
             Path::new("assets/gen/shaders/test/test.frag"),
+            &renderer.device,
         )
-        .expect("Failed to create shader !");
+        .expect("Failed to create shader");
 
         log::trace!("{:#?}", test_shader.vertex_bindings);
         log::trace!("{:#?}", test_shader.fragment_bindings);
 
-        test_shader.destroy(renderer.device());
+        test_shader.destroy(&renderer.device);
+
+        let test_texture = Texture::from_path(Path::new("assets/img/rust.png"), renderer)
+            .expect("Failed to create texture");
+
+        log::trace!("texture path: {}", test_texture.path.as_ref().unwrap());
+
+        test_texture.destroy(&renderer.device, &mut renderer.allocator);
     }
 
     fn on_update(&mut self, dt: std::time::Duration, _renderer: &mut Renderer, window: &Window) {
@@ -62,7 +70,7 @@ fn init_logging() {
         .log_to_file(file_spec)
         .write_mode(flexi_logger::WriteMode::BufferAndFlush)
         .duplicate_to_stdout(log_level.1)
-        .set_palette("b9;3;2;8;7".to_string())
+        .set_palette("b9;3;2;8;7".to_owned())
         .start()
         .expect("Failed to build logger");
 }

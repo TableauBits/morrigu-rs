@@ -85,7 +85,7 @@ impl Shader {
             }?;
 
             if let Some(&old_binding) = map.get(&binding_reflection.binding) {
-                let mut new_binding = old_binding.clone();
+                let mut new_binding = old_binding;
                 new_binding.stage_flags |= vk::ShaderStageFlags::FRAGMENT;
                 map.insert(binding_reflection.binding, new_binding);
             } else {
@@ -108,8 +108,6 @@ impl Shader {
             bindings_infos.push(binding_info);
         }
 
-        log::trace!("{:#?}", bindings_infos);
-
         let dsl_create_info =
             vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings_infos);
 
@@ -120,21 +118,21 @@ impl Shader {
 impl Shader {
     /// This function expects a valid path for both **SPIR-V compiled** shader files.
     pub fn from_path(
-        device: &Device,
         vertex_path: &Path,
         fragment_path: &Path,
+        device: &Device,
     ) -> Result<Self, Error> {
         let vertex_spirv = fs::read(vertex_path)?;
         let fragment_spirv = fs::read(fragment_path)?;
 
-        Self::from_spirv_u8(device, &vertex_spirv, &fragment_spirv)
+        Self::from_spirv_u8(&vertex_spirv, &fragment_spirv, device)
     }
 
     /// This function expects **COMPILED SPIR-V**, not higher level languages like GLSL or HSLS source code.
     pub fn from_spirv_u8(
-        device: &Device,
         vertex_spirv: &[u8],
         fragment_spirv: &[u8],
+        device: &Device,
     ) -> Result<Self, Error> {
         let vertex_u32 = ash::util::read_spv(&mut std::io::Cursor::new(vertex_spirv))?;
         let fragment_u32 = ash::util::read_spv(&mut std::io::Cursor::new(fragment_spirv))?;

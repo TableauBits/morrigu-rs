@@ -15,6 +15,7 @@ ash-window = "0.9"
 gpu-allocator = "0.17"
 spirv-reflect = "0.2.3"
 nalgebra-glm = "0.16"
+image = "0.24.1"
 
 [workspace]
 members = [".", "Macha"]
