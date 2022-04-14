@@ -175,10 +175,9 @@ impl<'a> AllocatedImageBuilder<'a> {
         )?)
         .build(device, allocator)?;
 
-        let slice = staging_buffer
-            .allocation
-            .mapped_slice_mut()
-            .ok_or(gpu_allocator::AllocationError::FailedToMap)?;
+        let slice = staging_buffer.allocation.mapped_slice_mut().ok_or(
+            gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned()),
+        )?;
         // copy_from_slice panics if slices are of diffrent lengths, so we have to set a limit
         // just in case the allocation decides to allocate more
         slice[..data.len()].copy_from_slice(data);

@@ -12,7 +12,7 @@ log = "0.4"
 winit = "0.26"
 ash = { version = "0.36", features = ["linked", "debug"] }
 ash-window = "0.9"
-gpu-allocator = "0.17"
+gpu-allocator = { git = "https://github.com/Ithyx/gpu-allocator" }
 spirv-reflect = "0.2.3"
 nalgebra-glm = "0.16"
 image = "0.24.1"

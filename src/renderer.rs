@@ -166,11 +166,9 @@ fn create_swapchain(
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
     device: &ash::Device,
-    graphics_queue: vk::Queue,
     surface: &SurfaceInfo,
     surface_loader: &Surface,
     allocator: &mut Allocator,
-    command_uploader: &CommandUploader,
 ) -> SwapchainInfo {
     let capabilities = unsafe {
         surface_loader.get_physical_device_surface_capabilities(physical_device, surface.handle)
@@ -263,7 +261,7 @@ fn create_swapchain(
     let memory_requirements = unsafe { device.get_image_memory_requirements(depth_image_handle) };
     let depth_allocation = allocator
         .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
-            name: "Image allocation",
+            name: "Depth image allocation",
             requirements: memory_requirements,
             location: gpu_allocator::MemoryLocation::GpuOnly,
             linear: false,
@@ -817,11 +815,9 @@ impl<'a> RendererBuilder<'a> {
             &instance,
             physical_device,
             &device,
-            present_queue.handle,
             &surface,
             &surface.loader,
             &mut gpu_allocator,
-            &command_uploader,
         );
 
         let primary_render_pass =
@@ -1053,11 +1049,9 @@ impl Renderer {
             &self.instance,
             self.physical_device,
             &self.device,
-            self.graphics_queue.handle,
             &self.surface,
             &self.surface.loader,
             &mut self.allocator,
-            &self.command_uploader,
         );
 
         //    - and finally the framebuffers
@@ -1071,8 +1065,6 @@ impl Renderer {
         self.framebuffer_width = self.window_width;
         self.framebuffer_height = self.window_height;
     }
-
-    pub fn create_shader_module() {}
 }
 
 impl Drop for Renderer {
