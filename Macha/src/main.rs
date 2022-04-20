@@ -1,11 +1,14 @@
 use morrigu::{
     application::{event, ApplicationBuilder, ApplicationState, Window},
+    material::MaterialBuilder,
     renderer::Renderer,
     shader::Shader,
     texture::Texture,
 };
 
 use std::path::Path;
+
+type Vertex = morrigu::sample_vertex::TexturedVertex;
 
 struct MachaState {
     frame_count: i32,
@@ -23,14 +26,17 @@ impl ApplicationState for MachaState {
         log::trace!("{:#?}", test_shader.vertex_bindings);
         log::trace!("{:#?}", test_shader.fragment_bindings);
 
-        test_shader.destroy(&renderer.device);
+        let test_material = MaterialBuilder::new()
+            .build::<Vertex>(&test_shader, renderer)
+            .expect("Failed to create material");
 
         let test_texture = Texture::from_path(Path::new("assets/img/rust.png"), renderer)
             .expect("Failed to create texture");
-
         log::trace!("texture path: {}", test_texture.path.as_ref().unwrap());
 
-        test_texture.destroy(&renderer.device, &mut renderer.allocator);
+        test_texture.destroy(renderer);
+        test_material.destroy(renderer);
+        test_shader.destroy(&renderer.device);
     }
 
     fn on_update(&mut self, dt: std::time::Duration, _renderer: &mut Renderer, window: &Window) {

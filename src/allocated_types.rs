@@ -1,7 +1,7 @@
 use ash::vk;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 
-use crate::{error::Error, utils::CommandUploader};
+use crate::{error::Error, renderer::Renderer, utils::CommandUploader};
 
 #[derive(Default)]
 pub struct AllocatedBuffer {
@@ -98,12 +98,13 @@ pub struct AllocatedImage {
 }
 
 impl AllocatedImage {
-    pub fn destroy(self, device: &ash::Device, allocator: &mut Allocator) {
-        unsafe { device.destroy_image_view(self.view, None) };
-        allocator
+    pub fn destroy(self, renderer: &mut Renderer) {
+        unsafe { renderer.device.destroy_image_view(self.view, None) };
+        renderer
+            .allocator()
             .free(self.allocation)
             .expect("Failed to free image memory");
-        unsafe { device.destroy_image(self.handle, None) };
+        unsafe { renderer.device.destroy_image(self.handle, None) };
     }
 }
 
@@ -175,9 +176,12 @@ impl<'a> AllocatedImageBuilder<'a> {
         )?)
         .build(device, allocator)?;
 
-        let slice = staging_buffer.allocation.mapped_slice_mut().ok_or(
-            gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned()),
-        )?;
+        let slice = staging_buffer
+            .allocation
+            .mapped_slice_mut()
+            .ok_or_else(|| {
+                gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
+            })?;
         // copy_from_slice panics if slices are of diffrent lengths, so we have to set a limit
         // just in case the allocation decides to allocate more
         slice[..data.len()].copy_from_slice(data);

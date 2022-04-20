@@ -1,5 +1,7 @@
 #version 450
 
+float inverseMix(float a, float b, float v) { return (v - a) / (b - a); }
+
 layout(location = 0) in vec2 vs_UVPassthrough;
 
 layout(set = 3, binding = 1) uniform LerpInfo {
@@ -15,8 +17,6 @@ layout(set = 3, binding = 2) uniform Colors {
 u_Colors;
 
 layout(location = 0) out vec4 f_Color;
-
-float inverseMix(float a, float b, float v) { return (v - a) / (b - a); }
 
 void main() {
   float t =

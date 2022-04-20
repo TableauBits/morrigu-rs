@@ -11,6 +11,17 @@ pub struct Texture {
 }
 
 impl Texture {
+    pub fn default(renderer: &mut Renderer) -> Result<Self, Error> {
+        Self::from_data(
+            &[
+                255, 255, 255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255,
+            ],
+            2,
+            2,
+            renderer,
+        )
+    }
+
     pub fn from_path(
         path: &std::path::Path,
         renderer: &mut Renderer, // device: &ash::Device,
@@ -49,7 +60,10 @@ impl Texture {
             data,
             device,
             renderer.graphics_queue.handle,
-            &mut renderer.allocator,
+            renderer
+                .allocator
+                .as_mut()
+                .ok_or("Uinitialized allocator")?,
             &renderer.command_uploader,
         )?;
 
@@ -68,9 +82,9 @@ impl Texture {
         })
     }
 
-    pub fn destroy(self, device: &ash::Device, allocator: &mut gpu_allocator::vulkan::Allocator) {
-        unsafe { device.destroy_sampler(self.sampler, None) };
+    pub fn destroy(self, renderer: &mut Renderer) {
+        unsafe { renderer.device.destroy_sampler(self.sampler, None) };
 
-        self.image.destroy(device, allocator)
+        self.image.destroy(renderer)
     }
 }

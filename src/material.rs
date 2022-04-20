@@ -1,30 +1,308 @@
 use ash::vk;
 use gpu_allocator::vulkan::Allocator;
 
-use crate::{allocated_types::AllocatedBuffer, shader::Shader};
+use crate::{
+    allocated_types::AllocatedBuffer,
+    error::Error,
+    pipeline_builder::PipelineBuilder,
+    renderer::Renderer,
+    shader::{binding_type_cast, Shader},
+    texture::Texture,
+};
 
-pub struct Material<'a> {
-    pub pipeline: vk::Pipeline,
-    pub layout: vk::PipelineLayout,
-    pub level_2_descriptor: vk::DescriptorSet,
+use nalgebra_glm as glm;
+
+pub struct VertexInputDescription {
+    pub bindings: Vec<vk::VertexInputBindingDescription>,
+    pub attributes: Vec<vk::VertexInputAttributeDescription>,
+}
+pub trait Vertex {
+    fn vertex_input_description() -> VertexInputDescription;
+}
+
+struct CameraData {
+    view_projection_matrix: glm::Mat4,
+    world_position: glm::Vec4,
+}
+
+pub struct Material<'a, VertexType>
+where
+    VertexType: Vertex,
+{
+    descriptor_pool: vk::DescriptorPool,
+    uniform_buffers: std::collections::HashMap<u32, AllocatedBuffer>,
+    sampled_images: std::collections::HashMap<u32, Texture>,
 
     pub shader: &'a Shader,
 
-    uniform_buffers: std::collections::HashMap<u32, AllocatedBuffer>,
-    // uniform_buffers: std::collections::HashMap<u32, Texture>,
-    descriptor_pool: vk::DescriptorPool,
+    pub descriptor: vk::DescriptorSet,
+    pub layout: vk::PipelineLayout,
+    pub pipeline: vk::Pipeline,
+
+    vertex_type_safety: std::marker::PhantomData<VertexType>,
 }
 
-impl<'a> Material<'a> {
-    pub fn destroy(self, device: &ash::Device, allocator: &mut Allocator) {
-        unsafe {
-            for (_, uniform) in self.uniform_buffers {
-                uniform.destroy(device, allocator);
+pub struct MaterialBuilder {
+    pub z_test: bool,
+    pub z_write: bool,
+}
+
+impl MaterialBuilder {
+    pub fn new() -> Self {
+        Self {
+            z_test: true,
+            z_write: true,
+        }
+    }
+
+    pub fn z_test(mut self, z_test: bool) -> Self {
+        self.z_test = z_test;
+        self
+    }
+
+    pub fn z_write(mut self, z_write: bool) -> Self {
+        self.z_write = z_write;
+        self
+    }
+
+    pub fn build<'a, VertexType>(
+        self,
+        shader: &'a Shader,
+        renderer: &mut Renderer,
+    ) -> Result<Material<'a, VertexType>, Error>
+    where
+        VertexType: Vertex,
+    {
+        let mut ubo_count = 0;
+        let mut sampled_image_count = 0;
+
+        for binding in shader
+            .vertex_bindings
+            .iter()
+            .chain(shader.fragment_bindings.iter())
+        {
+            if binding.set != 2 {
+                continue;
             }
 
-            device.destroy_pipeline(self.pipeline, None);
-            device.destroy_pipeline_layout(self.layout, None);
-            device.destroy_descriptor_pool(self.descriptor_pool, None);
+            match binding_type_cast(binding.descriptor_type)? {
+                vk::DescriptorType::UNIFORM_BUFFER => ubo_count += 1,
+                vk::DescriptorType::SAMPLED_IMAGE => sampled_image_count += 1,
+                _ => (),
+            }
+        }
+
+        let pool_sizes = [
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count: std::cmp::max(ubo_count, 1),
+            },
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::SAMPLED_IMAGE,
+                descriptor_count: std::cmp::max(sampled_image_count, 1),
+            },
+        ];
+        let pool_info = vk::DescriptorPoolCreateInfo::builder()
+            .max_sets(1)
+            .pool_sizes(&pool_sizes);
+        let descriptor_pool = unsafe { renderer.device.create_descriptor_pool(&pool_info, None) }?;
+
+        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::builder()
+            .descriptor_pool(descriptor_pool)
+            .set_layouts(std::slice::from_ref(&shader.level_2_dsl));
+        let descriptor = unsafe {
+            renderer
+                .device
+                .allocate_descriptor_sets(&descriptor_set_alloc_info)
+        }?[0];
+
+        let mut uniform_buffers = std::collections::HashMap::new();
+        let mut sampled_images = std::collections::HashMap::new();
+
+        for binding in shader
+            .vertex_bindings
+            .iter()
+            .chain(shader.fragment_bindings.iter())
+        {
+            if binding.set != 2 {
+                continue;
+            }
+
+            match binding_type_cast(binding.descriptor_type)? {
+                vk::DescriptorType::UNIFORM_BUFFER => {
+                    let buffer = AllocatedBuffer::builder(binding.block.size.into())
+                        .with_usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
+                        .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
+                        .build(
+                            &renderer.device,
+                            renderer
+                                .allocator
+                                .as_mut()
+                                .ok_or("Uinitialized allocator")?,
+                        )?;
+                    let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
+                        .buffer(buffer.handle)
+                        .offset(0)
+                        .range(binding.block.size.into());
+                    let set_write = vk::WriteDescriptorSet::builder()
+                        .dst_set(descriptor)
+                        .dst_binding(binding.binding)
+                        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                        .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
+
+                    unsafe {
+                        renderer
+                            .device
+                            .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
+                    };
+                    uniform_buffers.insert(binding.binding, buffer);
+                }
+                vk::DescriptorType::SAMPLED_IMAGE => {
+                    let texture = Texture::default(renderer)?;
+                    let descriptor_image_info = vk::DescriptorImageInfo::builder()
+                        .sampler(texture.sampler)
+                        .image_view(texture.image.view)
+                        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+                    let set_write = vk::WriteDescriptorSet::builder()
+                        .dst_set(descriptor)
+                        .dst_binding(binding.binding)
+                        .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                        .image_info(std::slice::from_ref(&descriptor_image_info));
+
+                    unsafe {
+                        renderer
+                            .device
+                            .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
+                    };
+                    sampled_images.insert(binding.binding, texture);
+                }
+                _ => (),
+            }
+        }
+
+        let mut pc_shader_stages = vk::ShaderStageFlags::empty();
+        if !shader.vertex_push_constants.is_empty() {
+            pc_shader_stages |= vk::ShaderStageFlags::VERTEX;
+        }
+        if !shader.fragment_push_constants.is_empty() {
+            pc_shader_stages |= vk::ShaderStageFlags::FRAGMENT;
+        }
+
+        let mut pc_ranges = vec![];
+        if !pc_shader_stages.is_empty() {
+            pc_ranges = vec![vk::PushConstantRange::builder()
+                .stage_flags(pc_shader_stages)
+                .offset(0)
+                .size(std::mem::size_of::<CameraData>().try_into()?)
+                .build()]
+        }
+        let layouts = [
+            renderer.descriptors[0].layout,
+            renderer.descriptors[1].layout,
+            shader.level_2_dsl,
+            shader.level_3_dsl,
+        ];
+        let layout_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&layouts)
+            .push_constant_ranges(&pc_ranges);
+        let layout = unsafe { renderer.device.create_pipeline_layout(&layout_info, None) }?;
+
+        let vertex_info = VertexType::vertex_input_description();
+        let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
+            .vertex_binding_descriptions(&vertex_info.bindings)
+            .vertex_attribute_descriptions(&vertex_info.attributes);
+
+        let shader_module_entry_point = std::ffi::CString::new("main").unwrap();
+        let vertex_shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::VERTEX)
+            .module(shader.vertex_module)
+            .name(&shader_module_entry_point);
+        let fragment_shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::FRAGMENT)
+            .module(shader.fragment_module)
+            .name(&shader_module_entry_point);
+
+        let input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
+            .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
+        let rasterizer_state_info = vk::PipelineRasterizationStateCreateInfo::builder()
+            .polygon_mode(vk::PolygonMode::FILL)
+            .cull_mode(vk::CullModeFlags::NONE)
+            .front_face(vk::FrontFace::CLOCKWISE)
+            .line_width(1.0);
+        let multisampling_state_info = vk::PipelineMultisampleStateCreateInfo::builder()
+            .rasterization_samples(vk::SampleCountFlags::TYPE_1)
+            .min_sample_shading(1.0);
+        let depth_stencil_state_info = vk::PipelineDepthStencilStateCreateInfo::builder()
+            .depth_test_enable(self.z_test)
+            .depth_write_enable(self.z_write)
+            .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+            .min_depth_bounds(0.0)
+            .max_depth_bounds(1.0);
+        let color_blend_attachment_state = vk::PipelineColorBlendAttachmentState::builder()
+            .blend_enable(true)
+            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+            .color_blend_op(vk::BlendOp::ADD)
+            .src_alpha_blend_factor(vk::BlendFactor::ONE)
+            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .alpha_blend_op(vk::BlendOp::ADD)
+            .color_write_mask(vk::ColorComponentFlags::RGBA);
+
+        let pipeline = PipelineBuilder {
+            shader_stages: vec![*vertex_shader_stage, *fragment_shader_stage],
+            vertex_input_state_info: *vertex_input_state_info,
+            input_assembly_state_info: *input_assembly_state_info,
+            rasterizer_state_info: *rasterizer_state_info,
+            multisampling_state_info: *multisampling_state_info,
+            depth_stencil_state_info: *depth_stencil_state_info,
+            color_blend_attachment_state: *color_blend_attachment_state,
+            layout,
+            cache: None, // @TODO(Ithyx): use pipeline cache plz
+        }
+        .build(&renderer.device, renderer.primary_render_pass)?;
+
+        Ok(Material {
+            descriptor_pool,
+            uniform_buffers,
+            sampled_images,
+            shader,
+            descriptor,
+            layout,
+            pipeline,
+            vertex_type_safety: std::marker::PhantomData,
+        })
+    }
+}
+
+impl Default for MaterialBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<'a, VertexType> Material<'a, VertexType>
+where
+    VertexType: Vertex,
+{
+    pub fn builder() -> MaterialBuilder {
+        MaterialBuilder::new()
+    }
+
+    pub fn destroy(self, renderer: &mut Renderer) {
+        unsafe {
+            for (_, uniform) in self.uniform_buffers {
+                uniform.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
+            }
+
+            for (_, image) in self.sampled_images {
+                image.destroy(renderer);
+            }
+
+            renderer.device.destroy_pipeline(self.pipeline, None);
+            renderer.device.destroy_pipeline_layout(self.layout, None);
+            renderer
+                .device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
         }
     }
 }

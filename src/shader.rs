@@ -1,11 +1,11 @@
 use crate::error::Error;
 
 use ash::{vk, Device};
-use spirv_reflect::types::{ReflectDescriptorBinding, ReflectDescriptorType};
+use spirv_reflect::types::{ReflectBlockVariable, ReflectDescriptorBinding, ReflectDescriptorType};
 
 use std::{fs, path::Path};
 
-fn binding_type_cast(
+pub(crate) fn binding_type_cast(
     descriptor_type: ReflectDescriptorType,
 ) -> Result<vk::DescriptorType, &'static str> {
     match descriptor_type {
@@ -18,14 +18,16 @@ fn binding_type_cast(
 }
 
 pub struct Shader {
-    vertex_module: vk::ShaderModule,
-    fragment_module: vk::ShaderModule,
+    pub(crate) vertex_module: vk::ShaderModule,
+    pub(crate) fragment_module: vk::ShaderModule,
 
     pub level_2_dsl: vk::DescriptorSetLayout,
     pub level_3_dsl: vk::DescriptorSetLayout,
 
     pub vertex_bindings: Vec<ReflectDescriptorBinding>,
+    pub vertex_push_constants: Vec<ReflectBlockVariable>,
     pub fragment_bindings: Vec<ReflectDescriptorBinding>,
+    pub fragment_push_constants: Vec<ReflectBlockVariable>,
 }
 
 impl Shader {
@@ -153,12 +155,16 @@ impl Shader {
         let vertex_entry_point = vertex_reflection_module.enumerate_entry_points()?[0].clone();
         let vertex_bindings = vertex_reflection_module
             .enumerate_descriptor_bindings(Some(vertex_entry_point.name.as_str()))?;
+        let vertex_push_constants = vertex_reflection_module
+            .enumerate_push_constant_blocks(Some(vertex_entry_point.name.as_str()))?;
 
         let fragment_reflection_module =
             spirv_reflect::ShaderModule::load_u32_data(fragment_spirv)?;
         let fragment_entry_point = fragment_reflection_module.enumerate_entry_points()?[0].clone();
         let fragment_bindings = fragment_reflection_module
             .enumerate_descriptor_bindings(Some(fragment_entry_point.name.as_str()))?;
+        let fragment_push_constants = fragment_reflection_module
+            .enumerate_push_constant_blocks(Some(fragment_entry_point.name.as_str()))?;
 
         let level_2_dsl = Self::create_dsl(device, 2, &vertex_bindings, &fragment_bindings)?;
         let level_3_dsl = Self::create_dsl(device, 3, &vertex_bindings, &fragment_bindings)?;
@@ -169,7 +175,9 @@ impl Shader {
             level_2_dsl,
             level_3_dsl,
             vertex_bindings,
+            vertex_push_constants,
             fragment_bindings,
+            fragment_push_constants,
         })
     }
 

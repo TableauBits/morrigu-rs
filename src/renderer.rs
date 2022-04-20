@@ -111,10 +111,10 @@ struct SyncObjects {
     render_semaphore: vk::Semaphore,
 }
 
-struct DescriptorInfo {
-    handle: vk::DescriptorSet,
-    layout: vk::DescriptorSetLayout,
-    buffer: Option<AllocatedBuffer>,
+pub(crate) struct DescriptorInfo {
+    pub(crate) handle: vk::DescriptorSet,
+    pub(crate) layout: vk::DescriptorSetLayout,
+    pub(crate) buffer: Option<AllocatedBuffer>,
 }
 
 pub struct Renderer {
@@ -129,18 +129,18 @@ pub struct Renderer {
     #[allow(dead_code)]
     debug_messenger: Option<DebugMessengerInfo>,
 
-    pub command_uploader: CommandUploader,
+    pub(crate) command_uploader: CommandUploader,
 
-    descriptors: [DescriptorInfo; 2],
+    pub(crate) descriptors: [DescriptorInfo; 2],
     descriptor_pool: vk::DescriptorPool,
     sync_objects: SyncObjects,
     primary_command_buffer: vk::CommandBuffer,
     command_pool: vk::CommandPool,
     swapchain_framebuffers: Vec<vk::Framebuffer>,
-    primary_render_pass: vk::RenderPass,
+    pub(crate) primary_render_pass: vk::RenderPass,
     swapchain: SwapchainInfo,
     pub graphics_queue: QueueInfo,
-    pub allocator: Allocator,
+    pub allocator: Option<Allocator>,
     pub device: ash::Device,
     physical_device: vk::PhysicalDevice,
     surface: SurfaceInfo,
@@ -343,13 +343,10 @@ impl<'a> RendererBuilder<'a> {
             .engine_version(vk::make_api_version(0, 1, 0, 0))
             .api_version(vk::make_api_version(0, 1, 2, 0));
 
-        let required_extensions = ash_window::enumerate_required_extensions(self.window_handle)
-            .expect("Failed to query extensions");
         #[allow(unused_mut)]
-        let mut raw_required_extensions = required_extensions
-            .iter()
-            .map(|extension| extension.as_ptr())
-            .collect::<Vec<_>>();
+        let mut required_extensions = ash_window::enumerate_required_extensions(self.window_handle)
+            .expect("Failed to query extensions")
+            .to_vec();
 
         #[allow(unused_assignments)]
         #[allow(unused_mut)]
@@ -360,13 +357,13 @@ impl<'a> RendererBuilder<'a> {
                 [CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap()];
             raw_layer_names = layer_names.iter().map(|layer| layer.as_ptr()).collect();
 
-            raw_required_extensions.push(ash::extensions::ext::DebugUtils::name().as_ptr());
+            required_extensions.push(ash::extensions::ext::DebugUtils::name().as_ptr());
         }
 
         let instance_info = vk::InstanceCreateInfo::builder()
             .application_info(&app_info)
             .enabled_layer_names(&raw_layer_names)
-            .enabled_extension_names(&raw_required_extensions);
+            .enabled_extension_names(&required_extensions);
         unsafe {
             entry
                 .create_instance(&instance_info, None)
@@ -869,7 +866,7 @@ impl<'a> RendererBuilder<'a> {
             primary_render_pass,
             swapchain,
             graphics_queue: present_queue,
-            allocator: gpu_allocator,
+            allocator: Some(gpu_allocator),
             device,
             physical_device,
             surface,
@@ -880,6 +877,12 @@ impl<'a> RendererBuilder<'a> {
 }
 
 impl Renderer {
+    pub fn allocator(&mut self) -> &mut Allocator {
+        self.allocator
+            .as_mut()
+            .expect("Allocator was not initialized")
+    }
+
     pub fn begin_frame(&mut self) -> bool {
         if self.window_width == 0 || self.window_height == 0 {
             return false;
@@ -1024,7 +1027,7 @@ impl Renderer {
 
         //    - the depth image
         let swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
-        swapchain_depth_image.destroy(&self.device, &mut self.allocator);
+        swapchain_depth_image.destroy(self);
 
         //    - the swapchain image views
         for image_view in &self.swapchain.image_views {
@@ -1051,7 +1054,7 @@ impl Renderer {
             &self.device,
             &self.surface,
             &self.surface.loader,
-            &mut self.allocator,
+            self.allocator.as_mut().unwrap(),
         );
 
         //    - and finally the framebuffers
@@ -1077,7 +1080,7 @@ impl Drop for Renderer {
             self.device
                 .destroy_descriptor_set_layout(self.descriptors[1].layout, None);
             if let Some(time_buffer) = self.descriptors[0].buffer.take() {
-                time_buffer.destroy(&self.device, &mut self.allocator);
+                time_buffer.destroy(&self.device, self.allocator.as_mut().unwrap());
             }
             self.device
                 .destroy_descriptor_set_layout(self.descriptors[0].layout, None);
@@ -1101,7 +1104,7 @@ impl Drop for Renderer {
                 .destroy_render_pass(self.primary_render_pass, None);
 
             let swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
-            swapchain_depth_image.destroy(&self.device, &mut self.allocator);
+            swapchain_depth_image.destroy(self);
 
             for image_view in &self.swapchain.image_views {
                 self.device.destroy_image_view(*image_view, None);
@@ -1111,7 +1114,9 @@ impl Drop for Renderer {
                 .loader
                 .destroy_swapchain(self.swapchain.handle, None);
 
-            drop(&mut self.allocator);
+            if let Some(allocator) = self.allocator.take() {
+                drop(allocator);
+            }
 
             let command_uploader = std::mem::take(&mut self.command_uploader);
             command_uploader.destroy(&self.device);
