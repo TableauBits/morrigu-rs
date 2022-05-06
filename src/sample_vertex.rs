@@ -7,7 +7,6 @@ use crate::{
     material::{Vertex, VertexInputDescription},
     mesh::Mesh,
     renderer::Renderer,
-    utils::CommandUploader,
 };
 
 #[repr(C)]

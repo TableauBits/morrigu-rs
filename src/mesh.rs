@@ -1,5 +1,3 @@
-use gpu_allocator::vulkan::Allocator;
-
 use crate::{allocated_types::AllocatedBuffer, material::Vertex, renderer::Renderer};
 
 pub struct Mesh<VertexType>
@@ -17,6 +15,6 @@ where
 {
     pub fn destroy(self, renderer: &mut Renderer) {
         self.vertex_buffer
-            .destroy(&renderer.device, &mut renderer.allocator.as_mut().unwrap());
+            .destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
     }
 }
