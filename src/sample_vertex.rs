@@ -1,12 +1,20 @@
 use ash::vk;
 use nalgebra_glm as glm;
 
-use crate::material::{Vertex, VertexInputDescription};
+use crate::{
+    allocated_types::AllocatedBuffer,
+    error::Error,
+    material::{Vertex, VertexInputDescription},
+    mesh::Mesh,
+    renderer::Renderer,
+    utils::CommandUploader,
+};
 
+#[repr(C)]
 pub struct TexturedVertex {
     position: glm::Vec3,
     normal: glm::Vec3,
-    texture_coords: glm::Vec3,
+    texture_coords: glm::Vec2,
 }
 
 impl Vertex for TexturedVertex {
@@ -24,7 +32,7 @@ impl Vertex for TexturedVertex {
         let position = vk::VertexInputAttributeDescription::builder()
             .location(0)
             .binding(0)
-            .format(vk::Format::R32G32B32A32_SFLOAT)
+            .format(vk::Format::R32G32B32_SFLOAT)
             .offset(
                 memoffset::offset_of!(TexturedVertex, position)
                     .try_into()
@@ -35,7 +43,7 @@ impl Vertex for TexturedVertex {
         let normal = vk::VertexInputAttributeDescription::builder()
             .location(1)
             .binding(0)
-            .format(vk::Format::R32G32B32A32_SFLOAT)
+            .format(vk::Format::R32G32B32_SFLOAT)
             .offset(
                 memoffset::offset_of!(TexturedVertex, normal)
                     .try_into()
@@ -46,7 +54,7 @@ impl Vertex for TexturedVertex {
         let texture_coords = vk::VertexInputAttributeDescription::builder()
             .location(2)
             .binding(0)
-            .format(vk::Format::R32G32B32A32_SFLOAT)
+            .format(vk::Format::R32G32_SFLOAT)
             .offset(
                 memoffset::offset_of!(TexturedVertex, texture_coords)
                     .try_into()
@@ -58,5 +66,106 @@ impl Vertex for TexturedVertex {
             bindings: vec![main_binding],
             attributes: vec![position, normal, texture_coords],
         }
+    }
+}
+
+impl TexturedVertex {
+    pub fn load_model_from_path(
+        path: &std::path::Path,
+        renderer: &mut Renderer,
+    ) -> Result<Mesh<Self>, Error> {
+        let (load_result, _) = tobj::load_obj(
+            path,
+            &tobj::LoadOptions {
+                triangulate: true,
+                single_index: true,
+                ..Default::default()
+            },
+        )?;
+
+        let mesh = &load_result[0].mesh;
+
+        let positions = mesh
+            .positions
+            .chunks_exact(3)
+            .map(|slice| glm::Vec3::new(slice[0], slice[1], slice[2]))
+            .collect::<Vec<glm::Vec3>>();
+        let normals = mesh
+            .normals
+            .chunks_exact(3)
+            .map(|slice| glm::Vec3::new(slice[0], slice[1], slice[2]))
+            .collect::<Vec<glm::Vec3>>();
+        let texture_coordinates = mesh
+            .texcoords
+            .chunks_exact(2)
+            .map(|slice| glm::Vec2::new(slice[0], slice[1]))
+            .collect::<Vec<glm::Vec2>>();
+
+        let mut vertices = Vec::with_capacity(positions.len());
+        for index in 0..positions.len() {
+            vertices.push(TexturedVertex {
+                position: positions[index],
+                normal: normals[index],
+                texture_coords: texture_coordinates[index],
+            });
+        }
+
+        let indices = mesh.indices.clone();
+
+        let data_size: u64 = (vertices.len() * std::mem::size_of::<Self>()).try_into()?;
+        let staging_buffer = AllocatedBuffer::builder(data_size)
+            .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
+            .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
+            .build(
+                &renderer.device,
+                renderer
+                    .allocator
+                    .as_mut()
+                    .ok_or("Uninitialized allocator")?,
+            )?;
+        let staging_ptr = staging_buffer
+            .allocation
+            .mapped_ptr()
+            .ok_or_else(|| {
+                gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
+            })?
+            .cast::<Self>()
+            .as_ptr();
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(vertices.as_ptr(), staging_ptr, vertices.len());
+        };
+
+        let vertex_buffer = AllocatedBuffer::builder(data_size)
+            .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER)
+            .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
+            .build(
+                &renderer.device,
+                renderer
+                    .allocator
+                    .as_mut()
+                    .ok_or("Uninitialized allocator")?,
+            )?;
+
+        renderer.immediate_command(|cmd_buffer| {
+            let copy_info = vk::BufferCopy::builder().size(data_size);
+
+            unsafe {
+                renderer.device.cmd_copy_buffer(
+                    *cmd_buffer,
+                    staging_buffer.handle,
+                    vertex_buffer.handle,
+                    std::slice::from_ref(&copy_info),
+                );
+            }
+        })?;
+
+        staging_buffer.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
+
+        Ok(Mesh::<Self> {
+            vertices,
+            indices,
+            vertex_buffer,
+        })
     }
 }

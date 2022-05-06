@@ -1,5 +1,6 @@
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage},
+    error::Error,
     utils::CommandUploader,
 };
 
@@ -883,7 +884,7 @@ impl Renderer {
             .expect("Allocator was not initialized")
     }
 
-    pub fn begin_frame(&mut self) -> bool {
+    pub(crate) fn begin_frame(&mut self) -> bool {
         if self.window_width == 0 || self.window_height == 0 {
             return false;
         }
@@ -976,7 +977,7 @@ impl Renderer {
         }
     }
 
-    pub fn end_frame(&self) {
+    pub(crate) fn end_frame(&self) {
         unsafe { self.device.cmd_end_render_pass(self.primary_command_buffer) };
         unsafe { self.device.end_command_buffer(self.primary_command_buffer) }
             .expect("Failed to record command buffer");
@@ -1011,7 +1012,7 @@ impl Renderer {
         };
     }
 
-    pub fn on_resize(&mut self, width: u32, height: u32) {
+    pub(crate) fn on_resize(&mut self, width: u32, height: u32) {
         self.window_width = width;
         self.window_height = height;
     }
@@ -1067,6 +1068,14 @@ impl Renderer {
         );
         self.framebuffer_width = self.window_width;
         self.framebuffer_height = self.window_height;
+    }
+
+    pub(crate) fn immediate_command<F>(&self, function: F) -> Result<(), Error>
+    where
+        F: FnOnce(&vk::CommandBuffer),
+    {
+        self.command_uploader
+            .immediate_command(&self.device, self.graphics_queue.handle, function)
     }
 }
 

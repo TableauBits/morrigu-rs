@@ -9,6 +9,7 @@ pub enum Error {
     AllocationError(gpu_allocator::AllocationError),
     UnsupportedPlatform(TryFromIntError),
     ImageError(image::ImageError),
+    ModelLoadError(tobj::LoadError),
     GenericError(String),
 }
 
@@ -39,6 +40,12 @@ impl From<TryFromIntError> for Error {
 impl From<image::ImageError> for Error {
     fn from(error: image::ImageError) -> Self {
         Self::ImageError(error)
+    }
+}
+
+impl From<tobj::LoadError> for Error {
+    fn from(error: tobj::LoadError) -> Self {
+        Self::ModelLoadError(error)
     }
 }
 

@@ -1,5 +1,4 @@
 use ash::vk;
-use gpu_allocator::vulkan::Allocator;
 
 use crate::{
     allocated_types::AllocatedBuffer,
@@ -138,7 +137,7 @@ impl MaterialBuilder {
                             renderer
                                 .allocator
                                 .as_mut()
-                                .ok_or("Uinitialized allocator")?,
+                                .ok_or("Unintialized allocator")?,
                         )?;
                     let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
                         .buffer(buffer.handle)

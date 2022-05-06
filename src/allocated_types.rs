@@ -6,7 +6,7 @@ use crate::{error::Error, renderer::Renderer, utils::CommandUploader};
 #[derive(Default)]
 pub struct AllocatedBuffer {
     pub handle: vk::Buffer,
-    allocation: Allocation,
+    pub(crate) allocation: Allocation,
 }
 
 impl AllocatedBuffer {
