@@ -14,10 +14,11 @@ ash = { version = "0.37", features = ["linked", "debug"] }
 ash-window = "0.10"
 gpu-allocator = { git = "https://github.com/Ithyx/gpu-allocator", rev = "80c1d98fc58225f4fdf2f9b9d2d8a0fe4c88d90e" }
 spirv-reflect = "0.2.3"
-nalgebra-glm = "0.16"
+nalgebra-glm = "0.17.0"
 image = "0.24.1"
 memoffset = "0.6"
 tobj = "3.2.2"
+bevy_ecs = "0.7.0"
 
 [workspace]
 members = [".", "Macha"]
