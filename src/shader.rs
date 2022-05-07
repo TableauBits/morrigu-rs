@@ -21,8 +21,8 @@ pub struct Shader {
     pub(crate) vertex_module: vk::ShaderModule,
     pub(crate) fragment_module: vk::ShaderModule,
 
-    pub level_2_dsl: vk::DescriptorSetLayout,
-    pub level_3_dsl: vk::DescriptorSetLayout,
+    pub(crate) level_2_dsl: vk::DescriptorSetLayout,
+    pub(crate) level_3_dsl: vk::DescriptorSetLayout,
 
     pub vertex_bindings: Vec<ReflectDescriptorBinding>,
     pub vertex_push_constants: Vec<ReflectBlockVariable>,

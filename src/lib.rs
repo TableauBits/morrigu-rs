@@ -1,5 +1,6 @@
 pub mod allocated_types;
 pub mod application;
+pub mod components;
 pub mod error;
 pub mod material;
 pub mod mesh;

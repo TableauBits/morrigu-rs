@@ -34,9 +34,9 @@ where
 
     pub shader: &'a Shader,
 
-    pub descriptor: vk::DescriptorSet,
-    pub layout: vk::PipelineLayout,
-    pub pipeline: vk::Pipeline,
+    pub(crate) descriptor_set: vk::DescriptorSet,
+    pub(crate) layout: vk::PipelineLayout,
+    pub(crate) pipeline: vk::Pipeline,
 
     vertex_type_safety: std::marker::PhantomData<VertexType>,
 }
@@ -109,7 +109,7 @@ impl MaterialBuilder {
         let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(descriptor_pool)
             .set_layouts(std::slice::from_ref(&shader.level_2_dsl));
-        let descriptor = unsafe {
+        let descriptor_set = unsafe {
             renderer
                 .device
                 .allocate_descriptor_sets(&descriptor_set_alloc_info)
@@ -144,7 +144,7 @@ impl MaterialBuilder {
                         .offset(0)
                         .range(binding.block.size.into());
                     let set_write = vk::WriteDescriptorSet::builder()
-                        .dst_set(descriptor)
+                        .dst_set(descriptor_set)
                         .dst_binding(binding.binding)
                         .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                         .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
@@ -163,7 +163,7 @@ impl MaterialBuilder {
                         .image_view(texture.image.view)
                         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
                     let set_write = vk::WriteDescriptorSet::builder()
-                        .dst_set(descriptor)
+                        .dst_set(descriptor_set)
                         .dst_binding(binding.binding)
                         .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
                         .image_info(std::slice::from_ref(&descriptor_image_info));
@@ -265,7 +265,7 @@ impl MaterialBuilder {
             uniform_buffers,
             sampled_images,
             shader,
-            descriptor,
+            descriptor_set,
             layout,
             pipeline,
             vertex_type_safety: std::marker::PhantomData,

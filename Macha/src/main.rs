@@ -1,5 +1,6 @@
 use morrigu::{
     application::{event, ApplicationBuilder, ApplicationState, Window},
+    components::mesh_renderer::MeshRenderer,
     material::MaterialBuilder,
     renderer::Renderer,
     shader::Shader,
@@ -34,12 +35,16 @@ impl ApplicationState for MachaState {
             Vertex::load_model_from_path(Path::new("assets/meshes/monkey.obj"), renderer)
                 .expect("Failed to load mesh");
 
+        let test_mesh_renderer = MeshRenderer::new(&test_mesh, &test_material, renderer)
+            .expect("Failed to rceate mesh renderer");
+
         let test_texture = Texture::from_path(Path::new("assets/img/rust.png"), renderer)
             .expect("Failed to create texture");
         log::trace!("texture path: {}", test_texture.path.as_ref().unwrap());
 
-        test_mesh.destroy(renderer);
         test_texture.destroy(renderer);
+        test_mesh_renderer.destroy(renderer);
+        test_mesh.destroy(renderer);
         test_material.destroy(renderer);
         test_shader.destroy(&renderer.device);
     }
