@@ -266,6 +266,37 @@ impl<'a> AllocatedImageBuilder<'a> {
             format: self.image_create_info_builder.format,
         })
     }
+
+    /// Used internally for texture cloning.
+    ///
+    /// WARNING: no memory barrier has been applied to the image, meaning it's still in vk::ImageLayout::UNDEFINED
+    pub(crate) fn build_uninitialized(
+        mut self,
+        device: &ash::Device,
+        allocator: &mut Allocator,
+    ) -> Result<AllocatedImage, Error> {
+        let handle = unsafe { device.create_image(&self.image_create_info_builder, None) }
+            .expect("Failed to create image");
+
+        let memory_requirements = unsafe { device.get_image_memory_requirements(handle) };
+        let allocation = allocator.allocate(&AllocationCreateDesc {
+            name: "Image allocation",
+            requirements: memory_requirements,
+            location: gpu_allocator::MemoryLocation::GpuOnly,
+            linear: false,
+        })?;
+        unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }?;
+
+        self.image_view_create_info_builder = self.image_view_create_info_builder.image(handle);
+        let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }?;
+
+        Ok(AllocatedImage {
+            view,
+            allocation,
+            handle,
+            format: self.image_create_info_builder.format,
+        })
+    }
 }
 
 impl<'a> AllocatedImage {

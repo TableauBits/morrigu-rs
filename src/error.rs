@@ -54,3 +54,9 @@ impl From<&str> for Error {
         Error::GenericError(String::from_str(error).expect("Failed to parse error message"))
     }
 }
+
+impl From<String> for Error {
+    fn from(error: String) -> Self {
+        Error::GenericError(error)
+    }
+}
