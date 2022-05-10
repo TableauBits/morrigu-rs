@@ -21,7 +21,7 @@ tobj = "3.2.2"
 bevy_ecs = "0.7.0"
 
 [workspace]
-members = [".", "Macha"]
+members = [".", "macha"]
 
 [profile.release]
 debug = true

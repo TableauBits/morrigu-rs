@@ -51,7 +51,7 @@ impl ApplicationState for MachaState {
 
     fn on_update(&mut self, dt: std::time::Duration, _renderer: &mut Renderer, window: &Window) {
         self.frame_count += 1;
-        if dt.as_millis() > 15 {
+        if dt.as_millis() > 25 {
             let string = format!("frame {} handled in {}ms", self.frame_count, dt.as_millis());
             log::warn!("{}", string);
             window.set_title(&string);

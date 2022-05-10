@@ -17,6 +17,7 @@ use nalgebra_glm as glm;
 use winit::window::Window;
 
 use std::{
+    cmp::Ordering,
     ffi::{CStr, CString},
     mem,
 };
@@ -417,7 +418,7 @@ impl<'a> RendererBuilder<'a> {
         surface_loader: &Surface,
         required_version: u32,
     ) -> (vk::PhysicalDevice, u32) {
-        let physical_devices = unsafe { instance.enumerate_physical_devices() }
+        let mut physical_devices = unsafe { instance.enumerate_physical_devices() }
             .expect("Failed to query physical devices");
 
         let device_selector =
@@ -457,6 +458,38 @@ impl<'a> RendererBuilder<'a> {
                     .find_map(device_discriminator)
             };
 
+        physical_devices.sort_unstable_by(|a, b| {
+            let device_a_info = unsafe { instance.get_physical_device_properties(*a) };
+            let device_b_info = unsafe { instance.get_physical_device_properties(*b) };
+
+            let mut ordering = Ordering::Equal;
+            if device_a_info.device_type == vk::PhysicalDeviceType::DISCRETE_GPU
+                && device_b_info.device_type != vk::PhysicalDeviceType::DISCRETE_GPU
+            {
+                ordering = Ordering::Less;
+            }
+            if device_b_info.device_type == vk::PhysicalDeviceType::DISCRETE_GPU
+                && device_a_info.device_type != vk::PhysicalDeviceType::DISCRETE_GPU
+            {
+                ordering = Ordering::Greater;
+            }
+
+            ordering
+        });
+        log::debug!("Physical device list (sorted):");
+        for device in &physical_devices {
+            let device_info = unsafe { instance.get_physical_device_properties(*device) };
+
+            log::debug!(
+                "\t{}: {}",
+                unsafe {
+                    CStr::from_ptr(device_info.device_name.as_ptr())
+                        .to_str()
+                        .unwrap_or("Invalid name")
+                },
+                device_type_to_str(device_info.device_type)
+            );
+        }
         physical_devices
             .iter()
             .find_map(device_selector)
