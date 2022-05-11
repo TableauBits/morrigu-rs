@@ -300,11 +300,11 @@ where
 
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         unsafe {
-            for (_, uniform) in &mut self.uniform_buffers {
+            for uniform in self.uniform_buffers.values_mut() {
                 uniform.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
             }
 
-            for (_, image) in &mut self.sampled_images {
+            for image in self.sampled_images.values_mut() {
                 let mut image = image.lock();
                 image.destroy(renderer);
             }

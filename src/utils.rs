@@ -8,9 +8,7 @@ pub struct ThreadSafeRef<T>(Arc<Mutex<T>>);
 
 impl<T> ThreadSafeRef<T> {
     pub fn new(value: T) -> Self {
-        Self {
-            0: Arc::new(Mutex::new(value)),
-        }
+        Self(Arc::new(Mutex::new(value)))
     }
 
     pub fn lock(&self) -> MutexGuard<T> {

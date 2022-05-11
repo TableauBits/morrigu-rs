@@ -35,8 +35,7 @@ impl Texture {
         let image = image::open(path)?.fliph();
         let dimensions = image.dimensions();
 
-        let mut new_texture =
-            Self::from_data(image.as_bytes(), dimensions.0, dimensions.1, renderer)?;
+        let new_texture = Self::from_data(image.as_bytes(), dimensions.0, dimensions.1, renderer)?;
         new_texture.lock().path = Some(path.to_str().unwrap_or("invalid path").to_owned());
         Ok(new_texture)
     }
