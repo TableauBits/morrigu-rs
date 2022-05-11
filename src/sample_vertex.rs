@@ -111,8 +111,8 @@ impl TexturedVertex {
 
         let indices = mesh.indices.clone();
 
-        let data_size: u64 = (vertices.len() * std::mem::size_of::<Self>()).try_into()?;
-        let staging_buffer = AllocatedBuffer::builder(data_size)
+        let vertex_data_size: u64 = (vertices.len() * std::mem::size_of::<Self>()).try_into()?;
+        let vertex_staging_buffer = AllocatedBuffer::builder(vertex_data_size)
             .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
             .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
             .build(
@@ -122,7 +122,7 @@ impl TexturedVertex {
                     .as_mut()
                     .ok_or("Uninitialized allocator")?,
             )?;
-        let staging_ptr = staging_buffer
+        let vertex_staging_ptr = vertex_staging_buffer
             .allocation
             .mapped_ptr()
             .ok_or_else(|| {
@@ -132,10 +132,10 @@ impl TexturedVertex {
             .as_ptr();
 
         unsafe {
-            std::ptr::copy_nonoverlapping(vertices.as_ptr(), staging_ptr, vertices.len());
+            std::ptr::copy_nonoverlapping(vertices.as_ptr(), vertex_staging_ptr, vertices.len());
         };
 
-        let vertex_buffer = AllocatedBuffer::builder(data_size)
+        let vertex_buffer = AllocatedBuffer::builder(vertex_data_size)
             .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER)
             .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
             .build(
@@ -147,24 +147,76 @@ impl TexturedVertex {
             )?;
 
         renderer.immediate_command(|cmd_buffer| {
-            let copy_info = vk::BufferCopy::builder().size(data_size);
+            let copy_info = vk::BufferCopy::builder().size(vertex_data_size);
 
             unsafe {
                 renderer.device.cmd_copy_buffer(
                     *cmd_buffer,
-                    staging_buffer.handle,
+                    vertex_staging_buffer.handle,
                     vertex_buffer.handle,
                     std::slice::from_ref(&copy_info),
                 );
             }
         })?;
 
-        staging_buffer.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
+        vertex_staging_buffer.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
+
+        let index_data_size: u64 = (indices.len() * std::mem::size_of::<u32>()).try_into()?;
+        let index_staging_buffer = AllocatedBuffer::builder(index_data_size)
+            .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
+            .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
+            .build(
+                &renderer.device,
+                renderer
+                    .allocator
+                    .as_mut()
+                    .ok_or("Uninitialized allocator")?,
+            )?;
+
+        let index_staging_ptr = index_staging_buffer
+            .allocation
+            .mapped_ptr()
+            .ok_or_else(|| {
+                gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
+            })?
+            .cast::<u32>()
+            .as_ptr();
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(indices.as_ptr(), index_staging_ptr, indices.len());
+        };
+
+        let index_buffer = AllocatedBuffer::builder(index_data_size)
+            .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER)
+            .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
+            .build(
+                &renderer.device,
+                renderer
+                    .allocator
+                    .as_mut()
+                    .ok_or("Uninitialized allocator")?,
+            )?;
+
+        renderer.immediate_command(|cmd_buffer| {
+            let copy_info = vk::BufferCopy::builder().size(index_data_size);
+
+            unsafe {
+                renderer.device.cmd_copy_buffer(
+                    *cmd_buffer,
+                    index_staging_buffer.handle,
+                    index_buffer.handle,
+                    std::slice::from_ref(&copy_info),
+                );
+            }
+        })?;
+
+        index_staging_buffer.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
 
         Ok(Mesh::<Self> {
             vertices,
             indices,
             vertex_buffer,
+            index_buffer,
         })
     }
 }
