@@ -7,6 +7,7 @@ use crate::{
     material::{Vertex, VertexInputDescription},
     mesh::Mesh,
     renderer::Renderer,
+    utils::ThreadSafeRef,
 };
 
 #[repr(C)]
@@ -72,7 +73,7 @@ impl TexturedVertex {
     pub fn load_model_from_path(
         path: &std::path::Path,
         renderer: &mut Renderer,
-    ) -> Result<Mesh<Self>, Error> {
+    ) -> Result<ThreadSafeRef<Mesh<Self>>, Error> {
         let (load_result, _) = tobj::load_obj(
             path,
             &tobj::LoadOptions {
@@ -112,7 +113,7 @@ impl TexturedVertex {
         let indices = mesh.indices.clone();
 
         let vertex_data_size: u64 = (vertices.len() * std::mem::size_of::<Self>()).try_into()?;
-        let vertex_staging_buffer = AllocatedBuffer::builder(vertex_data_size)
+        let mut vertex_staging_buffer = AllocatedBuffer::builder(vertex_data_size)
             .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
             .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
             .build(
@@ -124,6 +125,8 @@ impl TexturedVertex {
             )?;
         let vertex_staging_ptr = vertex_staging_buffer
             .allocation
+            .as_ref()
+            .ok_or("use after free")?
             .mapped_ptr()
             .ok_or_else(|| {
                 gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
@@ -162,7 +165,7 @@ impl TexturedVertex {
         vertex_staging_buffer.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
 
         let index_data_size: u64 = (indices.len() * std::mem::size_of::<u32>()).try_into()?;
-        let index_staging_buffer = AllocatedBuffer::builder(index_data_size)
+        let mut index_staging_buffer = AllocatedBuffer::builder(index_data_size)
             .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
             .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
             .build(
@@ -175,6 +178,8 @@ impl TexturedVertex {
 
         let index_staging_ptr = index_staging_buffer
             .allocation
+            .as_ref()
+            .ok_or("use after free")?
             .mapped_ptr()
             .ok_or_else(|| {
                 gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
@@ -212,11 +217,11 @@ impl TexturedVertex {
 
         index_staging_buffer.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
 
-        Ok(Mesh::<Self> {
+        Ok(ThreadSafeRef::new(Mesh::<Self> {
             vertices,
             indices,
             vertex_buffer,
             index_buffer,
-        })
+        }))
     }
 }

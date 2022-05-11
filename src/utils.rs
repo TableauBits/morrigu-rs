@@ -1,6 +1,31 @@
+use std::sync::{Arc, Mutex, MutexGuard};
+
 use ash::vk::{self, CommandPoolResetFlags};
 
 use crate::error::Error;
+
+pub struct ThreadSafeRef<T>(Arc<Mutex<T>>);
+
+impl<T> ThreadSafeRef<T> {
+    pub fn new(value: T) -> Self {
+        Self {
+            0: Arc::new(Mutex::new(value)),
+        }
+    }
+
+    pub fn lock(&self) -> MutexGuard<T> {
+        match self.0.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+}
+
+impl<T> Clone for ThreadSafeRef<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 #[derive(Default)]
 pub struct CommandUploader {

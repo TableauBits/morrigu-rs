@@ -14,7 +14,7 @@ impl<VertexType> Mesh<VertexType>
 where
     VertexType: Vertex,
 {
-    pub fn destroy(self, renderer: &mut Renderer) {
+    pub fn destroy(&mut self, renderer: &mut Renderer) {
         self.index_buffer
             .destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
         self.vertex_buffer

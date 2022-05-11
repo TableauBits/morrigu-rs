@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::{error::Error, utils::ThreadSafeRef};
 
 use ash::{vk, Device};
 use spirv_reflect::types::{ReflectBlockVariable, ReflectDescriptorBinding, ReflectDescriptorType};
@@ -17,6 +17,14 @@ pub(crate) fn binding_type_cast(
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct BindingData {
+    pub set: u32,
+    pub slot: u32,
+    pub descriptor_type: ReflectDescriptorType,
+    pub size: u32,
+}
+
 pub struct Shader {
     pub(crate) vertex_module: vk::ShaderModule,
     pub(crate) fragment_module: vk::ShaderModule,
@@ -24,9 +32,9 @@ pub struct Shader {
     pub(crate) level_2_dsl: vk::DescriptorSetLayout,
     pub(crate) level_3_dsl: vk::DescriptorSetLayout,
 
-    pub vertex_bindings: Vec<ReflectDescriptorBinding>,
+    pub vertex_bindings: Vec<BindingData>,
     pub vertex_push_constants: Vec<ReflectBlockVariable>,
-    pub fragment_bindings: Vec<ReflectDescriptorBinding>,
+    pub fragment_bindings: Vec<BindingData>,
     pub fragment_push_constants: Vec<ReflectBlockVariable>,
 }
 
@@ -123,7 +131,7 @@ impl Shader {
         vertex_path: &Path,
         fragment_path: &Path,
         device: &Device,
-    ) -> Result<Self, Error> {
+    ) -> Result<ThreadSafeRef<Self>, Error> {
         let vertex_spirv = fs::read(vertex_path)?;
         let fragment_spirv = fs::read(fragment_path)?;
 
@@ -135,7 +143,7 @@ impl Shader {
         vertex_spirv: &[u8],
         fragment_spirv: &[u8],
         device: &Device,
-    ) -> Result<Self, Error> {
+    ) -> Result<ThreadSafeRef<Self>, Error> {
         let vertex_u32 = ash::util::read_spv(&mut std::io::Cursor::new(vertex_spirv))?;
         let fragment_u32 = ash::util::read_spv(&mut std::io::Cursor::new(fragment_spirv))?;
 
@@ -147,13 +155,13 @@ impl Shader {
         device: &Device,
         vertex_spirv: &[u32],
         fragment_spirv: &[u32],
-    ) -> Result<Self, Error> {
+    ) -> Result<ThreadSafeRef<Self>, Error> {
         let vertex_module = Self::create_shader_module(device, vertex_spirv)?;
         let fragment_module = Self::create_shader_module(device, fragment_spirv)?;
 
         let vertex_reflection_module = spirv_reflect::ShaderModule::load_u32_data(vertex_spirv)?;
         let vertex_entry_point = vertex_reflection_module.enumerate_entry_points()?[0].clone();
-        let vertex_bindings = vertex_reflection_module
+        let vertex_bindings_reflection = vertex_reflection_module
             .enumerate_descriptor_bindings(Some(vertex_entry_point.name.as_str()))?;
         let vertex_push_constants = vertex_reflection_module
             .enumerate_push_constant_blocks(Some(vertex_entry_point.name.as_str()))?;
@@ -161,15 +169,44 @@ impl Shader {
         let fragment_reflection_module =
             spirv_reflect::ShaderModule::load_u32_data(fragment_spirv)?;
         let fragment_entry_point = fragment_reflection_module.enumerate_entry_points()?[0].clone();
-        let fragment_bindings = fragment_reflection_module
+        let fragment_bindings_reflection = fragment_reflection_module
             .enumerate_descriptor_bindings(Some(fragment_entry_point.name.as_str()))?;
         let fragment_push_constants = fragment_reflection_module
             .enumerate_push_constant_blocks(Some(fragment_entry_point.name.as_str()))?;
 
-        let level_2_dsl = Self::create_dsl(device, 2, &vertex_bindings, &fragment_bindings)?;
-        let level_3_dsl = Self::create_dsl(device, 3, &vertex_bindings, &fragment_bindings)?;
+        let level_2_dsl = Self::create_dsl(
+            device,
+            2,
+            &vertex_bindings_reflection,
+            &fragment_bindings_reflection,
+        )?;
+        let level_3_dsl = Self::create_dsl(
+            device,
+            3,
+            &vertex_bindings_reflection,
+            &fragment_bindings_reflection,
+        )?;
 
-        Ok(Self {
+        let vertex_bindings = vertex_bindings_reflection
+            .iter()
+            .map(|binding| BindingData {
+                set: binding.set,
+                slot: binding.binding,
+                descriptor_type: binding.descriptor_type,
+                size: binding.block.size,
+            })
+            .collect::<Vec<_>>();
+        let fragment_bindings = fragment_bindings_reflection
+            .iter()
+            .map(|binding| BindingData {
+                set: binding.set,
+                slot: binding.binding,
+                descriptor_type: binding.descriptor_type,
+                size: binding.block.size,
+            })
+            .collect::<Vec<_>>();
+
+        Ok(ThreadSafeRef::new(Self {
             vertex_module,
             fragment_module,
             level_2_dsl,
@@ -178,10 +215,10 @@ impl Shader {
             vertex_push_constants,
             fragment_bindings,
             fragment_push_constants,
-        })
+        }))
     }
 
-    pub fn destroy(self, device: &Device) {
+    pub fn destroy(&mut self, device: &Device) {
         unsafe {
             device.destroy_descriptor_set_layout(self.level_3_dsl, None);
             device.destroy_descriptor_set_layout(self.level_2_dsl, None);

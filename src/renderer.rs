@@ -300,7 +300,7 @@ fn create_swapchain(
         depth_image: AllocatedImage {
             handle: depth_image_handle,
             view: depth_image_view,
-            allocation: depth_allocation,
+            allocation: Some(depth_allocation),
             format: depth_image_create_info_builder.format,
         },
         preferred_present_mode,
@@ -1060,7 +1060,7 @@ impl Renderer {
         }
 
         //    - the depth image
-        let swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
+        let mut swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
         swapchain_depth_image.destroy(self);
 
         //    - the swapchain image views
@@ -1121,7 +1121,7 @@ impl Drop for Renderer {
 
             self.device
                 .destroy_descriptor_set_layout(self.descriptors[1].layout, None);
-            if let Some(time_buffer) = self.descriptors[0].buffer.take() {
+            if let Some(mut time_buffer) = self.descriptors[0].buffer.take() {
                 time_buffer.destroy(&self.device, self.allocator.as_mut().unwrap());
             }
             self.device
@@ -1145,7 +1145,7 @@ impl Drop for Renderer {
             self.device
                 .destroy_render_pass(self.primary_render_pass, None);
 
-            let swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
+            let mut swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
             swapchain_depth_image.destroy(self);
 
             for image_view in &self.swapchain.image_views {

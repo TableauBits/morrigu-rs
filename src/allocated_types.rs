@@ -6,7 +6,7 @@ use crate::{error::Error, renderer::Renderer, utils::CommandUploader};
 #[derive(Default)]
 pub struct AllocatedBuffer {
     pub handle: vk::Buffer,
-    pub(crate) allocation: Allocation,
+    pub(crate) allocation: Option<Allocation>,
 }
 
 impl AllocatedBuffer {
@@ -15,11 +15,13 @@ impl AllocatedBuffer {
         AllocatedBufferBuilder::default(size)
     }
 
-    pub fn destroy(self, device: &ash::Device, allocator: &mut Allocator) {
-        allocator
-            .free(self.allocation)
-            .expect("Failed to free buffer memory");
-        unsafe { device.destroy_buffer(self.handle, None) };
+    pub fn destroy(&mut self, device: &ash::Device, allocator: &mut Allocator) {
+        if let Some(allocation) = self.allocation.take() {
+            allocator
+                .free(allocation)
+                .expect("Failed to free buffer memory");
+            unsafe { device.destroy_buffer(self.handle, None) };
+        }
     }
 }
 
@@ -85,26 +87,31 @@ impl AllocatedBufferBuilder {
 
         unsafe { device.bind_buffer_memory(handle, allocation.memory(), allocation.offset()) }?;
 
-        Ok(AllocatedBuffer { handle, allocation })
+        Ok(AllocatedBuffer {
+            handle,
+            allocation: Some(allocation),
+        })
     }
 }
 
 #[derive(Default)]
 pub struct AllocatedImage {
     pub view: vk::ImageView,
-    pub allocation: Allocation,
+    pub allocation: Option<Allocation>,
     pub handle: vk::Image,
     pub format: vk::Format,
 }
 
 impl AllocatedImage {
-    pub fn destroy(self, renderer: &mut Renderer) {
-        unsafe { renderer.device.destroy_image_view(self.view, None) };
-        renderer
-            .allocator()
-            .free(self.allocation)
-            .expect("Failed to free image memory");
-        unsafe { renderer.device.destroy_image(self.handle, None) };
+    pub fn destroy(&mut self, renderer: &mut Renderer) {
+        if let Some(allocation) = self.allocation.take() {
+            unsafe { renderer.device.destroy_image_view(self.view, None) };
+            renderer
+                .allocator()
+                .free(allocation)
+                .expect("Failed to free image memory");
+            unsafe { renderer.device.destroy_image(self.handle, None) };
+        }
     }
 }
 
@@ -178,6 +185,8 @@ impl<'a> AllocatedImageBuilder<'a> {
 
         let slice = staging_buffer
             .allocation
+            .as_mut()
+            .ok_or("use after free")?
             .mapped_slice_mut()
             .ok_or_else(|| {
                 gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
@@ -261,7 +270,7 @@ impl<'a> AllocatedImageBuilder<'a> {
 
         Ok(AllocatedImage {
             view,
-            allocation,
+            allocation: Some(allocation),
             handle,
             format: self.image_create_info_builder.format,
         })
@@ -292,7 +301,7 @@ impl<'a> AllocatedImageBuilder<'a> {
 
         Ok(AllocatedImage {
             view,
-            allocation,
+            allocation: Some(allocation),
             handle,
             format: self.image_create_info_builder.format,
         })

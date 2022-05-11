@@ -17,36 +17,40 @@ struct MachaState {
 
 impl ApplicationState for MachaState {
     fn on_attach(&mut self, renderer: &mut Renderer, _window: &Window) {
-        let test_shader = Shader::from_path(
+        let test_shader_ref = Shader::from_path(
             Path::new("assets/gen/shaders/test/test.vert"),
             Path::new("assets/gen/shaders/test/test.frag"),
             &renderer.device,
         )
         .expect("Failed to create shader");
 
-        log::trace!("{:#?}", test_shader.vertex_bindings);
-        log::trace!("{:#?}", test_shader.fragment_bindings);
+        log::trace!("{:#?}", test_shader_ref.lock().vertex_bindings);
+        log::trace!("{:#?}", test_shader_ref.lock().fragment_bindings);
 
-        let test_material = MaterialBuilder::new()
-            .build::<Vertex>(&test_shader, renderer)
+        let test_material_ref = MaterialBuilder::new()
+            .build::<Vertex>(&test_shader_ref, renderer)
             .expect("Failed to create material");
 
-        let test_mesh =
+        let test_mesh_ref =
             Vertex::load_model_from_path(Path::new("assets/meshes/monkey.obj"), renderer)
                 .expect("Failed to load mesh");
 
-        let test_mesh_renderer = MeshRendering::new(&test_mesh, &test_material, renderer)
-            .expect("Failed to rceate mesh renderer");
+        let mut test_mesh_rendering =
+            MeshRendering::new(&test_mesh_ref, &test_material_ref, renderer)
+                .expect("Failed to rceate mesh renderer");
 
-        let test_texture = Texture::from_path(Path::new("assets/img/rust.png"), renderer)
+        let test_texture_ref = Texture::from_path(Path::new("assets/img/rust.png"), renderer)
             .expect("Failed to create texture");
-        log::trace!("texture path: {}", test_texture.path.as_ref().unwrap());
+        log::trace!(
+            "texture path: {}",
+            test_texture_ref.lock().path.as_ref().unwrap()
+        );
 
-        test_texture.destroy(renderer);
-        test_mesh_renderer.destroy(renderer);
-        test_mesh.destroy(renderer);
-        test_material.destroy(renderer);
-        test_shader.destroy(&renderer.device);
+        test_texture_ref.lock().destroy(renderer);
+        test_mesh_rendering.destroy(renderer);
+        test_mesh_ref.lock().destroy(renderer);
+        test_material_ref.lock().destroy(renderer);
+        test_shader_ref.lock().destroy(&renderer.device);
     }
 
     fn on_update(&mut self, dt: std::time::Duration, _renderer: &mut Renderer, window: &Window) {

@@ -7,6 +7,7 @@ use crate::{
     renderer::Renderer,
     shader::{binding_type_cast, Shader},
     texture::Texture,
+    utils::ThreadSafeRef,
 };
 
 use nalgebra_glm as glm;
@@ -15,7 +16,7 @@ pub struct VertexInputDescription {
     pub bindings: Vec<vk::VertexInputBindingDescription>,
     pub attributes: Vec<vk::VertexInputAttributeDescription>,
 }
-pub trait Vertex {
+pub trait Vertex: std::marker::Sync + std::marker::Send + 'static {
     fn vertex_input_description() -> VertexInputDescription;
 }
 
@@ -24,15 +25,15 @@ struct CameraData {
     world_position: glm::Vec4,
 }
 
-pub struct Material<'a, VertexType>
+pub struct Material<VertexType>
 where
     VertexType: Vertex,
 {
     descriptor_pool: vk::DescriptorPool,
     uniform_buffers: std::collections::HashMap<u32, AllocatedBuffer>,
-    sampled_images: std::collections::HashMap<u32, Texture>,
+    sampled_images: std::collections::HashMap<u32, ThreadSafeRef<Texture>>,
 
-    pub shader: &'a Shader,
+    pub shader_ref: ThreadSafeRef<Shader>,
 
     pub(crate) descriptor_set: vk::DescriptorSet,
     pub(crate) layout: vk::PipelineLayout,
@@ -64,14 +65,17 @@ impl MaterialBuilder {
         self
     }
 
-    pub fn build<'a, VertexType>(
+    pub fn build<VertexType>(
         self,
-        shader: &'a Shader,
+        shader_ref: &ThreadSafeRef<Shader>,
         renderer: &mut Renderer,
-    ) -> Result<Material<'a, VertexType>, Error>
+    ) -> Result<ThreadSafeRef<Material<VertexType>>, Error>
     where
         VertexType: Vertex,
     {
+        let shader_ref = ThreadSafeRef::clone(shader_ref);
+        let shader = shader_ref.lock();
+
         let mut ubo_count = 0;
         let mut sampled_image_count = 0;
 
@@ -129,7 +133,7 @@ impl MaterialBuilder {
 
             match binding_type_cast(binding.descriptor_type)? {
                 vk::DescriptorType::UNIFORM_BUFFER => {
-                    let buffer = AllocatedBuffer::builder(binding.block.size.into())
+                    let buffer = AllocatedBuffer::builder(binding.size.into())
                         .with_usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
                         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
                         .build(
@@ -142,10 +146,10 @@ impl MaterialBuilder {
                     let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
                         .buffer(buffer.handle)
                         .offset(0)
-                        .range(binding.block.size.into());
+                        .range(binding.size.into());
                     let set_write = vk::WriteDescriptorSet::builder()
                         .dst_set(descriptor_set)
-                        .dst_binding(binding.binding)
+                        .dst_binding(binding.slot)
                         .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                         .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
 
@@ -154,17 +158,20 @@ impl MaterialBuilder {
                             .device
                             .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
                     };
-                    uniform_buffers.insert(binding.binding, buffer);
+                    uniform_buffers.insert(binding.slot, buffer);
                 }
                 vk::DescriptorType::SAMPLED_IMAGE => {
-                    let texture = Texture::default(renderer)?;
+                    let texture_ref = Texture::default(renderer)?;
+                    let texture = texture_ref.lock();
+
                     let descriptor_image_info = vk::DescriptorImageInfo::builder()
                         .sampler(texture.sampler)
                         .image_view(texture.image.view)
                         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+
                     let set_write = vk::WriteDescriptorSet::builder()
                         .dst_set(descriptor_set)
-                        .dst_binding(binding.binding)
+                        .dst_binding(binding.slot)
                         .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
                         .image_info(std::slice::from_ref(&descriptor_image_info));
 
@@ -173,7 +180,9 @@ impl MaterialBuilder {
                             .device
                             .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
                     };
-                    sampled_images.insert(binding.binding, texture);
+
+                    drop(texture);
+                    sampled_images.insert(binding.slot, texture_ref);
                 }
                 _ => (),
             }
@@ -260,16 +269,18 @@ impl MaterialBuilder {
         }
         .build(&renderer.device, renderer.primary_render_pass)?;
 
-        Ok(Material {
+        drop(shader);
+
+        Ok(ThreadSafeRef::new(Material {
             descriptor_pool,
             uniform_buffers,
             sampled_images,
-            shader,
+            shader_ref,
             descriptor_set,
             layout,
             pipeline,
             vertex_type_safety: std::marker::PhantomData,
-        })
+        }))
     }
 }
 
@@ -279,7 +290,7 @@ impl Default for MaterialBuilder {
     }
 }
 
-impl<'a, VertexType> Material<'a, VertexType>
+impl<VertexType> Material<VertexType>
 where
     VertexType: Vertex,
 {
@@ -287,13 +298,14 @@ where
         MaterialBuilder::new()
     }
 
-    pub fn destroy(self, renderer: &mut Renderer) {
+    pub fn destroy(&mut self, renderer: &mut Renderer) {
         unsafe {
-            for (_, uniform) in self.uniform_buffers {
+            for (_, uniform) in &mut self.uniform_buffers {
                 uniform.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
             }
 
-            for (_, image) in self.sampled_images {
+            for (_, image) in &mut self.sampled_images {
+                let mut image = image.lock();
                 image.destroy(renderer);
             }
 
@@ -311,17 +323,18 @@ where
             .get(&binding_slot)
             .ok_or_else(|| format!("no slot {} to bind to", binding_slot))?;
 
-        if binding_data.allocation.size() < std::mem::size_of::<T>().try_into()? {
+        let allocation = binding_data.allocation.as_ref().ok_or("use after free")?;
+
+        if allocation.size() < std::mem::size_of::<T>().try_into()? {
             return Err(format!(
                 "invalid size {} (expected {}) (make sure T is #[repr(C)]",
                 std::mem::size_of::<T>(),
-                binding_data.allocation.size(),
+                allocation.size(),
             )
             .into());
         }
 
-        let dst = binding_data
-            .allocation
+        let dst = allocation
             .mapped_ptr()
             .ok_or("failed to map memory")?
             .cast::<T>()
@@ -334,123 +347,34 @@ where
     pub fn bind_texture(
         &mut self,
         binding_slot: u32,
-        texture: &Texture,
+        texture_ref: ThreadSafeRef<Texture>,
         renderer: &mut Renderer,
     ) -> Result<(), Error> {
-        // This is very VERY bad
-        // @TODO(Ithyx): Fix this at some point when texture are proper references
-        let dst_texture = self
-            .sampled_images
-            .get_mut(&binding_slot)
-            .ok_or_else(|| format!("no slot {} to bind to", binding_slot))?;
+        if !self.sampled_images.contains_key(&binding_slot) {
+            return Err("Invalid binding slot".into());
+        };
 
-        if texture.dimensions != dst_texture.dimensions {
-            // texture dimension mismatch, we need to recreate our texture
-            let new_texture = texture.clone(renderer)?;
+        let texture = texture_ref.lock();
 
-            let descriptor_image_info = vk::DescriptorImageInfo::builder()
-                .sampler(new_texture.sampler)
-                .image_view(new_texture.image.view)
-                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
-            let set_write = vk::WriteDescriptorSet::builder()
-                .dst_set(self.descriptor_set)
-                .dst_binding(binding_slot)
-                .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
-                .image_info(std::slice::from_ref(&descriptor_image_info));
-            unsafe {
-                renderer
-                    .device
-                    .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
-            };
+        let descriptor_image_info = vk::DescriptorImageInfo::builder()
+            .sampler(texture.sampler)
+            .image_view(texture.image.view)
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
 
-            let old_texture = std::mem::replace(dst_texture, new_texture);
+        let set_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(binding_slot)
+            .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+            .image_info(std::slice::from_ref(&descriptor_image_info));
 
-            old_texture.destroy(renderer);
-        } else {
-            // no need for any allocations, simply copy the image to the new one
-            renderer.immediate_command(|cmd_buffer| {
-                let range = vk::ImageSubresourceRange::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .base_mip_level(0)
-                    .level_count(1)
-                    .base_array_layer(0)
-                    .layer_count(1);
-                let transfer_src_barrier = vk::ImageMemoryBarrier::builder()
-                    .src_access_mask(vk::AccessFlags::NONE)
-                    .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
-                    .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                    .image(texture.image.handle)
-                    .subresource_range(*range);
-                let transfer_dst_barrier = vk::ImageMemoryBarrier::builder()
-                    .src_access_mask(vk::AccessFlags::NONE)
-                    .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-                    .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .image(dst_texture.image.handle)
-                    .subresource_range(*range);
-                unsafe {
-                    renderer.device.cmd_pipeline_barrier(
-                        *cmd_buffer,
-                        vk::PipelineStageFlags::TOP_OF_PIPE,
-                        vk::PipelineStageFlags::TRANSFER,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[*transfer_src_barrier, *transfer_dst_barrier],
-                    )
-                };
+        unsafe {
+            renderer
+                .device
+                .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
+        };
 
-                let copy_region = vk::ImageCopy::builder()
-                    .src_subresource(vk::ImageSubresourceLayers {
-                        aspect_mask: vk::ImageAspectFlags::COLOR,
-                        mip_level: 0,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    })
-                    .extent(vk::Extent3D {
-                        width: texture.dimensions[0],
-                        height: texture.dimensions[1],
-                        depth: 1,
-                    });
-                unsafe {
-                    renderer.device.cmd_copy_image(
-                        *cmd_buffer,
-                        texture.image.handle,
-                        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                        dst_texture.image.handle,
-                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                        std::slice::from_ref(&copy_region),
-                    );
-                }
-
-                let shader_read_src_barrier = vk::ImageMemoryBarrier::builder()
-                    .src_access_mask(vk::AccessFlags::TRANSFER_READ)
-                    .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                    .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .image(texture.image.handle)
-                    .subresource_range(*range);
-                let shader_read_dst_barrier = vk::ImageMemoryBarrier::builder()
-                    .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-                    .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                    .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .image(dst_texture.image.handle)
-                    .subresource_range(*range);
-                unsafe {
-                    renderer.device.cmd_pipeline_barrier(
-                        *cmd_buffer,
-                        vk::PipelineStageFlags::TRANSFER,
-                        vk::PipelineStageFlags::FRAGMENT_SHADER,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[*shader_read_src_barrier, *shader_read_dst_barrier],
-                    )
-                };
-            })?;
-        }
+        drop(texture);
+        self.sampled_images.insert(binding_slot, texture_ref);
 
         Ok(())
     }

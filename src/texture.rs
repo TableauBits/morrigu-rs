@@ -1,4 +1,6 @@
-use crate::{allocated_types::AllocatedImage, error::Error, renderer::Renderer};
+use crate::{
+    allocated_types::AllocatedImage, error::Error, renderer::Renderer, utils::ThreadSafeRef,
+};
 
 use ash::vk;
 use image::{self, GenericImageView};
@@ -12,7 +14,7 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn default(renderer: &mut Renderer) -> Result<Self, Error> {
+    pub fn default(renderer: &mut Renderer) -> Result<ThreadSafeRef<Self>, Error> {
         Self::from_data(
             &[
                 255, 255, 255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255,
@@ -29,13 +31,13 @@ impl Texture {
                                  // graphics_queue: vk::Queue,
                                  // allocator: &mut gpu_allocator::vulkan::Allocator,
                                  // command_uploader: &CommandUploader
-    ) -> Result<Self, Error> {
+    ) -> Result<ThreadSafeRef<Self>, Error> {
         let image = image::open(path)?.fliph();
         let dimensions = image.dimensions();
 
         let mut new_texture =
             Self::from_data(image.as_bytes(), dimensions.0, dimensions.1, renderer)?;
-        new_texture.path = Some(path.to_str().unwrap_or("invalid path").to_owned());
+        new_texture.lock().path = Some(path.to_str().unwrap_or("invalid path").to_owned());
         Ok(new_texture)
     }
 
@@ -48,7 +50,7 @@ impl Texture {
         // graphics_queue: vk::Queue,
         // allocator: &mut gpu_allocator::vulkan::Allocator,
         // command_uploader: &CommandUploader,
-    ) -> Result<Self, Error> {
+    ) -> Result<ThreadSafeRef<Self>, Error> {
         let device = &renderer.device;
 
         let image = AllocatedImage::builder(vk::Extent3D {
@@ -76,12 +78,12 @@ impl Texture {
             .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE);
         let sampler = unsafe { device.create_sampler(&sampler_info, None) }?;
 
-        Ok(Self {
+        Ok(ThreadSafeRef::new(Self {
             image,
             sampler,
             path: None,
             dimensions: [width, height],
-        })
+        }))
     }
 
     pub fn clone(&self, renderer: &mut Renderer) -> Result<Self, Error> {
@@ -198,7 +200,7 @@ impl Texture {
         })
     }
 
-    pub fn destroy(self, renderer: &mut Renderer) {
+    pub fn destroy(&mut self, renderer: &mut Renderer) {
         unsafe { renderer.device.destroy_sampler(self.sampler, None) };
 
         self.image.destroy(renderer)
