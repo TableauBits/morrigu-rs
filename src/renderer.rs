@@ -77,8 +77,9 @@ fn device_type_to_str(device_type: PhysicalDeviceType) -> &'static str {
     }
 }
 
-struct TimeData {
-    time: glm::Vec4,
+#[repr(C)]
+pub(crate) struct TimeData {
+    pub(crate) time: glm::Vec4,
 }
 
 pub struct QueueInfo {
@@ -124,8 +125,8 @@ pub struct Renderer {
 
     window_width: u32,
     window_height: u32,
-    framebuffer_width: u32,
-    framebuffer_height: u32,
+    pub framebuffer_width: u32,
+    pub framebuffer_height: u32,
     next_image_index: u32,
 
     #[allow(dead_code)]
@@ -136,7 +137,7 @@ pub struct Renderer {
     pub(crate) descriptors: [DescriptorInfo; 2],
     descriptor_pool: vk::DescriptorPool,
     sync_objects: SyncObjects,
-    primary_command_buffer: vk::CommandBuffer,
+    pub(crate) primary_command_buffer: vk::CommandBuffer,
     command_pool: vk::CommandPool,
     swapchain_framebuffers: Vec<vk::Framebuffer>,
     pub(crate) primary_render_pass: vk::RenderPass,
