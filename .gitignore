@@ -3,4 +3,4 @@ Cargo.lock
 .vscode
 *.log
 
-Macha/assets/gen/**
+macha/assets/gen/**
