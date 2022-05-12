@@ -1,80 +1,128 @@
+use bevy_ecs::{entity::Entity, schedule::SystemStage};
 use morrigu::{
-    application::{event, ApplicationBuilder, ApplicationState, Window},
-    components::mesh_rendering::MeshRendering,
-    material::MaterialBuilder,
-    renderer::Renderer,
+    application::{event, ApplicationBuilder, ApplicationState, StateContext},
+    components::{
+        camera::{Camera, PerspectiveData},
+        transform::Transform,
+    },
     shader::Shader,
-    texture::Texture,
+    systems::mesh_renderer,
+    utils::ThreadSafeRef,
 };
+use nalgebra_glm as glm;
 
 use std::path::Path;
 
 type Vertex = morrigu::sample_vertex::TexturedVertex;
+type Material = morrigu::material::Material<Vertex>;
+type Mesh = morrigu::mesh::Mesh<Vertex>;
+type MeshRendering = morrigu::components::mesh_rendering::MeshRendering<Vertex>;
 
 struct MachaState {
-    frame_count: i32,
+    shader_ref: Option<ThreadSafeRef<Shader>>,
+    material_ref: Option<ThreadSafeRef<Material>>,
+    mesh_ref: Option<ThreadSafeRef<Mesh>>,
+    mesh_rendering_ref: Option<ThreadSafeRef<MeshRendering>>,
+    monkey: Option<Entity>,
+}
+
+impl MachaState {
+    pub fn new() -> Self {
+        Self {
+            shader_ref: None,
+            material_ref: None,
+            mesh_ref: None,
+            mesh_rendering_ref: None,
+            monkey: None,
+        }
+    }
 }
 
 impl ApplicationState for MachaState {
-    fn on_attach(&mut self, renderer: &mut Renderer, _window: &Window) {
-        let test_shader_ref = Shader::from_path(
-            Path::new("assets/gen/shaders/test/test.vert"),
-            Path::new("assets/gen/shaders/test/test.frag"),
-            &renderer.device,
-        )
-        .expect("Failed to create shader");
+    fn on_attach(&mut self, context: &mut StateContext) {
+        let camera = Camera::builder().build(
+            morrigu::components::camera::Projection::Perspective(PerspectiveData {
+                horizontal_fov: f32::to_radians(90.0),
+                near_plane: 0.001,
+                far_plane: 1000.0,
+            }),
+            16.0 / 9.0,
+        );
+        context.ecs_manager.world.insert_resource(camera);
 
-        log::trace!("{:#?}", test_shader_ref.lock().vertex_bindings);
-        log::trace!("{:#?}", test_shader_ref.lock().fragment_bindings);
-
-        let test_material_ref = MaterialBuilder::new()
-            .build::<Vertex>(&test_shader_ref, renderer)
-            .expect("Failed to create material");
-
-        let test_mesh_ref =
-            Vertex::load_model_from_path(Path::new("assets/meshes/monkey.obj"), renderer)
-                .expect("Failed to load mesh");
-
-        let mut test_mesh_rendering =
-            MeshRendering::new(&test_mesh_ref, &test_material_ref, renderer)
-                .expect("Failed to rceate mesh renderer");
-
-        let test_texture_ref = Texture::from_path(Path::new("assets/img/rust.png"), renderer)
-            .expect("Failed to create texture");
-        log::trace!(
-            "texture path: {}",
-            test_texture_ref.lock().path.as_ref().unwrap()
+        self.shader_ref = Some(
+            Shader::from_path(
+                Path::new("assets/gen/shaders/test/test.vert"),
+                Path::new("assets/gen/shaders/test/test.frag"),
+                &context.renderer.device,
+            )
+            .expect("Failed to create shader"),
+        );
+        self.material_ref = Some(
+            Material::builder()
+                .build(&self.shader_ref.as_ref().unwrap(), context.renderer)
+                .expect("Failed to create material"),
+        );
+        self.mesh_ref = Some(
+            Vertex::load_model_from_path(Path::new("assets/meshes/monkey.obj"), context.renderer)
+                .expect("Failed to create mesh"),
         );
 
-        test_texture_ref.lock().destroy(renderer);
-        test_mesh_rendering.destroy(renderer);
-        test_mesh_ref.lock().destroy(renderer);
-        test_material_ref.lock().destroy(renderer);
-        test_shader_ref.lock().destroy(&renderer.device);
+        let mesh_rendering_ref = MeshRendering::new(
+            &self.mesh_ref.as_ref().unwrap(),
+            &self.material_ref.as_ref().unwrap(),
+            context.renderer,
+        )
+        .expect("Failed to create mesh rendering");
+        self.mesh_rendering_ref = Some(mesh_rendering_ref.clone());
+
+        let mut monkey_tranform = Transform::default().clone();
+        monkey_tranform.translate(&glm::vec3(-5.0, 0.0, 0.0));
+
+        self.monkey = Some(
+            context
+                .ecs_manager
+                .world
+                .spawn()
+                .insert(monkey_tranform)
+                .insert(mesh_rendering_ref.clone())
+                .id(),
+        );
+
+        context.ecs_manager.redefine_systems_schedule(|schedule| {
+            schedule.add_stage(
+                "render meshes",
+                SystemStage::parallel().with_system(mesh_renderer::render_meshes::<Vertex>),
+            );
+        })
     }
 
-    fn on_update(&mut self, dt: std::time::Duration, _renderer: &mut Renderer, window: &Window) {
-        self.frame_count += 1;
-        if dt.as_millis() > 25 {
-            let string = format!("frame {} handled in {}ms", self.frame_count, dt.as_millis());
-            log::warn!("{}", string);
-            window.set_title(&string);
-        }
-    }
+    fn on_update(&mut self, dt: std::time::Duration, context: &mut StateContext) {}
 
-    fn on_event(&mut self, event: event::Event<()>, _renderer: &mut Renderer, _window: &Window) {
-        match event {
-            event::Event::DeviceEvent {
-                event: event::DeviceEvent::Button { button, state },
-                ..
-            } => {
-                log::debug!("Mouse button detected: {:?}, {:?}", button, state);
-            }
-            _ => (),
-        }
-    }
+    fn on_event(&mut self, event: event::Event<()>, context: &mut StateContext) {}
 
-    fn on_drop(&mut self, _renderer: &mut Renderer, _window: &Window) {}
+    fn on_drop(&mut self, context: &mut StateContext) {
+        self.mesh_rendering_ref
+            .as_ref()
+            .unwrap()
+            .lock()
+            .destroy(context.renderer);
+        self.mesh_ref
+            .as_ref()
+            .unwrap()
+            .lock()
+            .destroy(context.renderer);
+        self.material_ref
+            .as_ref()
+            .unwrap()
+            .lock()
+            .destroy(context.renderer);
+        self.shader_ref
+            .as_ref()
+            .unwrap()
+            .lock()
+            .destroy(&context.renderer.device);
+    }
 }
 
 fn init_logging() {
@@ -98,7 +146,7 @@ fn init_logging() {
 fn main() {
     init_logging();
 
-    let mut state = MachaState { frame_count: 0 };
+    let mut state = MachaState::new();
     ApplicationBuilder::new()
         .with_window_name("Macha editor")
         .with_dimensions(1280, 720)

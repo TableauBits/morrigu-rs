@@ -304,10 +304,11 @@ where
                 uniform.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
             }
 
-            for image in self.sampled_images.values_mut() {
-                let mut image = image.lock();
-                image.destroy(renderer);
-            }
+            // Not sure if we should destroy those
+            // for image in self.sampled_images.values_mut() {
+            // let mut image = image.lock();
+            // image.destroy(renderer);
+            // }
 
             renderer.device.destroy_pipeline(self.pipeline, None);
             renderer.device.destroy_pipeline_layout(self.layout, None);

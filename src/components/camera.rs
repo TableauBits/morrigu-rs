@@ -57,6 +57,7 @@ impl CameraBuilder {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Camera {
     projection_type: Projection,
     aspect_ratio: f32,
@@ -72,6 +73,10 @@ pub struct Camera {
 }
 
 impl Camera {
+    pub fn builder() -> CameraBuilder {
+        CameraBuilder::new()
+    }
+
     fn compute_orientation(pitch: f32, yaw: f32) -> glm::Quat {
         glm::quat(-pitch, -yaw, 0.0, 1.0)
     }
@@ -118,6 +123,10 @@ impl Camera {
         &self.view_projection
     }
 
+    pub fn position(&self) -> &glm::Vec3 {
+        &self.position
+    }
+
     pub fn set_projection_type(&mut self, projection_type: Projection) {
         self.projection_type = projection_type;
         self.projection = Self::compute_projection(&self.projection_type, self.aspect_ratio);
@@ -148,5 +157,9 @@ impl Camera {
         self.orientation = Self::compute_orientation(self.pitch, self.yaw);
         self.view = Self::compute_view(&self.position, &self.orientation);
         self.view_projection = Self::compute_view_projection(&self.view, &self.projection)
+    }
+
+    pub(crate) fn on_resize(&mut self, width: u32, height: u32) {
+        self.set_aspect_ratio(width as f32 / height as f32);
     }
 }

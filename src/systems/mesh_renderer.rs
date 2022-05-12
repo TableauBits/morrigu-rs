@@ -1,9 +1,10 @@
 use std::time::Instant;
 
 use crate::{
-    components::{camera::Camera, mesh_rendering::MeshRendering},
+    components::{camera::Camera, mesh_rendering::MeshRendering, transform::Transform},
     material::Vertex,
     renderer::{Renderer, TimeData},
+    utils::ThreadSafeRef,
 };
 
 use ash::vk;
@@ -11,20 +12,22 @@ use bevy_ecs::{prelude::Query, system::Res};
 use nalgebra_glm as glm;
 
 #[repr(C)]
+#[derive(Debug)]
 struct CameraData {
-    pub(crate) view: glm::Mat4,
-    pub(crate) projection: glm::Mat4,
     pub(crate) view_projection: glm::Mat4,
+    pub(crate) world_position: glm::Vec4,
 }
 
 pub fn render_meshes<VertexType>(
-    query: Query<&MeshRendering<VertexType>>,
+    query: Query<(&Transform, &ThreadSafeRef<MeshRendering<VertexType>>)>,
     timer: Res<Instant>,
     camera: Res<Camera>,
-    renderer: Res<Renderer>,
+    renderer_ref: Res<ThreadSafeRef<Renderer>>,
 ) where
     VertexType: Vertex,
 {
+    let renderer = renderer_ref.lock();
+
     let current_time = timer.elapsed().as_secs_f32();
     let time_data = TimeData {
         time: glm::Vec4::new(
@@ -49,9 +52,15 @@ pub fn render_meshes<VertexType>(
     let mut last_material_pipeline = None;
     let device = &renderer.device;
     let cmd_buffer = &renderer.primary_command_buffer;
-    for mesh_rendering in query.iter() {
+    for (transform, mesh_rendering_ref) in query.iter() {
+        let mesh_rendering = mesh_rendering_ref.lock();
         let material = mesh_rendering.material_ref.lock();
         let mesh = mesh_rendering.mesh_ref.lock();
+
+        let upload_result = mesh_rendering.upload_uniform(0, *transform.matrix());
+        if upload_result.is_err() {
+            log::warn!("Failed to upload model data to slot 0");
+        }
 
         if let None = last_material_pipeline {
             // first draw, need to bind the descriptor set (common for all materials)
@@ -113,16 +122,17 @@ pub fn render_meshes<VertexType>(
         }
 
         let mut camera_data = CameraData {
-            view: *camera.view(),
-            projection: *camera.projection(),
             view_projection: *camera.view_projection(),
+            world_position: glm::vec3_to_vec4(camera.position()),
         };
         let camera_data_ptr = std::ptr::NonNull::new(&mut camera_data)
             .expect("Failed to create camera data")
             .cast::<u8>()
             .as_ptr();
+
         unsafe {
-            let camera_data_raw = std::slice::from_raw_parts(camera_data_ptr, 1);
+            let camera_data_raw =
+                std::slice::from_raw_parts(camera_data_ptr, std::mem::size_of::<CameraData>());
             device.cmd_push_constants(
                 *cmd_buffer,
                 material.layout,
@@ -144,7 +154,7 @@ pub fn render_meshes<VertexType>(
                 *cmd_buffer,
                 0,
                 std::slice::from_ref(&mesh.vertex_buffer.handle),
-                &[],
+                &[0],
             );
             device.cmd_bind_index_buffer(
                 *cmd_buffer,

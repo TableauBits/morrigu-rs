@@ -1,9 +1,11 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use ash::vk::{self, CommandPoolResetFlags};
+use bevy_ecs::prelude::Component;
 
 use crate::error::Error;
 
+#[derive(Component)]
 pub struct ThreadSafeRef<T>(Arc<Mutex<T>>);
 
 impl<T> ThreadSafeRef<T> {
@@ -32,7 +34,7 @@ pub struct CommandUploader {
 }
 
 impl CommandUploader {
-    pub fn new(device: &ash::Device, queue_index: u32) -> Result<Self, Error> {
+    pub(crate) fn new(device: &ash::Device, queue_index: u32) -> Result<Self, Error> {
         let command_pool_info =
             vk::CommandPoolCreateInfo::builder().queue_family_index(queue_index);
         let command_pool = unsafe { device.create_command_pool(&command_pool_info, None) }?;
@@ -46,7 +48,7 @@ impl CommandUploader {
         })
     }
 
-    pub fn destroy(self, device: &ash::Device) {
+    pub(crate) fn destroy(self, device: &ash::Device) {
         unsafe {
             device.destroy_fence(self.fence, None);
             device.destroy_command_pool(self.command_pool, None);

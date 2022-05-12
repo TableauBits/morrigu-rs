@@ -1,7 +1,7 @@
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage},
     error::Error,
-    utils::CommandUploader,
+    utils::{CommandUploader, ThreadSafeRef},
 };
 
 use ash::{
@@ -12,6 +12,7 @@ use ash::{
     vk::{self, PhysicalDeviceType},
     Entry, Instance,
 };
+use bevy_ecs::schedule::Schedule;
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use nalgebra_glm as glm;
 use winit::window::Window;
@@ -773,7 +774,7 @@ impl<'a> RendererBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> Renderer {
+    pub fn build(self) -> ThreadSafeRef<Renderer> {
         let entry = Entry::linked();
         let instance = self.create_instance(&entry);
         let debug_messenger = self.create_debug_messenger(&entry, &instance);
@@ -880,7 +881,7 @@ impl<'a> RendererBuilder<'a> {
 
         let (descriptor_pool, descriptors) = self.create_descriptors(&device, &mut gpu_allocator);
 
-        Renderer {
+        ThreadSafeRef::new(Renderer {
             clear_color: [0.0_f32, 0.0_f32, 0.0_f32, 1.0_f32],
 
             window_width: self.width,
@@ -907,7 +908,7 @@ impl<'a> RendererBuilder<'a> {
             surface,
             instance,
             entry,
-        }
+        })
     }
 }
 

@@ -24,4 +24,6 @@ void main() {
             0.f, 1.f);
 
   f_Color = mix(u_Colors.fromColor, u_Colors.toColor, t);
+
+  f_Color = vec4(0.2, 0.2, 0.7, 1.0);
 }

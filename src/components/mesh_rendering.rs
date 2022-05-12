@@ -34,7 +34,7 @@ where
         mesh_ref: &ThreadSafeRef<Mesh<VertexType>>,
         material_ref: &ThreadSafeRef<Material<VertexType>>,
         renderer: &mut Renderer,
-    ) -> Result<Self, Error> {
+    ) -> Result<ThreadSafeRef<Self>, Error> {
         let mesh_ref = ThreadSafeRef::clone(mesh_ref);
         let mesh = mesh_ref.lock();
 
@@ -159,14 +159,14 @@ where
         drop(material);
         drop(mesh);
 
-        Ok(Self {
+        Ok(ThreadSafeRef::new(Self {
             descriptor_pool,
             uniform_buffers,
             sampled_images,
             mesh_ref,
             material_ref,
             descriptor_set,
-        })
+        }))
     }
 
     pub fn upload_uniform<T>(&self, binding_slot: u32, data: T) -> Result<(), Error> {
@@ -236,10 +236,11 @@ where
                 uniform.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
             }
 
-            for image in self.sampled_images.values_mut() {
-                let mut image = image.lock();
-                image.destroy(renderer);
-            }
+            // Not sure if we should destroy those
+            // for image in self.sampled_images.values_mut() {
+            // let mut image = image.lock();
+            // image.destroy(renderer);
+            // }
 
             renderer
                 .device

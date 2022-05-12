@@ -192,7 +192,7 @@ impl TexturedVertex {
         };
 
         let index_buffer = AllocatedBuffer::builder(index_data_size)
-            .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER)
+            .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)
             .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
             .build(
                 &renderer.device,
