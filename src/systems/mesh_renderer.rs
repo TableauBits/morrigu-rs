@@ -62,7 +62,7 @@ pub fn render_meshes<VertexType>(
             log::warn!("Failed to upload model data to slot 0");
         }
 
-        if let None = last_material_pipeline {
+        if last_material_pipeline.is_none() {
             // first draw, need to bind the descriptor set (common for all materials)
             unsafe {
                 device.cmd_bind_descriptor_sets(
@@ -121,7 +121,7 @@ pub fn render_meshes<VertexType>(
                 );
             };
 
-            last_material_pipeline = Some(material.pipeline.clone());
+            last_material_pipeline = Some(material.pipeline);
         }
 
         let mut camera_data = CameraData {

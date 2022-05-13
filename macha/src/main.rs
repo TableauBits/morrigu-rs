@@ -63,7 +63,7 @@ impl ApplicationState for MachaState {
         );
         self.material_ref = Some(
             Material::builder()
-                .build(&self.shader_ref.as_ref().unwrap(), context.renderer)
+                .build(self.shader_ref.as_ref().unwrap(), context.renderer)
                 .expect("Failed to create material"),
         );
         self.mesh_ref = Some(
@@ -77,8 +77,8 @@ impl ApplicationState for MachaState {
         self.texture_ref = Some(texture_ref.clone());
 
         let mesh_rendering_ref = MeshRendering::new(
-            &self.mesh_ref.as_ref().unwrap(),
-            &self.material_ref.as_ref().unwrap(),
+            self.mesh_ref.as_ref().unwrap(),
+            self.material_ref.as_ref().unwrap(),
             context.renderer,
         )
         .expect("Failed to create mesh rendering");
@@ -90,7 +90,7 @@ impl ApplicationState for MachaState {
             .destroy(context.renderer);
         self.mesh_rendering_ref = Some(mesh_rendering_ref.clone());
 
-        let mut tranform = Transform::default().clone();
+        let mut tranform = Transform::default();
         tranform
             .translate(&glm::vec3(0.0, -3.0, -15.0))
             .scale(&glm::vec3(0.02, 0.02, 0.02));
@@ -124,7 +124,7 @@ impl ApplicationState for MachaState {
             .rotate(f32::to_radians(25.0) * dt.as_secs_f32(), Axis::Y);
     }
 
-    fn on_event(&mut self, event: event::Event<()>, context: &mut StateContext) {}
+    fn on_event(&mut self, _event: event::Event<()>, _context: &mut StateContext) {}
 
     fn on_drop(&mut self, context: &mut StateContext) {
         self.texture_ref
