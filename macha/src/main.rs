@@ -7,6 +7,7 @@ use morrigu::{
     },
     shader::Shader,
     systems::mesh_renderer,
+    texture::Texture,
     utils::ThreadSafeRef,
 };
 use nalgebra_glm as glm;
@@ -23,7 +24,8 @@ struct MachaState {
     material_ref: Option<ThreadSafeRef<Material>>,
     mesh_ref: Option<ThreadSafeRef<Mesh>>,
     mesh_rendering_ref: Option<ThreadSafeRef<MeshRendering>>,
-    monkey: Option<Entity>,
+    texture_ref: Option<ThreadSafeRef<Texture>>,
+    rock: Option<Entity>,
 }
 
 impl MachaState {
@@ -33,7 +35,8 @@ impl MachaState {
             material_ref: None,
             mesh_ref: None,
             mesh_rendering_ref: None,
-            monkey: None,
+            texture_ref: None,
+            rock: None,
         }
     }
 }
@@ -64,9 +67,14 @@ impl ApplicationState for MachaState {
                 .expect("Failed to create material"),
         );
         self.mesh_ref = Some(
-            Vertex::load_model_from_path(Path::new("assets/meshes/monkey.obj"), context.renderer)
+            Vertex::load_model_from_path(Path::new("assets/meshes/rock.obj"), context.renderer)
                 .expect("Failed to create mesh"),
         );
+
+        let texture_ref =
+            Texture::from_path(Path::new("assets/textures/rock.jpg"), context.renderer)
+                .expect("Failed to load texture");
+        self.texture_ref = Some(texture_ref.clone());
 
         let mesh_rendering_ref = MeshRendering::new(
             &self.mesh_ref.as_ref().unwrap(),
@@ -74,18 +82,24 @@ impl ApplicationState for MachaState {
             context.renderer,
         )
         .expect("Failed to create mesh rendering");
+        mesh_rendering_ref
+            .lock()
+            .bind_texture(1, &texture_ref, context.renderer)
+            .expect("Failed to bind texture");
         self.mesh_rendering_ref = Some(mesh_rendering_ref.clone());
 
-        let mut monkey_tranform = Transform::default().clone();
-        monkey_tranform.translate(&glm::vec3(-5.0, 0.0, 0.0));
+        let mut tranform = Transform::default().clone();
+        tranform
+            .translate(&glm::vec3(0.0, 0.0, -15.0))
+            .scale(&glm::vec3(0.0001, 0.0001, 0.0001));
 
-        self.monkey = Some(
+        self.rock = Some(
             context
                 .ecs_manager
                 .world
                 .spawn()
-                .insert(monkey_tranform)
-                .insert(mesh_rendering_ref.clone())
+                .insert(tranform)
+                .insert(mesh_rendering_ref)
                 .id(),
         );
 
@@ -102,6 +116,11 @@ impl ApplicationState for MachaState {
     fn on_event(&mut self, event: event::Event<()>, context: &mut StateContext) {}
 
     fn on_drop(&mut self, context: &mut StateContext) {
+        self.texture_ref
+            .as_ref()
+            .unwrap()
+            .lock()
+            .destroy(context.renderer);
         self.mesh_rendering_ref
             .as_ref()
             .unwrap()

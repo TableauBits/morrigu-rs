@@ -90,7 +90,7 @@ impl MaterialBuilder {
 
             match binding_type_cast(binding.descriptor_type)? {
                 vk::DescriptorType::UNIFORM_BUFFER => ubo_count += 1,
-                vk::DescriptorType::SAMPLED_IMAGE => sampled_image_count += 1,
+                vk::DescriptorType::COMBINED_IMAGE_SAMPLER => sampled_image_count += 1,
                 _ => (),
             }
         }
@@ -101,7 +101,7 @@ impl MaterialBuilder {
                 descriptor_count: std::cmp::max(ubo_count, 1),
             },
             vk::DescriptorPoolSize {
-                ty: vk::DescriptorType::SAMPLED_IMAGE,
+                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 descriptor_count: std::cmp::max(sampled_image_count, 1),
             },
         ];
@@ -160,7 +160,7 @@ impl MaterialBuilder {
                     };
                     uniform_buffers.insert(binding.slot, buffer);
                 }
-                vk::DescriptorType::SAMPLED_IMAGE => {
+                vk::DescriptorType::COMBINED_IMAGE_SAMPLER => {
                     let texture_ref = Texture::default(renderer)?;
                     let texture = texture_ref.lock();
 
@@ -172,7 +172,7 @@ impl MaterialBuilder {
                     let set_write = vk::WriteDescriptorSet::builder()
                         .dst_set(descriptor_set)
                         .dst_binding(binding.slot)
-                        .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                        .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                         .image_info(std::slice::from_ref(&descriptor_image_info));
 
                     unsafe {
@@ -365,7 +365,7 @@ where
         let set_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
             .dst_binding(binding_slot)
-            .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .image_info(std::slice::from_ref(&descriptor_image_info));
 
         unsafe {

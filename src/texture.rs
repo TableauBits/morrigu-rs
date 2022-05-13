@@ -3,7 +3,7 @@ use crate::{
 };
 
 use ash::vk;
-use image::{self, GenericImageView};
+use image::{self, EncodableLayout};
 
 pub struct Texture {
     pub image: AllocatedImage,
@@ -32,7 +32,7 @@ impl Texture {
                                  // allocator: &mut gpu_allocator::vulkan::Allocator,
                                  // command_uploader: &CommandUploader
     ) -> Result<ThreadSafeRef<Self>, Error> {
-        let image = image::open(path)?.fliph();
+        let image = image::open(path)?.fliph().into_rgba8();
         let dimensions = image.dimensions();
 
         let new_texture = Self::from_data(image.as_bytes(), dimensions.0, dimensions.1, renderer)?;

@@ -29,23 +29,31 @@ impl Transform {
         self.cached_transform = translation_matrix * rotation_matrix * scale_matrix;
     }
 
-    pub fn set_position(&mut self, position: &glm::Vec3) {
+    pub fn set_position(&mut self, position: &glm::Vec3) -> &mut Self {
         self.position = *position;
         self.recompute_matrix();
+
+        self
     }
 
-    pub fn translate(&mut self, translation: &glm::Vec3) {
+    pub fn translate(&mut self, translation: &glm::Vec3) -> &mut Self {
         self.position += translation;
         self.recompute_matrix();
+
+        self
     }
 
-    pub fn set_rotation(&mut self, rotation: &glm::Vec3) {
+    pub fn set_rotation(&mut self, rotation: &glm::Vec3) -> &mut Self {
         self.rotation = *rotation;
         self.recompute_matrix();
+
+        self
     }
 
     // @TODO(Ithyx): Rework this to allow rotation on arbitrary axis
-    pub fn rotate(&mut self, rotation: f32, axis: Axis) {
+    // Updating the transform is easy enough.
+    // However, my brain is veri smol, so not sure how to update individual values
+    pub fn rotate(&mut self, rotation: f32, axis: Axis) -> &mut Self {
         let axis_rotation = match axis {
             Axis::X => &mut self.rotation.x,
             Axis::Y => &mut self.rotation.y,
@@ -53,16 +61,23 @@ impl Transform {
         };
 
         *axis_rotation += rotation;
+        self.recompute_matrix();
+
+        self
     }
 
-    pub fn set_scale(&mut self, scale: &glm::Vec3) {
+    pub fn set_scale(&mut self, scale: &glm::Vec3) -> &mut Self {
         self.scale = *scale;
         self.recompute_matrix();
+
+        self
     }
 
-    pub fn scale(&mut self, scale: &glm::Vec3) {
+    pub fn scale(&mut self, scale: &glm::Vec3) -> &mut Self {
         self.scale = self.scale.component_mul(scale);
         self.recompute_matrix();
+
+        self
     }
 
     pub fn matrix(&self) -> &glm::Mat4 {
@@ -75,7 +90,7 @@ impl Default for Transform {
         Self {
             position: Default::default(),
             rotation: Default::default(),
-            scale: Default::default(),
+            scale: glm::vec3(1.0, 1.0, 1.0),
             cached_transform: glm::Mat4::identity(),
         }
     }
