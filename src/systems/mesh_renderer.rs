@@ -79,19 +79,22 @@ pub fn render_meshes<VertexType>(
             };
         }
         if last_material_pipeline != Some(material.pipeline) {
+            // This one small trick allows us to keep vertex data sane
+            // (Actual engineers hate him)
+            // https://www.saschawillems.de/blog/2019/03/29/flipping-the-vulkan-viewport/
+            let y: f32 = u16::try_from(renderer.framebuffer_height)
+                .expect("Invalid width")
+                .into();
+
             let viewport = vk::Viewport::builder()
                 .x(0.0)
-                .y(0.0)
+                .y(y)
                 .width(
                     u16::try_from(renderer.framebuffer_width)
                         .expect("Invalid width")
                         .into(),
                 )
-                .height(
-                    u16::try_from(renderer.framebuffer_height)
-                        .expect("Invalid width")
-                        .into(),
-                )
+                .height(-y)
                 .min_depth(0.0)
                 .max_depth(1.0);
             let scissor = vk::Rect2D::builder()

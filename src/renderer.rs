@@ -12,7 +12,6 @@ use ash::{
     vk::{self, PhysicalDeviceType},
     Entry, Instance,
 };
-use bevy_ecs::schedule::Schedule;
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use nalgebra_glm as glm;
 use winit::window::Window;
@@ -785,7 +784,7 @@ impl<'a> RendererBuilder<'a> {
         };
         let surface_loader = Surface::new(&entry, &instance);
 
-        let required_api_version = (1, 0, 0);
+        let required_api_version = (1, 1, 0);
         let (physical_device, queue_family_index) = self.select_physical_device(
             surface_handle,
             &instance,
