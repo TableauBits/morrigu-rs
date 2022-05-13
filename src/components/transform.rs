@@ -19,12 +19,13 @@ pub struct Transform {
 impl Transform {
     fn recompute_matrix(&mut self) {
         let translation_matrix = glm::translate(&glm::Mat4::identity(), &self.position);
-        let rotation_matrix = glm::quat_to_mat4(&glm::quat(
-            self.position.x,
-            self.position.y,
-            self.position.z,
-            1.0,
-        ));
+        let rotation_matrix = {
+            let rot_x = glm::rotation(self.rotation.x, &glm::vec3(1.0, 0.0, 0.0));
+            let rot_y = glm::rotation(self.rotation.y, &glm::vec3(0.0, 1.0, 0.0));
+            let rot_z = glm::rotation(self.rotation.z, &glm::vec3(0.0, 0.0, 1.0));
+
+            rot_x * rot_y * rot_z
+        };
         let scale_matrix = glm::scale(&glm::Mat4::identity(), &self.scale);
         self.cached_transform = translation_matrix * rotation_matrix * scale_matrix;
     }

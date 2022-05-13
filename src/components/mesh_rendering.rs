@@ -200,7 +200,7 @@ where
         binding_slot: u32,
         texture_ref: &ThreadSafeRef<Texture>,
         renderer: &mut Renderer,
-    ) -> Result<(), Error> {
+    ) -> Result<ThreadSafeRef<Texture>, Error> {
         if !self.sampled_images.contains_key(&binding_slot) {
             return Err("Invalid binding slot".into());
         };
@@ -226,9 +226,11 @@ where
         };
 
         drop(texture);
-        self.sampled_images.insert(binding_slot, texture_ref);
 
-        Ok(())
+        Ok(self
+            .sampled_images
+            .insert(binding_slot, texture_ref)
+            .unwrap())
     }
 
     pub fn destroy(&mut self, renderer: &mut Renderer) {

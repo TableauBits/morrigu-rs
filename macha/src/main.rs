@@ -3,7 +3,7 @@ use morrigu::{
     application::{event, ApplicationBuilder, ApplicationState, StateContext},
     components::{
         camera::{Camera, PerspectiveData},
-        transform::Transform,
+        transform::{Axis, Transform},
     },
     shader::Shader,
     systems::mesh_renderer,
@@ -85,13 +85,15 @@ impl ApplicationState for MachaState {
         mesh_rendering_ref
             .lock()
             .bind_texture(1, &texture_ref, context.renderer)
-            .expect("Failed to bind texture");
+            .expect("Failed to bind texture")
+            .lock()
+            .destroy(context.renderer);
         self.mesh_rendering_ref = Some(mesh_rendering_ref.clone());
 
         let mut tranform = Transform::default().clone();
         tranform
             .translate(&glm::vec3(0.0, 0.0, -15.0))
-            .scale(&glm::vec3(0.0001, 0.0001, 0.0001));
+            .scale(&glm::vec3(0.1, 0.1, 0.1));
 
         self.rock = Some(
             context
@@ -111,7 +113,16 @@ impl ApplicationState for MachaState {
         })
     }
 
-    fn on_update(&mut self, dt: std::time::Duration, context: &mut StateContext) {}
+    fn on_update(&mut self, dt: std::time::Duration, context: &mut StateContext) {
+        context
+            .ecs_manager
+            .world
+            .get_entity_mut(self.rock.unwrap())
+            .unwrap()
+            .get_mut::<Transform>()
+            .unwrap()
+            .rotate(f32::to_radians(25.0) * dt.as_secs_f32(), Axis::Y);
+    }
 
     fn on_event(&mut self, event: event::Event<()>, context: &mut StateContext) {}
 
