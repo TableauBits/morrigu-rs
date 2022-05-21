@@ -21,6 +21,12 @@ impl<T> ThreadSafeRef<T> {
     }
 }
 
+impl<T> From<ThreadSafeRef<T>> for Arc<Mutex<T>> {
+    fn from(thread_safe_ref: ThreadSafeRef<T>) -> Self {
+        thread_safe_ref.0
+    }
+}
+
 impl<T> Clone for ThreadSafeRef<T> {
     fn clone(&self) -> Self {
         Self(self.0.clone())

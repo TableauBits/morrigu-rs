@@ -20,6 +20,7 @@ use std::{
     cmp::Ordering,
     ffi::{CStr, CString},
     mem,
+    sync::MutexGuard,
 };
 
 #[cfg(debug_assertions)]
@@ -143,7 +144,7 @@ pub struct Renderer {
     pub(crate) primary_render_pass: vk::RenderPass,
     swapchain: SwapchainInfo,
     pub graphics_queue: QueueInfo,
-    pub allocator: Option<Allocator>,
+    pub allocator: Option<ThreadSafeRef<Allocator>>,
     pub device: ash::Device,
     physical_device: vk::PhysicalDevice,
     surface: SurfaceInfo,
@@ -901,7 +902,7 @@ impl<'a> RendererBuilder<'a> {
             primary_render_pass,
             swapchain,
             graphics_queue: present_queue,
-            allocator: Some(gpu_allocator),
+            allocator: Some(ThreadSafeRef::new(gpu_allocator)),
             device,
             physical_device,
             surface,
@@ -912,10 +913,11 @@ impl<'a> RendererBuilder<'a> {
 }
 
 impl Renderer {
-    pub fn allocator(&mut self) -> &mut Allocator {
+    pub fn allocator(&self) -> MutexGuard<Allocator> {
         self.allocator
-            .as_mut()
+            .as_ref()
             .expect("Allocator was not initialized")
+            .lock()
     }
 
     pub(crate) fn begin_frame(&mut self) -> bool {
@@ -1089,7 +1091,7 @@ impl Renderer {
             &self.device,
             &self.surface,
             &self.surface.loader,
-            self.allocator.as_mut().unwrap(),
+            &mut self.allocator.as_ref().unwrap().lock(),
         );
 
         //    - and finally the framebuffers
@@ -1111,6 +1113,21 @@ impl Renderer {
         self.command_uploader
             .immediate_command(&self.device, self.graphics_queue.handle, function)
     }
+
+    pub(crate) fn create_imgui_renderer(
+        &self,
+        imgui_context: &mut imgui::Context,
+    ) -> Result<imgui_rs_vulkan_renderer::Renderer, Error> {
+        Ok(imgui_rs_vulkan_renderer::Renderer::with_gpu_allocator(
+            self.allocator.as_ref().unwrap().clone().into(),
+            self.device.clone(),
+            self.graphics_queue.handle,
+            self.command_pool,
+            self.primary_render_pass,
+            imgui_context,
+            None,
+        )?)
+    }
 }
 
 impl Drop for Renderer {
@@ -1123,7 +1140,7 @@ impl Drop for Renderer {
             self.device
                 .destroy_descriptor_set_layout(self.descriptors[1].layout, None);
             if let Some(mut time_buffer) = self.descriptors[0].buffer.take() {
-                time_buffer.destroy(&self.device, self.allocator.as_mut().unwrap());
+                time_buffer.destroy(&self.device, &mut self.allocator());
             }
             self.device
                 .destroy_descriptor_set_layout(self.descriptors[0].layout, None);

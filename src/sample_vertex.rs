@@ -116,13 +116,7 @@ impl TexturedVertex {
         let mut vertex_staging_buffer = AllocatedBuffer::builder(vertex_data_size)
             .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
             .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
-            .build(
-                &renderer.device,
-                renderer
-                    .allocator
-                    .as_mut()
-                    .ok_or("Uninitialized allocator")?,
-            )?;
+            .build(&renderer.device, &mut renderer.allocator())?;
         let vertex_staging_ptr = vertex_staging_buffer
             .allocation
             .as_ref()
@@ -141,13 +135,7 @@ impl TexturedVertex {
         let vertex_buffer = AllocatedBuffer::builder(vertex_data_size)
             .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER)
             .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
-            .build(
-                &renderer.device,
-                renderer
-                    .allocator
-                    .as_mut()
-                    .ok_or("Uninitialized allocator")?,
-            )?;
+            .build(&renderer.device, &mut renderer.allocator())?;
 
         renderer.immediate_command(|cmd_buffer| {
             let copy_info = vk::BufferCopy::builder().size(vertex_data_size);
@@ -162,19 +150,13 @@ impl TexturedVertex {
             }
         })?;
 
-        vertex_staging_buffer.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
+        vertex_staging_buffer.destroy(&renderer.device, &mut renderer.allocator());
 
         let index_data_size: u64 = (indices.len() * std::mem::size_of::<u32>()).try_into()?;
         let mut index_staging_buffer = AllocatedBuffer::builder(index_data_size)
             .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
             .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
-            .build(
-                &renderer.device,
-                renderer
-                    .allocator
-                    .as_mut()
-                    .ok_or("Uninitialized allocator")?,
-            )?;
+            .build(&renderer.device, &mut renderer.allocator())?;
 
         let index_staging_ptr = index_staging_buffer
             .allocation
@@ -194,13 +176,7 @@ impl TexturedVertex {
         let index_buffer = AllocatedBuffer::builder(index_data_size)
             .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)
             .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
-            .build(
-                &renderer.device,
-                renderer
-                    .allocator
-                    .as_mut()
-                    .ok_or("Uninitialized allocator")?,
-            )?;
+            .build(&renderer.device, &mut renderer.allocator())?;
 
         renderer.immediate_command(|cmd_buffer| {
             let copy_info = vk::BufferCopy::builder().size(index_data_size);
@@ -215,7 +191,7 @@ impl TexturedVertex {
             }
         })?;
 
-        index_staging_buffer.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
+        index_staging_buffer.destroy(&renderer.device, &mut renderer.allocator());
 
         Ok(ThreadSafeRef::new(Mesh::<Self> {
             vertices,

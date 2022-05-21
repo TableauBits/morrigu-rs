@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [build-dependencies]
-shaderc = "0.7.4"
+shaderc = "0.8.0"
 
 [dependencies]
 log = "0.4"
@@ -12,3 +12,4 @@ flexi_logger = "0.22.3"
 morrigu = { path = "../" }
 bevy_ecs = "0.7.0"
 nalgebra-glm = "0.17.0"
+imgui = "0.8"

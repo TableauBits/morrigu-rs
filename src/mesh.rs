@@ -16,8 +16,8 @@ where
 {
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         self.index_buffer
-            .destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
+            .destroy(&renderer.device, &mut renderer.allocator());
         self.vertex_buffer
-            .destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
+            .destroy(&renderer.device, &mut renderer.allocator());
     }
 }

@@ -27,10 +27,7 @@ impl Texture {
 
     pub fn from_path(
         path: &std::path::Path,
-        renderer: &mut Renderer, // device: &ash::Device,
-                                 // graphics_queue: vk::Queue,
-                                 // allocator: &mut gpu_allocator::vulkan::Allocator,
-                                 // command_uploader: &CommandUploader
+        renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Self>, Error> {
         let image = image::open(path)?.fliph().into_rgba8();
         let dimensions = image.dimensions();
@@ -45,10 +42,6 @@ impl Texture {
         width: u32,
         height: u32,
         renderer: &mut Renderer,
-        // device: &ash::Device,
-        // graphics_queue: vk::Queue,
-        // allocator: &mut gpu_allocator::vulkan::Allocator,
-        // command_uploader: &CommandUploader,
     ) -> Result<ThreadSafeRef<Self>, Error> {
         let device = &renderer.device;
 
@@ -62,10 +55,7 @@ impl Texture {
             data,
             device,
             renderer.graphics_queue.handle,
-            renderer
-                .allocator
-                .as_mut()
-                .ok_or("Unintialized allocator")?,
+            &mut renderer.allocator(),
             &renderer.command_uploader,
         )?;
 
@@ -92,13 +82,7 @@ impl Texture {
             depth: 1,
         })
         .texture_default()
-        .build_uninitialized(
-            &renderer.device,
-            renderer
-                .allocator
-                .as_mut()
-                .ok_or("Unintialized allocator")?,
-        )?;
+        .build_uninitialized(&renderer.device, &mut renderer.allocator())?;
 
         renderer.immediate_command(|cmd_buffer| {
             let range = vk::ImageSubresourceRange::builder()

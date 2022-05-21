@@ -20,6 +20,47 @@ use winit::{
 
 use std::time::{Duration, Instant};
 
+struct ImGui {
+    pub context: imgui::Context,
+    pub platform: imgui_winit_support::WinitPlatform,
+    pub renderer: imgui_rs_vulkan_renderer::Renderer,
+}
+
+impl ImGui {
+    fn new(renderer: &mut Renderer, window: &Window) -> Self {
+        let mut context = imgui::Context::create();
+        let mut platform = imgui_winit_support::WinitPlatform::init(&mut context);
+
+        let highdpi_factor = platform.hidpi_factor() as f32;
+        let font_size = 13.0 * highdpi_factor;
+        context
+            .fonts()
+            .add_font(&[imgui::FontSource::DefaultFontData {
+                config: Some(imgui::FontConfig {
+                    size_pixels: font_size,
+                    ..Default::default()
+                }),
+            }]);
+        context.io_mut().font_global_scale = 1.0 / highdpi_factor;
+
+        platform.attach_window(
+            context.io_mut(),
+            window,
+            imgui_winit_support::HiDpiMode::Rounded,
+        );
+
+        let renderer = renderer
+            .create_imgui_renderer(&mut context)
+            .expect("Failed to build imgui renderer");
+
+        ImGui {
+            context,
+            platform,
+            renderer,
+        }
+    }
+}
+
 pub struct StateContext<'a> {
     pub renderer: &'a mut Renderer,
     pub ecs_manager: &'a mut ECSManager,
@@ -29,6 +70,7 @@ pub struct StateContext<'a> {
 pub trait ApplicationState {
     fn on_attach(&mut self, context: &mut StateContext);
     fn on_update(&mut self, dt: Duration, context: &mut StateContext);
+    fn on_update_imgui(&mut self, ui: &mut imgui::Ui, context: &mut StateContext);
     fn on_event(&mut self, event: Event<()>, context: &mut StateContext);
     fn on_drop(&mut self, context: &mut StateContext);
 }
@@ -121,6 +163,8 @@ impl<'a> ApplicationBuilder<'a> {
         );
 
         let mut renderer = renderer_ref.lock();
+        let mut imgui = ImGui::new(&mut renderer, &window);
+
         state.on_attach(&mut StateContext {
             renderer: &mut renderer,
             ecs_manager: &mut ecs_manager,
@@ -132,6 +176,10 @@ impl<'a> ApplicationBuilder<'a> {
 
         event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
+
+            imgui
+                .platform
+                .handle_event(imgui.context.io_mut(), &window, &event);
 
             match event {
                 WindowEvent {
@@ -147,6 +195,7 @@ impl<'a> ApplicationBuilder<'a> {
                 }
                 Event::MainEventsCleared => {
                     let delta = prev_time.elapsed();
+                    imgui.context.io_mut().update_delta_time(delta);
                     prev_time = Instant::now();
 
                     let mut renderer = renderer_ref.lock();
@@ -162,6 +211,34 @@ impl<'a> ApplicationBuilder<'a> {
                         drop(renderer);
 
                         ecs_manager.run_schedule();
+
+                        #[cfg(debug_assertions)]
+                        {
+                            if let Err(error) = imgui
+                                .platform
+                                .prepare_frame(imgui.context.io_mut(), &window)
+                            {
+                                log::error!("ImGui error while preparing frame: {}", error);
+                            }
+
+                            let mut ui = imgui.context.frame();
+                            let mut renderer = renderer_ref.lock();
+                            state.on_update_imgui(
+                                &mut ui,
+                                &mut StateContext {
+                                    renderer: &mut renderer,
+                                    ecs_manager: &mut ecs_manager,
+                                    window: &window,
+                                },
+                            );
+                            imgui.platform.prepare_render(&ui, &window);
+                            let draw_data = ui.render();
+
+                            imgui
+                                .renderer
+                                .cmd_draw(renderer.primary_command_buffer, draw_data)
+                                .expect("Failed to render UI");
+                        }
 
                         let renderer = renderer_ref.lock();
                         renderer.end_frame();

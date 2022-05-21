@@ -136,13 +136,7 @@ impl MaterialBuilder {
                     let buffer = AllocatedBuffer::builder(binding.size.into())
                         .with_usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
                         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
-                        .build(
-                            &renderer.device,
-                            renderer
-                                .allocator
-                                .as_mut()
-                                .ok_or("Unintialized allocator")?,
-                        )?;
+                        .build(&renderer.device, &mut renderer.allocator())?;
                     let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
                         .buffer(buffer.handle)
                         .offset(0)
@@ -301,7 +295,7 @@ where
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         unsafe {
             for uniform in self.uniform_buffers.values_mut() {
-                uniform.destroy(&renderer.device, renderer.allocator.as_mut().unwrap());
+                uniform.destroy(&renderer.device, &mut renderer.allocator());
             }
 
             // Not sure if we should destroy those

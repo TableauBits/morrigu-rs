@@ -56,7 +56,7 @@ fn compile_shader(entry: Result<DirEntry, io::Error>) {
     }
     .expect("Failed to parse shader type");
 
-    let mut compiler = shaderc::Compiler::new().expect("Failed to create shaderc compiler");
+    let compiler = shaderc::Compiler::new().expect("Failed to create shaderc compiler");
     let compiled_spirv = compiler
         .compile_into_spirv(
             source.as_str(),

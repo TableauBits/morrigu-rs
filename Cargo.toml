@@ -10,15 +10,22 @@ name = "morrigu"
 [dependencies]
 log = "0.4"
 winit = "0.26"
-ash = { version = "0.37", features = ["linked", "debug"] }
+ash = { version = "0.37", default-features = false, features = ["debug", "linked"] }
 ash-window = "0.10"
-gpu-allocator = { git = "https://github.com/Ithyx/gpu-allocator", rev = "80c1d98fc58225f4fdf2f9b9d2d8a0fe4c88d90e" }
-spirv-reflect = "0.2.3"
-nalgebra-glm = "0.17.0"
-image = "0.24.1"
+gpu-allocator = { git = "https://github.com/Ithyx/gpu-allocator", rev = "027b89ed49f11e08facb968eea82c58cbb0d5729" }
+spirv-reflect = "0.2"
+nalgebra-glm = "0.17"
+image = "0.24"
 memoffset = "0.6"
-tobj = "3.2.2"
-bevy_ecs = "0.7.0"
+tobj = "3.2"
+bevy_ecs = "0.7"
+
+imgui = "0.8"
+imgui-winit-support = { version = "^0.8", default-features = false, features = ["winit-26"] }
+imgui-rs-vulkan-renderer = { git = "https://github.com/adrien-ben/imgui-rs-vulkan-renderer", branch = "ash-0.37", features = ["gpu-allocator"] }
+
+[patch.crates-io]
+gpu-allocator = { git = "https://github.com/Ithyx/gpu-allocator", rev = "027b89ed49f11e08facb968eea82c58cbb0d5729" }
 
 [workspace]
 members = [".", "macha"]

@@ -54,9 +54,9 @@ impl ApplicationState for MachaState {
         context.ecs_manager.world.insert_resource(camera);
 
         self.shader_ref = Some(
-            Shader::from_path(
-                Path::new("assets/gen/shaders/test/test.vert"),
-                Path::new("assets/gen/shaders/test/test.frag"),
+            Shader::from_spirv_u8(
+                include_bytes!("../assets/gen/shaders/test/test.vert"),
+                include_bytes!("../assets/gen/shaders/test/test.frag"),
                 &context.renderer.device,
             )
             .expect("Failed to create shader"),
@@ -122,6 +122,10 @@ impl ApplicationState for MachaState {
             .get_mut::<Transform>()
             .unwrap()
             .rotate(f32::to_radians(25.0) * dt.as_secs_f32(), Axis::Y);
+    }
+
+    fn on_update_imgui(&mut self, ui: &mut imgui::Ui, _context: &mut StateContext) {
+        ui.show_demo_window(&mut true);
     }
 
     fn on_event(&mut self, _event: event::Event<()>, _context: &mut StateContext) {}
