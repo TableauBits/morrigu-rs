@@ -4,3 +4,4 @@ Cargo.lock
 *.log
 
 macha/assets/gen/**
+macha/imgui.ini
