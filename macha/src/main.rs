@@ -67,7 +67,7 @@ impl ApplicationState for MachaState {
                 .expect("Failed to create material"),
         );
         self.mesh_ref = Some(
-            Vertex::load_model_from_path(Path::new("assets/meshes/rock.obj"), context.renderer)
+            Vertex::load_model_from_path_obj(Path::new("assets/meshes/rock.obj"), context.renderer)
                 .expect("Failed to create mesh"),
         );
 

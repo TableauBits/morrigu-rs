@@ -159,23 +159,41 @@ pub fn render_meshes<VertexType>(
                 std::slice::from_ref(&mesh.vertex_buffer.handle),
                 &[0],
             );
-            device.cmd_bind_index_buffer(
-                *cmd_buffer,
-                mesh.index_buffer.handle,
-                0,
-                vk::IndexType::UINT32,
-            );
-            device.cmd_draw_indexed(
-                *cmd_buffer,
-                mesh.indices
-                    .len()
-                    .try_into()
-                    .expect("Unsupported architecture"),
-                1,
-                0,
-                0,
-                0,
-            );
+            match mesh.index_buffer.as_ref() {
+                Some(index_buffer) => {
+                    device.cmd_bind_index_buffer(
+                        *cmd_buffer,
+                        index_buffer.handle,
+                        0,
+                        vk::IndexType::UINT32,
+                    );
+                    device.cmd_draw_indexed(
+                        *cmd_buffer,
+                        mesh.indices
+                            .as_ref()
+                            .unwrap()
+                            .len()
+                            .try_into()
+                            .expect("Unsupported architecture"),
+                        1,
+                        0,
+                        0,
+                        0,
+                    );
+                }
+                None => {
+                    device.cmd_draw(
+                        *cmd_buffer,
+                        mesh.vertices
+                            .len()
+                            .try_into()
+                            .expect("Unsupported architecture"),
+                        1,
+                        0,
+                        0,
+                    );
+                }
+            }
         }
     }
 }

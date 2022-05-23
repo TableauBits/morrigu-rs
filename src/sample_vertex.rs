@@ -2,13 +2,14 @@ use ash::vk;
 use nalgebra_glm as glm;
 
 use crate::{
-    allocated_types::AllocatedBuffer,
     error::Error,
     material::{Vertex, VertexInputDescription},
-    mesh::Mesh,
+    mesh::{upload_mesh_data, upload_vertex_buffer, Mesh},
     renderer::Renderer,
     utils::ThreadSafeRef,
 };
+
+use ply_rs::{parser, ply};
 
 #[repr(C)]
 pub struct TexturedVertex {
@@ -69,8 +70,32 @@ impl Vertex for TexturedVertex {
     }
 }
 
+impl ply::PropertyAccess for TexturedVertex {
+    fn new() -> Self {
+        Self {
+            position: glm::Vec3::default(),
+            normal: glm::Vec3::default(),
+            texture_coords: glm::Vec2::default(),
+        }
+    }
+
+    fn set_property(&mut self, key: String, property: ply::Property) {
+        match (key.as_ref(), property) {
+            ("x", ply::Property::Float(v)) => self.position.x = v,
+            ("y", ply::Property::Float(v)) => self.position.y = v,
+            ("z", ply::Property::Float(v)) => self.position.z = v,
+            ("nx", ply::Property::Float(v)) => self.normal.x = v,
+            ("ny", ply::Property::Float(v)) => self.normal.y = v,
+            ("nz", ply::Property::Float(v)) => self.normal.z = v,
+            ("s", ply::Property::Float(v)) => self.texture_coords.x = v,
+            ("t", ply::Property::Float(v)) => self.texture_coords.y = v,
+            (_, _) => (),
+        }
+    }
+}
+
 impl TexturedVertex {
-    pub fn load_model_from_path(
+    pub fn load_model_from_path_obj(
         path: &std::path::Path,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Mesh<Self>>, Error> {
@@ -112,92 +137,46 @@ impl TexturedVertex {
 
         let indices = mesh.indices.clone();
 
-        let vertex_data_size: u64 = (vertices.len() * std::mem::size_of::<Self>()).try_into()?;
-        let mut vertex_staging_buffer = AllocatedBuffer::builder(vertex_data_size)
-            .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
-            .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
-            .build(&renderer.device, &mut renderer.allocator())?;
-        let vertex_staging_ptr = vertex_staging_buffer
-            .allocation
-            .as_ref()
-            .ok_or("use after free")?
-            .mapped_ptr()
-            .ok_or_else(|| {
-                gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
-            })?
-            .cast::<Self>()
-            .as_ptr();
-
-        unsafe {
-            std::ptr::copy_nonoverlapping(vertices.as_ptr(), vertex_staging_ptr, vertices.len());
-        };
-
-        let vertex_buffer = AllocatedBuffer::builder(vertex_data_size)
-            .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER)
-            .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
-            .build(&renderer.device, &mut renderer.allocator())?;
-
-        renderer.immediate_command(|cmd_buffer| {
-            let copy_info = vk::BufferCopy::builder().size(vertex_data_size);
-
-            unsafe {
-                renderer.device.cmd_copy_buffer(
-                    *cmd_buffer,
-                    vertex_staging_buffer.handle,
-                    vertex_buffer.handle,
-                    std::slice::from_ref(&copy_info),
-                );
-            }
-        })?;
-
-        vertex_staging_buffer.destroy(&renderer.device, &mut renderer.allocator());
-
-        let index_data_size: u64 = (indices.len() * std::mem::size_of::<u32>()).try_into()?;
-        let mut index_staging_buffer = AllocatedBuffer::builder(index_data_size)
-            .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
-            .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
-            .build(&renderer.device, &mut renderer.allocator())?;
-
-        let index_staging_ptr = index_staging_buffer
-            .allocation
-            .as_ref()
-            .ok_or("use after free")?
-            .mapped_ptr()
-            .ok_or_else(|| {
-                gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
-            })?
-            .cast::<u32>()
-            .as_ptr();
-
-        unsafe {
-            std::ptr::copy_nonoverlapping(indices.as_ptr(), index_staging_ptr, indices.len());
-        };
-
-        let index_buffer = AllocatedBuffer::builder(index_data_size)
-            .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)
-            .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
-            .build(&renderer.device, &mut renderer.allocator())?;
-
-        renderer.immediate_command(|cmd_buffer| {
-            let copy_info = vk::BufferCopy::builder().size(index_data_size);
-
-            unsafe {
-                renderer.device.cmd_copy_buffer(
-                    *cmd_buffer,
-                    index_staging_buffer.handle,
-                    index_buffer.handle,
-                    std::slice::from_ref(&copy_info),
-                );
-            }
-        })?;
-
-        index_staging_buffer.destroy(&renderer.device, &mut renderer.allocator());
+        let upload_result = upload_mesh_data(&vertices, &indices, renderer)?;
 
         Ok(ThreadSafeRef::new(Mesh::<Self> {
             vertices,
-            indices,
+            indices: Some(indices),
+            vertex_buffer: upload_result.vertex_buffer,
+            index_buffer: Some(upload_result.index_buffer),
+        }))
+    }
+
+    pub fn load_model_from_path_ply(
+        path: &std::path::Path,
+        renderer: &mut Renderer,
+    ) -> Result<ThreadSafeRef<Mesh<Self>>, Error> {
+        let file = std::fs::File::open(path)?;
+        let mut file = std::io::BufReader::new(file);
+
+        let vertex_parser = parser::Parser::<Self>::new();
+
+        let header = vertex_parser.read_header(&mut file)?;
+
+        let mut vertices = vec![];
+        for (_, element) in &header.elements {
+            #[allow(clippy::single_match)]
+            match element.name.as_ref() {
+                "vertex" => {
+                    vertices =
+                        vertex_parser.read_payload_for_element(&mut file, element, &header)?;
+                }
+                _ => (),
+            }
+        }
+
+        let vertex_buffer = upload_vertex_buffer(&vertices, renderer)?;
+
+        Ok(ThreadSafeRef::new(Mesh::<Self> {
+            vertices,
+            indices: None,
             vertex_buffer,
-            index_buffer,
+            index_buffer: None,
         }))
     }
 }
