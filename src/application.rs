@@ -68,11 +68,11 @@ pub struct StateContext<'a> {
 }
 
 pub trait ApplicationState {
-    fn on_attach(&mut self, context: &mut StateContext);
-    fn on_update(&mut self, dt: Duration, context: &mut StateContext);
-    fn on_update_imgui(&mut self, ui: &mut imgui::Ui, context: &mut StateContext);
-    fn on_event(&mut self, event: Event<()>, context: &mut StateContext);
-    fn on_drop(&mut self, context: &mut StateContext);
+    fn on_attach(&mut self, _context: &mut StateContext) {}
+    fn on_update(&mut self, _dt: Duration, _context: &mut StateContext) {}
+    fn on_update_imgui(&mut self, _ui: &mut imgui::Ui, _context: &mut StateContext) {}
+    fn on_event(&mut self, _event: Event<()>, _context: &mut StateContext) {}
+    fn on_drop(&mut self, _context: &mut StateContext) {}
 }
 
 pub struct ApplicationBuilder<'a> {

@@ -4,7 +4,7 @@ use nalgebra_glm as glm;
 use crate::{
     error::Error,
     material::{Vertex, VertexInputDescription},
-    mesh::{upload_mesh_data, upload_vertex_buffer, Mesh},
+    mesh::{upload_index_buffer, upload_mesh_data, upload_vertex_buffer, Mesh},
     renderer::Renderer,
     utils::ThreadSafeRef,
 };
@@ -94,6 +94,26 @@ impl ply::PropertyAccess for TexturedVertex {
     }
 }
 
+struct Face {
+    indices: Vec<u32>,
+}
+
+impl ply::PropertyAccess for Face {
+    fn new() -> Self {
+        Self {
+            indices: Vec::default(),
+        }
+    }
+
+    #[allow(clippy::single_match)]
+    fn set_property(&mut self, key: String, property: ply::Property) {
+        match (key.as_ref(), property) {
+            ("vertex_indices", ply::Property::ListUInt(v)) => self.indices = v,
+            (_, _) => (),
+        }
+    }
+}
+
 impl TexturedVertex {
     pub fn load_model_from_path_obj(
         path: &std::path::Path,
@@ -155,10 +175,12 @@ impl TexturedVertex {
         let mut file = std::io::BufReader::new(file);
 
         let vertex_parser = parser::Parser::<Self>::new();
+        let face_parser = parser::Parser::<Face>::new();
 
         let header = vertex_parser.read_header(&mut file)?;
 
         let mut vertices = vec![];
+        let mut faces = vec![];
         for (_, element) in &header.elements {
             #[allow(clippy::single_match)]
             match element.name.as_ref() {
@@ -166,17 +188,27 @@ impl TexturedVertex {
                     vertices =
                         vertex_parser.read_payload_for_element(&mut file, element, &header)?;
                 }
+                "face" => {
+                    faces = face_parser.read_payload_for_element(&mut file, element, &header)?;
+                }
                 _ => (),
             }
         }
 
         let vertex_buffer = upload_vertex_buffer(&vertices, renderer)?;
 
+        let mut indices = vec![];
+        indices.reserve(faces.len() * 3);
+        for face in faces {
+            indices.extend(face.indices.iter());
+        }
+        let index_buffer = upload_index_buffer(&indices, renderer)?;
+
         Ok(ThreadSafeRef::new(Mesh::<Self> {
             vertices,
-            indices: None,
+            indices: Some(indices),
             vertex_buffer,
-            index_buffer: None,
+            index_buffer: Some(index_buffer),
         }))
     }
 }

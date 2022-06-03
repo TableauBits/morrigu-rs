@@ -122,7 +122,7 @@ where
                     uniform_buffers.insert(binding.slot, buffer);
                 }
                 vk::DescriptorType::COMBINED_IMAGE_SAMPLER => {
-                    let texture_ref = Texture::default(renderer)?;
+                    let texture_ref = Texture::builder().build_default(renderer)?;
                     let texture = texture_ref.lock();
 
                     let descriptor_image_info = vk::DescriptorImageInfo::builder()

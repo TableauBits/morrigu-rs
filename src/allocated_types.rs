@@ -131,11 +131,11 @@ impl<'a> AllocatedImageBuilder<'a> {
         }
     }
 
-    pub fn texture_default(mut self) -> Self {
+    pub fn texture_default(mut self, format: vk::Format) -> Self {
         self.image_create_info_builder = self
             .image_create_info_builder
             .image_type(vk::ImageType::TYPE_2D)
-            .format(vk::Format::R8G8B8A8_SRGB)
+            .format(format)
             .mip_levels(1)
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
@@ -146,7 +146,7 @@ impl<'a> AllocatedImageBuilder<'a> {
         self.image_view_create_info_builder = self
             .image_view_create_info_builder
             .view_type(vk::ImageViewType::TYPE_2D)
-            .format(vk::Format::R8G8B8A8_SRGB)
+            .format(format)
             .subresource_range(vk::ImageSubresourceRange {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 base_mip_level: 0,
