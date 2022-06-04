@@ -7,6 +7,7 @@ use crate::{
     components::camera::{Camera, PerspectiveData, Projection},
     ecs_manager::ECSManager,
     renderer::{Renderer, RendererBuilder},
+    utils::ThreadSafeRef,
 };
 
 use ash::vk;
@@ -75,6 +76,18 @@ pub trait ApplicationState {
     fn on_drop(&mut self, _context: &mut StateContext) {}
 }
 
+pub trait BuildableApplicationState<UserData>: ApplicationState {
+    fn build(context: &mut StateContext, data: UserData) -> Self;
+}
+
+struct ApplicationContext {
+    pub imgui: ImGui,
+    pub ecs_manager: ECSManager,
+    pub renderer_ref: ThreadSafeRef<Renderer>,
+    pub window: Window,
+    pub event_loop: EventLoop<()>,
+}
+
 pub struct ApplicationBuilder<'a> {
     width: u32,
     height: u32,
@@ -135,8 +148,8 @@ impl<'a> ApplicationBuilder<'a> {
     }
     */
 
-    pub fn build_and_run(self, state: &mut impl ApplicationState) {
-        let mut event_loop = EventLoop::new();
+    fn setup_context(&self) -> ApplicationContext {
+        let event_loop = EventLoop::new();
 
         let window = WindowBuilder::new()
             .with_inner_size(PhysicalSize::new(self.width, self.height))
@@ -150,7 +163,7 @@ impl<'a> ApplicationBuilder<'a> {
             .with_name(self.application_name)
             .with_version(self.version.0, self.version.1, self.version.2)
             .build();
-        let mut ecs_manager = ECSManager::new(
+        let ecs_manager = ECSManager::new(
             &renderer_ref,
             Camera::builder().build(
                 Projection::Perspective(PerspectiveData {
@@ -163,14 +176,24 @@ impl<'a> ApplicationBuilder<'a> {
         );
 
         let mut renderer = renderer_ref.lock();
-        let mut imgui = ImGui::new(&mut renderer, &window);
-
-        state.on_attach(&mut StateContext {
-            renderer: &mut renderer,
-            ecs_manager: &mut ecs_manager,
-            window: &window,
-        });
+        let imgui = ImGui::new(&mut renderer, &window);
         drop(renderer);
+
+        ApplicationContext {
+            imgui,
+            ecs_manager,
+            renderer_ref,
+            window,
+            event_loop,
+        }
+    }
+
+    fn main_loop(&self, context: &mut ApplicationContext, state: &mut dyn ApplicationState) {
+        let imgui = &mut context.imgui;
+        let ecs_manager = &mut context.ecs_manager;
+        let renderer_ref = &context.renderer_ref;
+        let window = &context.window;
+        let event_loop = &mut context.event_loop;
 
         let mut prev_time = Instant::now();
 
@@ -179,7 +202,7 @@ impl<'a> ApplicationBuilder<'a> {
 
             imgui
                 .platform
-                .handle_event(imgui.context.io_mut(), &window, &event);
+                .handle_event(imgui.context.io_mut(), window, &event);
 
             match event {
                 WindowEvent {
@@ -204,8 +227,8 @@ impl<'a> ApplicationBuilder<'a> {
                             delta,
                             &mut StateContext {
                                 renderer: &mut renderer,
-                                ecs_manager: &mut ecs_manager,
-                                window: &window,
+                                ecs_manager,
+                                window,
                             },
                         );
                         drop(renderer);
@@ -214,9 +237,8 @@ impl<'a> ApplicationBuilder<'a> {
 
                         #[cfg(debug_assertions)]
                         {
-                            if let Err(error) = imgui
-                                .platform
-                                .prepare_frame(imgui.context.io_mut(), &window)
+                            if let Err(error) =
+                                imgui.platform.prepare_frame(imgui.context.io_mut(), window)
                             {
                                 log::error!("ImGui error while preparing frame: {}", error);
                             }
@@ -227,11 +249,11 @@ impl<'a> ApplicationBuilder<'a> {
                                 &mut ui,
                                 &mut StateContext {
                                     renderer: &mut renderer,
-                                    ecs_manager: &mut ecs_manager,
-                                    window: &window,
+                                    ecs_manager,
+                                    window,
                                 },
                             );
-                            imgui.platform.prepare_render(&ui, &window);
+                            imgui.platform.prepare_render(&ui, window);
                             let draw_data = ui.render();
 
                             imgui
@@ -252,13 +274,15 @@ impl<'a> ApplicationBuilder<'a> {
                 event,
                 &mut StateContext {
                     renderer: &mut renderer,
-                    ecs_manager: &mut ecs_manager,
-                    window: &window,
+                    ecs_manager,
+                    window,
                 },
             );
         });
+    }
 
-        let mut renderer = renderer_ref.lock();
+    fn exit(&self, context: &mut ApplicationContext, state: &mut dyn ApplicationState) {
+        let mut renderer = context.renderer_ref.lock();
         unsafe {
             renderer
                 .device
@@ -267,9 +291,46 @@ impl<'a> ApplicationBuilder<'a> {
         }
         state.on_drop(&mut StateContext {
             renderer: &mut renderer,
-            ecs_manager: &mut ecs_manager,
-            window: &window,
+            ecs_manager: &mut context.ecs_manager,
+            window: &context.window,
         });
+    }
+
+    pub fn build_and_run_inplace<StateType, UserData>(self, data: UserData)
+    where
+        StateType: BuildableApplicationState<UserData>,
+    {
+        let mut context = self.setup_context();
+
+        let mut renderer = context.renderer_ref.lock();
+        let mut state_context = StateContext {
+            renderer: &mut renderer,
+            ecs_manager: &mut context.ecs_manager,
+            window: &context.window,
+        };
+        let mut state = StateType::build(&mut state_context, data);
+        state.on_attach(&mut state_context);
+        drop(renderer);
+
+        self.main_loop(&mut context, &mut state);
+
+        self.exit(&mut context, &mut state);
+    }
+
+    pub fn build_and_run(self, state: &mut impl ApplicationState) {
+        let mut context = self.setup_context();
+
+        let mut renderer = context.renderer_ref.lock();
+        state.on_attach(&mut StateContext {
+            renderer: &mut renderer,
+            ecs_manager: &mut context.ecs_manager,
+            window: &context.window,
+        });
+        drop(renderer);
+
+        self.main_loop(&mut context, state);
+
+        self.exit(&mut context, state);
     }
 }
 

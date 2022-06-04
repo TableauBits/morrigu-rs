@@ -1,6 +1,6 @@
 use bevy_ecs::{entity::Entity, schedule::SystemStage};
 use morrigu::{
-    application::{ApplicationBuilder, ApplicationState, StateContext},
+    application::{ApplicationBuilder, ApplicationState, BuildableApplicationState, StateContext},
     components::{
         camera::{Camera, PerspectiveData},
         transform::{Axis, Transform},
@@ -27,40 +27,25 @@ struct ShaderOptions {
 }
 
 struct MachaState {
-    shader_ref: Option<ThreadSafeRef<Shader>>,
-    material_ref: Option<ThreadSafeRef<Material>>,
-    mesh_ref: Option<ThreadSafeRef<Mesh>>,
-    mesh_rendering_ref: Option<ThreadSafeRef<MeshRendering>>,
-    texture_ref: Option<ThreadSafeRef<Texture>>,
-    flowmap_ref: Option<ThreadSafeRef<Texture>>,
-    gradient_ref: Option<ThreadSafeRef<Texture>>,
-    rock: Option<Entity>,
+    shader_ref: ThreadSafeRef<Shader>,
+    material_ref: ThreadSafeRef<Material>,
+    mesh_ref: ThreadSafeRef<Mesh>,
+    mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
+    texture_ref: ThreadSafeRef<Texture>,
+    flowmap_ref: ThreadSafeRef<Texture>,
+    gradient_ref: ThreadSafeRef<Texture>,
+    planet: Entity,
 
     shader_options: ShaderOptions,
 }
 
-impl MachaState {
-    pub fn new() -> Self {
-        Self {
-            shader_ref: None,
-            material_ref: None,
-            mesh_ref: None,
-            mesh_rendering_ref: None,
-            texture_ref: None,
-            flowmap_ref: None,
-            gradient_ref: None,
-            rock: None,
+impl BuildableApplicationState<()> for MachaState {
+    fn build(context: &mut StateContext, _: ()) -> Self {
+        let shader_options = ShaderOptions {
+            flow_speed: 0.2,
+            flow_intensity: 0.4,
+        };
 
-            shader_options: ShaderOptions {
-                flow_speed: 0.1,
-                flow_intensity: 0.1,
-            },
-        }
-    }
-}
-
-impl ApplicationState for MachaState {
-    fn on_attach(&mut self, context: &mut StateContext) {
         let camera = Camera::builder().build(
             morrigu::components::camera::Projection::Perspective(PerspectiveData {
                 horizontal_fov: f32::to_radians(90.0),
@@ -71,26 +56,21 @@ impl ApplicationState for MachaState {
         );
         context.ecs_manager.world.insert_resource(camera);
 
-        self.shader_ref = Some(
-            Shader::from_spirv_u8(
-                include_bytes!("../assets/gen/shaders/test/test.vert"),
-                include_bytes!("../assets/gen/shaders/test/test.frag"),
-                &context.renderer.device,
-            )
-            .expect("Failed to create shader"),
-        );
-        self.material_ref = Some(
-            Material::builder()
-                .build(self.shader_ref.as_ref().unwrap(), context.renderer)
-                .expect("Failed to create material"),
-        );
-        self.mesh_ref = Some(
-            Vertex::load_model_from_path_ply(
-                Path::new("assets/meshes/sphere.ply"),
-                context.renderer,
-            )
-            .expect("Failed to create mesh"),
-        );
+        let shader_ref = Shader::from_spirv_u8(
+            include_bytes!("../assets/gen/shaders/test/test.vert"),
+            include_bytes!("../assets/gen/shaders/test/test.frag"),
+            &context.renderer.device,
+        )
+        .expect("Failed to create shader");
+        let material_ref = Material::builder()
+            .build(&shader_ref, context.renderer)
+            .expect("Failed to create material");
+
+        let mesh_ref = Vertex::load_model_from_path_ply(
+            Path::new("assets/meshes/sphere.ply"),
+            context.renderer,
+        )
+        .expect("Failed to create mesh");
 
         let texture_ref = Texture::builder()
             .with_format(TextureFormat::RGBA8_UNORM)
@@ -99,7 +79,6 @@ impl ApplicationState for MachaState {
                 context.renderer,
             )
             .expect("Failed to load texture");
-        self.texture_ref = Some(texture_ref.clone());
         let flowmap_ref = Texture::builder()
             .with_format(TextureFormat::RGBA8_UNORM)
             .build_from_path(
@@ -107,21 +86,15 @@ impl ApplicationState for MachaState {
                 context.renderer,
             )
             .expect("Failed to load flowmap texture");
-        self.flowmap_ref = Some(flowmap_ref.clone());
         let gradient_ref = Texture::builder()
             .build_from_path(
                 Path::new("assets/textures/jupiter_gradient.png"),
                 context.renderer,
             )
             .expect("Failed to load gradient texture");
-        self.gradient_ref = Some(gradient_ref.clone());
 
-        let mesh_rendering_ref = MeshRendering::new(
-            self.mesh_ref.as_ref().unwrap(),
-            self.material_ref.as_ref().unwrap(),
-            context.renderer,
-        )
-        .expect("Failed to create mesh rendering");
+        let mesh_rendering_ref = MeshRendering::new(&mesh_ref, &material_ref, context.renderer)
+            .expect("Failed to create mesh rendering");
         mesh_rendering_ref
             .lock()
             .bind_texture(1, &texture_ref, context.renderer)
@@ -142,9 +115,8 @@ impl ApplicationState for MachaState {
             .destroy(context.renderer);
         mesh_rendering_ref
             .lock()
-            .upload_uniform(4, self.shader_options)
+            .upload_uniform(4, shader_options)
             .expect("Failed to upload flow settings");
-        self.mesh_rendering_ref = Some(mesh_rendering_ref.clone());
 
         let mut tranform = Transform::default();
         tranform
@@ -152,23 +124,37 @@ impl ApplicationState for MachaState {
             .rotate(f32::to_radians(-90.0), Axis::X)
             .scale(&glm::vec3(4.0, 4.0, 4.0));
 
-        self.rock = Some(
-            context
-                .ecs_manager
-                .world
-                .spawn()
-                .insert(tranform)
-                .insert(mesh_rendering_ref)
-                .id(),
-        );
+        let planet = context
+            .ecs_manager
+            .world
+            .spawn()
+            .insert(tranform)
+            .insert(mesh_rendering_ref.clone())
+            .id();
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
             schedule.add_stage(
                 "render meshes",
                 SystemStage::parallel().with_system(mesh_renderer::render_meshes::<Vertex>),
             );
-        })
+        });
+
+        MachaState {
+            shader_ref,
+            material_ref,
+            mesh_ref,
+            mesh_rendering_ref,
+            texture_ref,
+            flowmap_ref,
+            gradient_ref,
+            planet,
+            shader_options,
+        }
     }
+}
+
+impl ApplicationState for MachaState {
+    fn on_attach(&mut self, _context: &mut StateContext) {}
 
     fn on_update_imgui(&mut self, ui: &mut imgui::Ui, _context: &mut StateContext) {
         if let Some(window) = imgui::Window::new("shader uniforms").begin(ui) {
@@ -179,8 +165,6 @@ impl ApplicationState for MachaState {
 
             if ui.button("apply") {
                 self.mesh_rendering_ref
-                    .as_ref()
-                    .unwrap()
                     .lock()
                     .upload_uniform(4, self.shader_options)
                     .expect("Failed to upload flow settings");
@@ -191,41 +175,13 @@ impl ApplicationState for MachaState {
     }
 
     fn on_drop(&mut self, context: &mut StateContext) {
-        self.gradient_ref
-            .as_ref()
-            .unwrap()
-            .lock()
-            .destroy(context.renderer);
-        self.flowmap_ref
-            .as_ref()
-            .unwrap()
-            .lock()
-            .destroy(context.renderer);
-        self.texture_ref
-            .as_ref()
-            .unwrap()
-            .lock()
-            .destroy(context.renderer);
-        self.mesh_rendering_ref
-            .as_ref()
-            .unwrap()
-            .lock()
-            .destroy(context.renderer);
-        self.mesh_ref
-            .as_ref()
-            .unwrap()
-            .lock()
-            .destroy(context.renderer);
-        self.material_ref
-            .as_ref()
-            .unwrap()
-            .lock()
-            .destroy(context.renderer);
-        self.shader_ref
-            .as_ref()
-            .unwrap()
-            .lock()
-            .destroy(&context.renderer.device);
+        self.gradient_ref.lock().destroy(context.renderer);
+        self.flowmap_ref.lock().destroy(context.renderer);
+        self.texture_ref.lock().destroy(context.renderer);
+        self.mesh_rendering_ref.lock().destroy(context.renderer);
+        self.mesh_ref.lock().destroy(context.renderer);
+        self.material_ref.lock().destroy(context.renderer);
+        self.shader_ref.lock().destroy(&context.renderer.device);
     }
 }
 
@@ -250,11 +206,10 @@ fn init_logging() {
 fn main() {
     init_logging();
 
-    let mut state = MachaState::new();
     ApplicationBuilder::new()
         .with_window_name("Macha editor")
         .with_dimensions(1280, 720)
         .with_application_name("Macha")
         .with_application_version(0, 1, 0)
-        .build_and_run(&mut state);
+        .build_and_run_inplace::<MachaState, ()>(());
 }
