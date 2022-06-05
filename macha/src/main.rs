@@ -154,13 +154,10 @@ impl BuildableApplicationState<()> for MachaState {
 }
 
 impl ApplicationState for MachaState {
-    fn on_attach(&mut self, _context: &mut StateContext) {}
-
     fn on_update_imgui(&mut self, ui: &mut imgui::Ui, _context: &mut StateContext) {
         if let Some(window) = imgui::Window::new("shader uniforms").begin(ui) {
-            imgui::Slider::new("speed", 0.0_f32, 1.0_f32)
-                .build(ui, &mut self.shader_options.flow_speed);
-            imgui::Slider::new("intensity", 0.0_f32, 1.0_f32)
+            imgui::Slider::new("speed", 0.0, 1.0).build(ui, &mut self.shader_options.flow_speed);
+            imgui::Slider::new("intensity", 0.0, 1.0)
                 .build(ui, &mut self.shader_options.flow_intensity);
 
             if ui.button("apply") {
