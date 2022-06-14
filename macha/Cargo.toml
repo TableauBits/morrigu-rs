@@ -9,7 +9,7 @@ shaderc = "0.8.0"
 [dependencies]
 log = "0.4"
 flexi_logger = "0.22.3"
-morrigu = { path = "../" }
+morrigu = { path = "../", features = ["egui"] }
 bevy_ecs = "0.7.0"
-nalgebra-glm = "0.17.0"
-imgui = "0.8"
+nalgebra-glm = { version = "0.17.0", features = ["convert-bytemuck"] }
+egui = "0.18"

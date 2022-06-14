@@ -12,6 +12,7 @@ use ash::{
     vk::{self, PhysicalDeviceType},
     Entry, Instance,
 };
+use bytemuck::{Pod, Zeroable};
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use nalgebra_glm as glm;
 use winit::window::Window;
@@ -78,11 +79,6 @@ fn device_type_to_str(device_type: PhysicalDeviceType) -> &'static str {
     }
 }
 
-#[repr(C)]
-pub(crate) struct TimeData {
-    pub(crate) time: glm::Vec4,
-}
-
 pub struct QueueInfo {
     pub handle: vk::Queue,
     pub family_index: u32,
@@ -146,6 +142,7 @@ pub struct Renderer {
     pub graphics_queue: QueueInfo,
     pub allocator: Option<ThreadSafeRef<Allocator>>,
     pub device: ash::Device,
+    pub device_properties: vk::PhysicalDeviceProperties,
     physical_device: vk::PhysicalDevice,
     surface: SurfaceInfo,
     instance: ash::Instance,
@@ -693,7 +690,7 @@ impl<'a> RendererBuilder<'a> {
             .set_layouts(std::slice::from_ref(&level_0_layout));
         let level_0_handle = unsafe { device.allocate_descriptor_sets(&level_0_allocation_info) }
             .expect("Failed to allocate level 0 descriptor")[0];
-        let time_buffer_size: u64 = mem::size_of::<TimeData>().try_into().unwrap();
+        let time_buffer_size: u64 = mem::size_of::<glm::Vec4>().try_into().unwrap();
         let time_buffer = AllocatedBufferBuilder::uniform_buffer_default(time_buffer_size)
             .build(device, allocator)
             .expect("Failed to create time buffer");
@@ -904,6 +901,7 @@ impl<'a> RendererBuilder<'a> {
             graphics_queue: present_queue,
             allocator: Some(ThreadSafeRef::new(gpu_allocator)),
             device,
+            device_properties,
             physical_device,
             surface,
             instance,
@@ -1112,21 +1110,6 @@ impl Renderer {
     {
         self.command_uploader
             .immediate_command(&self.device, self.graphics_queue.handle, function)
-    }
-
-    pub(crate) fn create_imgui_renderer(
-        &self,
-        imgui_context: &mut imgui::Context,
-    ) -> Result<imgui_rs_vulkan_renderer::Renderer, Error> {
-        Ok(imgui_rs_vulkan_renderer::Renderer::with_gpu_allocator(
-            self.allocator.as_ref().unwrap().clone().into(),
-            self.device.clone(),
-            self.graphics_queue.handle,
-            self.command_pool,
-            self.primary_render_pass,
-            imgui_context,
-            None,
-        )?)
     }
 }
 

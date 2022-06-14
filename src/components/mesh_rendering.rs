@@ -1,4 +1,5 @@
 use ash::vk;
+use bytemuck::bytes_of;
 
 use crate::{
     allocated_types::AllocatedBuffer,
@@ -163,12 +164,16 @@ where
         }))
     }
 
-    pub fn upload_uniform<T>(&self, binding_slot: u32, data: T) -> Result<(), Error> {
+    pub fn upload_uniform<T: bytemuck::Pod>(
+        &mut self,
+        binding_slot: u32,
+        data: T,
+    ) -> Result<(), Error> {
         let binding_data = self
             .uniform_buffers
-            .get(&binding_slot)
+            .get_mut(&binding_slot)
             .ok_or_else(|| format!("no slot {} to bind to", binding_slot))?;
-        let allocation = binding_data.allocation.as_ref().ok_or("use after free")?;
+        let allocation = binding_data.allocation.as_mut().ok_or("use after free")?;
 
         if allocation.size() < std::mem::size_of::<T>().try_into()? {
             return Err(format!(
@@ -179,12 +184,10 @@ where
             .into());
         }
 
-        let dst = allocation
-            .mapped_ptr()
+        allocation
+            .mapped_slice_mut()
             .ok_or("failed to map memory")?
-            .cast::<T>()
-            .as_ptr();
-        unsafe { std::ptr::copy_nonoverlapping(&data, dst, 1) };
+            .copy_from_slice(bytes_of(&data));
 
         Ok(())
     }

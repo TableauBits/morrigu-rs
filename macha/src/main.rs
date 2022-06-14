@@ -19,13 +19,6 @@ type Material = morrigu::material::Material<Vertex>;
 type Mesh = morrigu::mesh::Mesh<Vertex>;
 type MeshRendering = morrigu::components::mesh_rendering::MeshRendering<Vertex>;
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-struct ShaderOptions {
-    pub flow_speed: f32,
-    pub flow_intensity: f32,
-}
-
 struct MachaState {
     shader_ref: ThreadSafeRef<Shader>,
     material_ref: ThreadSafeRef<Material>,
@@ -36,15 +29,14 @@ struct MachaState {
     gradient_ref: ThreadSafeRef<Texture>,
     planet: Entity,
 
-    shader_options: ShaderOptions,
+    shader_options: glm::Vec2,
 }
 
 impl BuildableApplicationState<()> for MachaState {
     fn build(context: &mut StateContext, _: ()) -> Self {
-        let shader_options = ShaderOptions {
-            flow_speed: 0.2,
-            flow_intensity: 0.4,
-        };
+        let flow_speed = 0.2_f32;
+        let flow_intensity = 0.4_f32;
+        let shader_options = glm::vec2(flow_speed, flow_intensity);
 
         let camera = Camera::builder().build(
             morrigu::components::camera::Projection::Perspective(PerspectiveData {
@@ -154,21 +146,13 @@ impl BuildableApplicationState<()> for MachaState {
 }
 
 impl ApplicationState for MachaState {
-    fn on_update_imgui(&mut self, ui: &mut imgui::Ui, _context: &mut StateContext) {
-        if let Some(window) = imgui::Window::new("shader uniforms").begin(ui) {
-            imgui::Slider::new("speed", 0.0, 1.0).build(ui, &mut self.shader_options.flow_speed);
-            imgui::Slider::new("intensity", 0.0, 1.0)
-                .build(ui, &mut self.shader_options.flow_intensity);
-
-            if ui.button("apply") {
-                self.mesh_rendering_ref
-                    .lock()
-                    .upload_uniform(4, self.shader_options)
-                    .expect("Failed to upload flow settings");
-            }
-
-            window.end();
-        }
+    fn on_update_egui(&mut self, egui_context: &egui::Context, _context: &mut StateContext) {
+        egui::Window::new("Shader uniforms").show(egui_context, |ui| {
+            ui.add(egui::Slider::new(&mut self.shader_options[0], 0.0..=1.0).text("flow speed"));
+            ui.add(
+                egui::Slider::new(&mut self.shader_options[1], 0.0..=1.0).text("flow intensity"),
+            );
+        });
     }
 
     fn on_drop(&mut self, context: &mut StateContext) {
