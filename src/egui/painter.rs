@@ -1,7 +1,8 @@
 use crate::{
+    components::mesh_rendering::MeshRendering,
     error::Error,
     material::{Material, MaterialBuilder, Vertex, VertexInputDescription},
-    mesh::{upload_index_buffer, upload_vertex_buffer},
+    mesh::{upload_index_buffer, upload_vertex_buffer, Mesh},
     renderer::Renderer,
     shader::Shader,
     texture::{Texture, TextureFormat},
@@ -9,7 +10,7 @@ use crate::{
 };
 
 use ash::vk;
-use bytemuck::{cast_slice, Pod, Zeroable};
+use bytemuck::{bytes_of, Pod, Zeroable};
 use egui::Rect;
 use nalgebra_glm as glm;
 
@@ -80,8 +81,8 @@ pub struct Painter {
 
     material: ThreadSafeRef<Material<EguiVertex>>,
 
-    next_native_texture_id: u64,
     textures: std::collections::HashMap<egui::TextureId, ThreadSafeRef<Texture>>,
+    frame_meshes: Vec<ThreadSafeRef<MeshRendering<EguiVertex>>>,
 }
 
 impl Painter {
@@ -102,8 +103,8 @@ impl Painter {
         Ok(Self {
             max_texture_size,
             material,
-            next_native_texture_id: 0,
             textures: Default::default(),
+            frame_meshes: Default::default(),
         })
     }
 
@@ -156,23 +157,176 @@ impl Painter {
     ) {
         assert!(mesh.is_valid());
 
-        let vertices: &[EguiVertex] = cast_slice(&mesh.vertices);
+        let vertices: &[EguiVertex] = &mesh
+            .vertices
+            .iter()
+            .map(|vertex| EguiVertex {
+                position: glm::vec2(vertex.pos.x, vertex.pos.y),
+                texture_coords: glm::vec2(vertex.uv.x, vertex.uv.y),
+                color: glm::vec4(
+                    vertex.color.r().into(),
+                    vertex.color.g().into(),
+                    vertex.color.b().into(),
+                    vertex.color.a().into(),
+                ),
+            })
+            .collect::<Vec<_>>();
         let vertex_buffer =
             upload_vertex_buffer(vertices, renderer).expect("Failed to create vertex buffer");
         let index_buffer =
             upload_index_buffer(&mesh.indices, renderer).expect("Failed to create index buffer");
+        let mesh_ref = ThreadSafeRef::new(Mesh {
+            vertices: vertices.to_vec(),
+            indices: Some(mesh.indices.clone()),
+            vertex_buffer,
+            index_buffer: Some(index_buffer),
+        });
 
         let width = renderer.framebuffer_width as f32 / pixels_per_point;
         let height = renderer.framebuffer_height as f32 / pixels_per_point;
-		  
-		let texture = self.textures.get(&mesh.texture_id);
-		if texture.is_none() {
-			return;
-		}
-		let texture = texture.unwrap();
 
-		let push_constants = glm::vec2(width, height);
-		
+        let texture = self.textures.get(&mesh.texture_id);
+        if texture.is_none() {
+            return;
+        }
+        let texture = texture.unwrap();
+        let push_constants = glm::vec2(width, height);
+
+        let mesh_rendering_ref = MeshRendering::new(&mesh_ref, &self.material, renderer)
+            .expect("Failed to create mesh rendering for egui mesh");
+        let mut mesh_rendering = mesh_rendering_ref.lock();
+        mesh_rendering
+            .bind_texture(1, texture, renderer)
+            .expect("Texture binding for Egui should succeed")
+            .lock()
+            .destroy(renderer);
+
+        let device = &renderer.device;
+        let cmd_buffer = &renderer.primary_command_buffer;
+        let material = self.material.lock();
+        unsafe {
+            device.cmd_bind_descriptor_sets(
+                *cmd_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                material.layout,
+                0,
+                &[
+                    renderer.descriptors[0].handle,
+                    renderer.descriptors[1].handle,
+                ],
+                &[],
+            )
+        };
+        let y: f32 = u16::try_from(renderer.framebuffer_height)
+            .expect("Invalid width")
+            .into();
+
+        let viewport = vk::Viewport::builder()
+            .x(0.0)
+            .y(y)
+            .width(
+                u16::try_from(renderer.framebuffer_width)
+                    .expect("Invalid width")
+                    .into(),
+            )
+            .height(-y)
+            .min_depth(0.0)
+            .max_depth(1.0);
+
+        let min_x = (pixels_per_point * clip_rect.min.x)
+            .clamp(0.0, width)
+            .round();
+        let min_y = (pixels_per_point * clip_rect.min.y)
+            .clamp(0.0, height)
+            .round();
+        let max_x = (pixels_per_point * clip_rect.max.x)
+            .clamp(pixels_per_point * clip_rect.min.x, width)
+            .round();
+        let max_y = (pixels_per_point * clip_rect.max.y)
+            .clamp(pixels_per_point * clip_rect.min.y, height)
+            .round();
+        let scissor = vk::Rect2D::builder()
+            .offset(vk::Offset2D {
+                x: min_x as i32,
+                y: min_y as i32,
+            })
+            .extent(vk::Extent2D {
+                width: (max_x - min_x) as u32,
+                height: (max_y - min_y) as u32,
+            });
+        unsafe {
+            device.cmd_bind_pipeline(
+                *cmd_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                material.pipeline,
+            );
+            device.cmd_set_viewport(*cmd_buffer, 0, std::slice::from_ref(&viewport));
+            device.cmd_set_scissor(*cmd_buffer, 0, std::slice::from_ref(&scissor));
+            device.cmd_bind_descriptor_sets(
+                *cmd_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                material.layout,
+                2,
+                std::slice::from_ref(&material.descriptor_set),
+                &[],
+            );
+            device.cmd_push_constants(
+                *cmd_buffer,
+                material.layout,
+                vk::ShaderStageFlags::VERTEX,
+                0,
+                bytes_of(&push_constants),
+            );
+
+            device.cmd_bind_descriptor_sets(
+                *cmd_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                material.layout,
+                3,
+                std::slice::from_ref(&mesh_rendering.descriptor_set),
+                &[],
+            );
+
+            let mesh = mesh_ref.lock();
+            device.cmd_bind_vertex_buffers(
+                *cmd_buffer,
+                0,
+                std::slice::from_ref(&mesh.vertex_buffer.handle),
+                &[0],
+            );
+            device.cmd_bind_index_buffer(
+                *cmd_buffer,
+                mesh.index_buffer.as_ref().unwrap().handle,
+                0,
+                vk::IndexType::UINT32,
+            );
+            device.cmd_draw_indexed(
+                *cmd_buffer,
+                mesh.indices
+                    .as_ref()
+                    .unwrap()
+                    .len()
+                    .try_into()
+                    .expect("Unsupported architecture"),
+                1,
+                0,
+                0,
+                0,
+            );
+        };
+
+        drop(mesh_rendering);
+        self.frame_meshes.push(mesh_rendering_ref);
+    }
+
+    pub fn cleanup_previous_frame(&mut self, renderer: &mut Renderer) {
+        for mesh_rendering_ref in &self.frame_meshes {
+            let mut mesh_rendering = mesh_rendering_ref.lock();
+            mesh_rendering.mesh_ref.lock().destroy(renderer);
+            mesh_rendering.destroy(renderer);
+        }
+
+        self.frame_meshes.clear();
     }
 
     fn set_texture(
@@ -185,13 +339,11 @@ impl Painter {
             egui::ImageData::Color(image) => image
                 .pixels
                 .iter()
-                .map(|pixel| pixel.to_array())
-                .flatten()
+                .flat_map(|pixel| pixel.to_array())
                 .collect(),
             egui::ImageData::Font(image) => image
                 .srgba_pixels(1.0)
-                .map(|pixel| pixel.to_array())
-                .flatten()
+                .flat_map(|pixel| pixel.to_array())
                 .collect(),
         };
         let texture = Texture::builder()
@@ -215,7 +367,7 @@ impl Painter {
         match delta.pos {
             Some(pos) => {
                 let original_texture = self.textures.get(&tex_id);
-                if let None = original_texture {
+                if original_texture.is_none() {
                     return;
                 }
                 let original_texture = original_texture.unwrap().lock();
@@ -323,5 +475,18 @@ impl Painter {
         if let Some(texture) = self.textures.remove(&tex_id) {
             texture.lock().destroy(renderer);
         }
+    }
+
+    pub(crate) fn destroy(&mut self, renderer: &mut Renderer) {
+        for mesh in &self.frame_meshes {
+            mesh.lock().destroy(renderer);
+        }
+        self.frame_meshes.clear();
+
+        for (_, texture) in self.textures.drain() {
+            texture.lock().destroy(renderer);
+        }
+
+        self.material.lock().destroy(renderer);
     }
 }

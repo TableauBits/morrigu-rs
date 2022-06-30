@@ -81,10 +81,10 @@ fn compile_shaders_in_dir(parent_dir: &Path) {
     }
 
     for entry in std::fs::read_dir(&input_dir)
-        .expect(format!("Directory {} should exist", input_dir.display()).as_str())
+        .unwrap_or_else(|_| panic!("Directory {} should exist", input_dir.display()))
     {
         let entry = entry
-            .expect(format!("Failed to iterate over directory {}", input_dir.display()).as_str());
+            .unwrap_or_else(|_| panic!("Failed to iterate over directory {}", input_dir.display()));
 
         compile_shader(entry);
     }

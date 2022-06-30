@@ -12,7 +12,6 @@ use ash::{
     vk::{self, PhysicalDeviceType},
     Entry, Instance,
 };
-use bytemuck::{Pod, Zeroable};
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use nalgebra_glm as glm;
 use winit::window::Window;

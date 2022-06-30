@@ -37,8 +37,8 @@ where
 
     pub shader_ref: ThreadSafeRef<Shader>,
 
-    pub(crate) descriptor_set: vk::DescriptorSet,
-    pub(crate) layout: vk::PipelineLayout,
+pub(crate) descriptor_set: vk::DescriptorSet,
+pub(crate) layout: vk::PipelineLayout,
     pub(crate) pipeline: vk::Pipeline,
 
     vertex_type_safety: std::marker::PhantomData<VertexType>,
@@ -294,17 +294,17 @@ where
         MaterialBuilder::new()
     }
 
+    pub fn destroy_owned_textures(&mut self, renderer: &mut Renderer) {
+        for texture_ref in self.sampled_images.values() {
+            texture_ref.lock().destroy(renderer);
+        }
+    }
+
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         unsafe {
             for uniform in self.uniform_buffers.values_mut() {
                 uniform.destroy(&renderer.device, &mut renderer.allocator());
             }
-
-            // Not sure if we should destroy those
-            // for image in self.sampled_images.values_mut() {
-            // let mut image = image.lock();
-            // image.destroy(renderer);
-            // }
 
             renderer.device.destroy_pipeline(self.pipeline, None);
             renderer.device.destroy_pipeline_layout(self.layout, None);
@@ -335,10 +335,11 @@ where
             .into());
         }
 
+        let raw_data = bytes_of(&data);
         allocation
             .mapped_slice_mut()
-            .ok_or("failed to map memory")?
-            .copy_from_slice(bytes_of(&data));
+            .ok_or("failed to map memory")?[..raw_data.len()]
+            .copy_from_slice(raw_data);
 
         Ok(())
     }

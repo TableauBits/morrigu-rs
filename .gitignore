@@ -2,6 +2,8 @@ target
 Cargo.lock
 .vscode
 *.log
+*.vim
 
+src/egui/shaders/gen/**
 macha/assets/gen/**
 macha/imgui.ini

@@ -41,13 +41,14 @@ pub fn render_meshes<VertexType>(
 
     let time_buffer = renderer.descriptors[0].buffer.as_mut().unwrap();
 
+    let raw_time_data = bytes_of(&time_data);
     time_buffer
         .allocation
         .as_mut()
         .expect("Free after use")
         .mapped_slice_mut()
-        .expect("Memory should be mappable")
-        .copy_from_slice(bytes_of(&time_data));
+        .expect("Memory should be mappable")[..raw_time_data.len()]
+        .copy_from_slice(raw_time_data);
 
     let mut last_material_pipeline = None;
     let device = &renderer.device;

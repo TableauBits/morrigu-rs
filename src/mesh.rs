@@ -105,7 +105,7 @@ pub fn upload_index_buffer(
         .ok_or_else(|| {
             gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
         })?
-        .copy_from_slice(cast_slice(&indices));
+        .copy_from_slice(cast_slice(indices));
 
     let index_buffer = AllocatedBuffer::builder(index_data_size)
         .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)

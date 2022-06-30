@@ -201,6 +201,9 @@ impl<'a> ApplicationBuilder<'a> {
 
                     let mut renderer = renderer_ref.lock();
                     if renderer.begin_frame() {
+                        #[cfg(feature = "egui")]
+                        egui.painter.cleanup_previous_frame(&mut renderer);
+
                         state.on_update(
                             delta,
                             &mut StateContext {
@@ -218,7 +221,7 @@ impl<'a> ApplicationBuilder<'a> {
                             let mut renderer = renderer_ref.lock();
                             egui.run(&context.window, |egui_context| {
                                 state.on_update_egui(
-                                    &egui_context,
+                                    egui_context,
                                     &mut StateContext {
                                         renderer: &mut renderer,
                                         ecs_manager,
@@ -261,6 +264,8 @@ impl<'a> ApplicationBuilder<'a> {
             ecs_manager: &mut context.ecs_manager,
             window: &context.window,
         });
+
+        context.egui.painter.destroy(&mut renderer);
     }
 
     pub fn build_and_run_inplace<StateType, UserData>(self, data: UserData)
