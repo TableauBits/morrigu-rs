@@ -37,8 +37,8 @@ where
 
     pub shader_ref: ThreadSafeRef<Shader>,
 
-pub(crate) descriptor_set: vk::DescriptorSet,
-pub(crate) layout: vk::PipelineLayout,
+    pub(crate) descriptor_set: vk::DescriptorSet,
+    pub(crate) layout: vk::PipelineLayout,
     pub(crate) pipeline: vk::Pipeline,
 
     vertex_type_safety: std::marker::PhantomData<VertexType>,

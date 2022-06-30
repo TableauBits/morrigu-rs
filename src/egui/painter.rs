@@ -487,6 +487,11 @@ impl Painter {
             texture.lock().destroy(renderer);
         }
 
+        self.material
+            .lock()
+            .shader_ref
+            .lock()
+            .destroy(&renderer.device);
         self.material.lock().destroy(renderer);
     }
 }
