@@ -478,20 +478,14 @@ impl Painter {
     }
 
     pub(crate) fn destroy(&mut self, renderer: &mut Renderer) {
-        for mesh in &self.frame_meshes {
-            mesh.lock().destroy(renderer);
-        }
-        self.frame_meshes.clear();
+        self.cleanup_previous_frame(renderer);
 
         for (_, texture) in self.textures.drain() {
             texture.lock().destroy(renderer);
         }
 
-        self.material
-            .lock()
-            .shader_ref
-            .lock()
-            .destroy(&renderer.device);
-        self.material.lock().destroy(renderer);
+        let mut material = self.material.lock();
+        material.shader_ref.lock().destroy(&renderer.device);
+        material.destroy(renderer);
     }
 }
