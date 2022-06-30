@@ -265,6 +265,7 @@ impl<'a> ApplicationBuilder<'a> {
             window: &context.window,
         });
 
+        #[cfg(feature = "egui")]
         context.egui.painter.destroy(&mut renderer);
     }
 
