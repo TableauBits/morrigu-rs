@@ -97,6 +97,7 @@ pub fn upload_index_buffer(
         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
         .build(&renderer.device, &mut renderer.allocator())?;
 
+    let raw_indices = cast_slice(indices);
     index_staging_buffer
         .allocation
         .as_mut()
@@ -104,8 +105,8 @@ pub fn upload_index_buffer(
         .mapped_slice_mut()
         .ok_or_else(|| {
             gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
-        })?
-        .copy_from_slice(cast_slice(indices));
+        })?[..raw_indices.len()]
+        .copy_from_slice(raw_indices);
 
     let index_buffer = AllocatedBuffer::builder(index_data_size)
         .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)
