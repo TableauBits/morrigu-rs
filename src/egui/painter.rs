@@ -61,7 +61,7 @@ impl Vertex for EguiVertex {
         let color = vk::VertexInputAttributeDescription::builder()
             .location(2)
             .binding(0)
-            .format(vk::Format::R32G32_SFLOAT)
+            .format(vk::Format::R32G32B32A32_SFLOAT)
             .offset(
                 memoffset::offset_of!(EguiVertex, color)
                     .try_into()
@@ -164,10 +164,10 @@ impl Painter {
                 position: glm::vec2(vertex.pos.x, vertex.pos.y),
                 texture_coords: glm::vec2(vertex.uv.x, vertex.uv.y),
                 color: glm::vec4(
-                    vertex.color.r().into(),
-                    vertex.color.g().into(),
-                    vertex.color.b().into(),
-                    vertex.color.a().into(),
+                    vertex.color.r() as f32 / u8::MAX as f32,
+                    vertex.color.g() as f32 / u8::MAX as f32,
+                    vertex.color.b() as f32 / u8::MAX as f32,
+                    vertex.color.a() as f32 / u8::MAX as f32,
                 ),
             })
             .collect::<Vec<_>>();
