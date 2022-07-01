@@ -161,7 +161,10 @@ impl Painter {
             .vertices
             .iter()
             .map(|vertex| EguiVertex {
-                position: glm::vec2(vertex.pos.x, vertex.pos.y),
+                position: glm::vec2(
+                    vertex.pos.x,
+                    renderer.framebuffer_height as f32 - vertex.pos.y,
+                ),
                 texture_coords: glm::vec2(vertex.uv.x, vertex.uv.y),
                 color: glm::vec4(
                     vertex.color.r() as f32 / u8::MAX as f32,

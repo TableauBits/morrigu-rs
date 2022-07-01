@@ -152,6 +152,13 @@ impl ApplicationState for MachaState {
             ui.add(
                 egui::Slider::new(&mut self.shader_options[1], 0.0..=1.0).text("flow intensity"),
             );
+
+            if ui.button("Apply changes").clicked() {
+                self.mesh_rendering_ref
+                    .lock()
+                    .upload_uniform(4, self.shader_options)
+                    .expect("Failed to upload flow settings");
+            }
         });
     }
 
