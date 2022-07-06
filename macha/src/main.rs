@@ -1,4 +1,4 @@
-use bevy_ecs::{entity::Entity, schedule::SystemStage};
+use bevy_ecs::schedule::SystemStage;
 use morrigu::{
     application::{ApplicationBuilder, ApplicationState, BuildableApplicationState, StateContext},
     components::{
@@ -27,7 +27,6 @@ struct MachaState {
     texture_ref: ThreadSafeRef<Texture>,
     flowmap_ref: ThreadSafeRef<Texture>,
     gradient_ref: ThreadSafeRef<Texture>,
-    planet: Entity,
 
     shader_options: glm::Vec2,
 }
@@ -116,13 +115,12 @@ impl BuildableApplicationState<()> for MachaState {
             .rotate(f32::to_radians(-90.0), Axis::X)
             .scale(&glm::vec3(4.0, 4.0, 4.0));
 
-        let planet = context
+        context
             .ecs_manager
             .world
             .spawn()
             .insert(tranform)
-            .insert(mesh_rendering_ref.clone())
-            .id();
+            .insert(mesh_rendering_ref.clone());
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
             schedule.add_stage(
@@ -139,7 +137,6 @@ impl BuildableApplicationState<()> for MachaState {
             texture_ref,
             flowmap_ref,
             gradient_ref,
-            planet,
             shader_options,
         }
     }
@@ -165,6 +162,8 @@ impl ApplicationState for MachaState {
                     .upload_uniform(4, self.shader_options)
                     .expect("Failed to upload flow settings");
             }
+
+            ui.allocate_space(ui.available_size());
         });
     }
 

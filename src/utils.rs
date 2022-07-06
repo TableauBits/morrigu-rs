@@ -42,8 +42,9 @@ pub struct CommandUploader {
 
 impl CommandUploader {
     pub(crate) fn new(device: &ash::Device, queue_index: u32) -> Result<Self, Error> {
-        let command_pool_info =
-            vk::CommandPoolCreateInfo::builder().queue_family_index(queue_index);
+        let command_pool_info = vk::CommandPoolCreateInfo::builder()
+            .queue_family_index(queue_index)
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
         let command_pool = unsafe { device.create_command_pool(&command_pool_info, None) }?;
 
         let fence_info = vk::FenceCreateInfo::default();
@@ -92,7 +93,9 @@ impl CommandUploader {
 
         unsafe { device.wait_for_fences(std::slice::from_ref(&self.fence), true, u64::MAX) }?;
         unsafe { device.reset_fences(std::slice::from_ref(&self.fence)) }?;
-        unsafe { device.reset_command_buffer(self.command_buffer, CommandBufferResetFlags::default()) }?;
+        unsafe {
+            device.reset_command_buffer(self.command_buffer, CommandBufferResetFlags::default())
+        }?;
 
         Ok(())
     }
