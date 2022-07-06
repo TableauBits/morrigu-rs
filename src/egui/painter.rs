@@ -2,7 +2,7 @@ use crate::{
     components::mesh_rendering::MeshRendering,
     error::Error,
     material::{Material, MaterialBuilder, Vertex, VertexInputDescription},
-    mesh::{upload_index_buffer, upload_vertex_buffer, Mesh},
+    mesh::{upload_mesh_data, Mesh, UploadResult},
     renderer::Renderer,
     shader::Shader,
     texture::{Texture, TextureFormat},
@@ -174,10 +174,11 @@ impl Painter {
                 ),
             })
             .collect::<Vec<_>>();
-        let vertex_buffer =
-            upload_vertex_buffer(vertices, renderer).expect("Failed to create vertex buffer");
-        let index_buffer =
-            upload_index_buffer(&mesh.indices, renderer).expect("Failed to create index buffer");
+        let UploadResult {
+            vertex_buffer,
+            index_buffer,
+        } = upload_mesh_data(vertices, &mesh.indices, renderer)
+            .expect("Failed to upload egui mesh data");
         let mesh_ref = ThreadSafeRef::new(Mesh {
             vertices: vertices.to_vec(),
             indices: Some(mesh.indices.clone()),
