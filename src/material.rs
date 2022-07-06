@@ -22,6 +22,7 @@ pub trait Vertex: std::marker::Sync + std::marker::Send + 'static {
     fn vertex_input_description() -> VertexInputDescription;
 }
 
+#[allow(dead_code)] // We never "read" value from this struct, it's directly uploaded to the GPU withou any field access
 struct CameraData {
     view_projection_matrix: glm::Mat4,
     world_position: glm::Vec4,

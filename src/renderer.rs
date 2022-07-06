@@ -91,6 +91,7 @@ struct SurfaceInfo {
 
 struct SwapchainInfo {
     handle: vk::SwapchainKHR,
+    #[allow(dead_code)] // Unused for now, but need to keep these alive
     images: Vec<vk::Image>,
     image_views: Vec<vk::ImageView>,
     depth_image: AllocatedImage,
@@ -145,6 +146,8 @@ pub struct Renderer {
     physical_device: vk::PhysicalDevice,
     surface: SurfaceInfo,
     instance: ash::Instance,
+    #[allow(dead_code)]
+    // This field is never read, but we need to keep it alive longer than the instance
     entry: ash::Entry,
 }
 
