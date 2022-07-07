@@ -143,13 +143,23 @@ impl BuildableApplicationState<()> for MachaState {
 }
 
 impl ApplicationState for MachaState {
-    fn on_update(&mut self, dt: std::time::Duration, context: &mut StateContext) {
-        context
-            .window
-            .set_title(format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()).as_str());
-    }
-
-    fn on_update_egui(&mut self, egui_context: &egui::Context, _context: &mut StateContext) {
+    fn on_update_egui(
+        &mut self,
+        dt: std::time::Duration,
+        egui_context: &egui::Context,
+        _context: &mut StateContext,
+    ) {
+        egui::Window::new("Debug info").show(egui_context, |ui| {
+            let color = match dt.as_millis() {
+                0..=25 => [51, 204, 51],
+                26..=50 => [255, 153, 0],
+                _ => [204, 51, 51],
+            };
+            ui.colored_label(
+                egui::Color32::from_rgb(color[0], color[1], color[2]),
+                format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()),
+            );
+        });
         egui::Window::new("Shader uniforms").show(egui_context, |ui| {
             ui.add(egui::Slider::new(&mut self.shader_options[0], 0.0..=1.0).text("flow speed"));
             ui.add(
