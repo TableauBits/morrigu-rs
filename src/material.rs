@@ -1,4 +1,5 @@
 use ash::vk;
+use bytemuck::bytes_of;
 
 use crate::{
     allocated_types::AllocatedBuffer,
@@ -16,10 +17,12 @@ pub struct VertexInputDescription {
     pub bindings: Vec<vk::VertexInputBindingDescription>,
     pub attributes: Vec<vk::VertexInputAttributeDescription>,
 }
+
 pub trait Vertex: std::marker::Sync + std::marker::Send + 'static {
     fn vertex_input_description() -> VertexInputDescription;
 }
 
+#[allow(dead_code)] // We never "read" value from this struct, it's directly uploaded to the GPU withou any field access
 struct CameraData {
     view_projection_matrix: glm::Mat4,
     world_position: glm::Vec4,
@@ -292,17 +295,17 @@ where
         MaterialBuilder::new()
     }
 
+    pub fn destroy_owned_textures(&mut self, renderer: &mut Renderer) {
+        for texture_ref in self.sampled_images.values() {
+            texture_ref.lock().destroy(renderer);
+        }
+    }
+
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         unsafe {
             for uniform in self.uniform_buffers.values_mut() {
                 uniform.destroy(&renderer.device, &mut renderer.allocator());
             }
-
-            // Not sure if we should destroy those
-            // for image in self.sampled_images.values_mut() {
-            // let mut image = image.lock();
-            // image.destroy(renderer);
-            // }
 
             renderer.device.destroy_pipeline(self.pipeline, None);
             renderer.device.destroy_pipeline_layout(self.layout, None);
@@ -312,13 +315,17 @@ where
         }
     }
 
-    pub fn upload_uniform<T>(&self, binding_slot: u32, data: T) -> Result<(), Error> {
+    pub fn upload_uniform<T: bytemuck::Pod>(
+        &mut self,
+        binding_slot: u32,
+        data: T,
+    ) -> Result<(), Error> {
         let binding_data = self
             .uniform_buffers
-            .get(&binding_slot)
+            .get_mut(&binding_slot)
             .ok_or_else(|| format!("no slot {} to bind to", binding_slot))?;
 
-        let allocation = binding_data.allocation.as_ref().ok_or("use after free")?;
+        let allocation = binding_data.allocation.as_mut().ok_or("use after free")?;
 
         if allocation.size() < std::mem::size_of::<T>().try_into()? {
             return Err(format!(
@@ -329,12 +336,11 @@ where
             .into());
         }
 
-        let dst = allocation
-            .mapped_ptr()
-            .ok_or("failed to map memory")?
-            .cast::<T>()
-            .as_ptr();
-        unsafe { std::ptr::copy_nonoverlapping(&data, dst, 1) };
+        let raw_data = bytes_of(&data);
+        allocation
+            .mapped_slice_mut()
+            .ok_or("failed to map memory")?[..raw_data.len()]
+            .copy_from_slice(raw_data);
 
         Ok(())
     }

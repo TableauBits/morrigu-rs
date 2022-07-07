@@ -1,4 +1,5 @@
 use ash::vk;
+use bytemuck::cast_slice;
 
 use crate::{allocated_types::AllocatedBuffer, error::Error, material::Vertex, renderer::Renderer};
 
@@ -42,6 +43,12 @@ where
         .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
         .build(&renderer.device, &mut renderer.allocator())?;
+
+    // We cannot cast this vertex slice using bytemuck because we don't want to enforce that a vertex types doesn't have padding.
+    // Padding issues are not a problem because of the way input bindings are setup (using offsets into a struct).
+    // So instead, we swallow our pride, pray for forgiveness for our sins, and go to unsafe land. One more time can't hurt, right ?
+    // Well I'm pretty sure it can. I've looked at this a bunch of time, and while I know for sure there's a problem in there,
+    // I can't find it, so it will have to do for now.
     let vertex_staging_ptr = vertex_staging_buffer
         .allocation
         .as_ref()
@@ -90,20 +97,16 @@ pub fn upload_index_buffer(
         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
         .build(&renderer.device, &mut renderer.allocator())?;
 
-    let index_staging_ptr = index_staging_buffer
+    let raw_indices = cast_slice(indices);
+    index_staging_buffer
         .allocation
-        .as_ref()
+        .as_mut()
         .ok_or("use after free")?
-        .mapped_ptr()
+        .mapped_slice_mut()
         .ok_or_else(|| {
             gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
-        })?
-        .cast::<u32>()
-        .as_ptr();
-
-    unsafe {
-        std::ptr::copy_nonoverlapping(indices.as_ptr(), index_staging_ptr, indices.len());
-    };
+        })?[..raw_indices.len()]
+        .copy_from_slice(raw_indices);
 
     let index_buffer = AllocatedBuffer::builder(index_data_size)
         .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)

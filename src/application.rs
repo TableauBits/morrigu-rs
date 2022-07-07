@@ -21,47 +21,6 @@ use winit::{
 
 use std::time::{Duration, Instant};
 
-struct ImGui {
-    pub context: imgui::Context,
-    pub platform: imgui_winit_support::WinitPlatform,
-    pub renderer: imgui_rs_vulkan_renderer::Renderer,
-}
-
-impl ImGui {
-    fn new(renderer: &mut Renderer, window: &Window) -> Self {
-        let mut context = imgui::Context::create();
-        let mut platform = imgui_winit_support::WinitPlatform::init(&mut context);
-
-        let highdpi_factor = platform.hidpi_factor() as f32;
-        let font_size = 13.0 * highdpi_factor;
-        context
-            .fonts()
-            .add_font(&[imgui::FontSource::DefaultFontData {
-                config: Some(imgui::FontConfig {
-                    size_pixels: font_size,
-                    ..Default::default()
-                }),
-            }]);
-        context.io_mut().font_global_scale = 1.0 / highdpi_factor;
-
-        platform.attach_window(
-            context.io_mut(),
-            window,
-            imgui_winit_support::HiDpiMode::Rounded,
-        );
-
-        let renderer = renderer
-            .create_imgui_renderer(&mut context)
-            .expect("Failed to build imgui renderer");
-
-        ImGui {
-            context,
-            platform,
-            renderer,
-        }
-    }
-}
-
 pub struct StateContext<'a> {
     pub renderer: &'a mut Renderer,
     pub ecs_manager: &'a mut ECSManager,
@@ -71,7 +30,8 @@ pub struct StateContext<'a> {
 pub trait ApplicationState {
     fn on_attach(&mut self, _context: &mut StateContext) {}
     fn on_update(&mut self, _dt: Duration, _context: &mut StateContext) {}
-    fn on_update_imgui(&mut self, _ui: &mut imgui::Ui, _context: &mut StateContext) {}
+    #[cfg(feature = "egui")]
+    fn on_update_egui(&mut self, _dt: Duration, _egui_context: &egui::Context, _context: &mut StateContext) {}
     fn on_event(&mut self, _event: Event<()>, _context: &mut StateContext) {}
     fn on_drop(&mut self, _context: &mut StateContext) {}
 }
@@ -81,7 +41,9 @@ pub trait BuildableApplicationState<UserData>: ApplicationState {
 }
 
 struct ApplicationContext {
-    pub imgui: ImGui,
+    #[cfg(feature = "egui")]
+    pub egui: crate::egui::EguiIntegration,
+
     pub ecs_manager: ECSManager,
     pub renderer_ref: ThreadSafeRef<Renderer>,
     pub window: Window,
@@ -175,21 +137,37 @@ impl<'a> ApplicationBuilder<'a> {
             ),
         );
 
-        let mut renderer = renderer_ref.lock();
-        let imgui = ImGui::new(&mut renderer, &window);
-        drop(renderer);
+        #[cfg(feature = "egui")]
+        {
+            let mut renderer = renderer_ref.lock();
+            let egui = crate::egui::EguiIntegration::new(&window, &mut renderer)
+                .expect("Failed to create Egui intergration");
+            drop(renderer);
 
-        ApplicationContext {
-            imgui,
-            ecs_manager,
-            renderer_ref,
-            window,
-            event_loop,
+            ApplicationContext {
+                egui,
+                ecs_manager,
+                renderer_ref,
+                window,
+                event_loop,
+            }
+        }
+
+        #[cfg(not(feature = "egui"))]
+        {
+            ApplicationContext {
+                ecs_manager,
+                renderer_ref,
+                window,
+                event_loop,
+            }
         }
     }
 
     fn main_loop(&self, context: &mut ApplicationContext, state: &mut dyn ApplicationState) {
-        let imgui = &mut context.imgui;
+        #[cfg(feature = "egui")]
+        let egui = &mut context.egui;
+
         let ecs_manager = &mut context.ecs_manager;
         let renderer_ref = &context.renderer_ref;
         let window = &context.window;
@@ -200,9 +178,10 @@ impl<'a> ApplicationBuilder<'a> {
         event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
 
-            imgui
-                .platform
-                .handle_event(imgui.context.io_mut(), window, &event);
+            #[cfg(feature = "egui")]
+            if egui.handle_event(&event) {
+                return;
+            }
 
             match event {
                 WindowEvent {
@@ -218,11 +197,13 @@ impl<'a> ApplicationBuilder<'a> {
                 }
                 Event::MainEventsCleared => {
                     let delta = prev_time.elapsed();
-                    imgui.context.io_mut().update_delta_time(delta);
                     prev_time = Instant::now();
 
                     let mut renderer = renderer_ref.lock();
                     if renderer.begin_frame() {
+                        #[cfg(feature = "egui")]
+                        egui.painter.cleanup_previous_frame(&mut renderer);
+
                         state.on_update(
                             delta,
                             &mut StateContext {
@@ -235,31 +216,21 @@ impl<'a> ApplicationBuilder<'a> {
 
                         ecs_manager.run_schedule();
 
-                        #[cfg(debug_assertions)]
+                        #[cfg(feature = "egui")]
                         {
-                            if let Err(error) =
-                                imgui.platform.prepare_frame(imgui.context.io_mut(), window)
-                            {
-                                log::error!("ImGui error while preparing frame: {}", error);
-                            }
-
-                            let mut ui = imgui.context.frame();
                             let mut renderer = renderer_ref.lock();
-                            state.on_update_imgui(
-                                &mut ui,
-                                &mut StateContext {
-                                    renderer: &mut renderer,
-                                    ecs_manager,
-                                    window,
-                                },
-                            );
-                            imgui.platform.prepare_render(&ui, window);
-                            let draw_data = ui.render();
-
-                            imgui
-                                .renderer
-                                .cmd_draw(renderer.primary_command_buffer, draw_data)
-                                .expect("Failed to render UI");
+                            egui.run(&context.window, |egui_context| {
+                                state.on_update_egui(
+                                    delta,
+                                    egui_context,
+                                    &mut StateContext {
+                                        renderer: &mut renderer,
+                                        ecs_manager,
+                                        window,
+                                    },
+                                );
+                            });
+                            egui.paint(&mut renderer)
                         }
 
                         let renderer = renderer_ref.lock();
@@ -294,6 +265,9 @@ impl<'a> ApplicationBuilder<'a> {
             ecs_manager: &mut context.ecs_manager,
             window: &context.window,
         });
+
+        #[cfg(feature = "egui")]
+        context.egui.painter.destroy(&mut renderer);
     }
 
     pub fn build_and_run_inplace<StateType, UserData>(self, data: UserData)

@@ -13,4 +13,7 @@ pub mod components;
 pub mod ecs_manager;
 pub mod systems;
 
+#[cfg(feature = "egui")]
+pub mod egui;
+
 mod pipeline_builder;

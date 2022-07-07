@@ -10,7 +10,6 @@ pub enum Error {
     UnsupportedPlatform(TryFromIntError),
     ImageError(image::ImageError),
     ModelLoadError(tobj::LoadError),
-    ImGuiRendererError(imgui_rs_vulkan_renderer::RendererError),
     GenericError(String),
 }
 
@@ -47,12 +46,6 @@ impl From<image::ImageError> for Error {
 impl From<tobj::LoadError> for Error {
     fn from(error: tobj::LoadError) -> Self {
         Self::ModelLoadError(error)
-    }
-}
-
-impl From<imgui_rs_vulkan_renderer::RendererError> for Error {
-    fn from(error: imgui_rs_vulkan_renderer::RendererError) -> Self {
-        Self::ImGuiRendererError(error)
     }
 }
 

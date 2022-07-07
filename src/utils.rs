@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use ash::vk::{self, CommandPoolResetFlags};
+use ash::vk::{self, CommandBufferResetFlags};
 use bevy_ecs::prelude::Component;
 
 use crate::error::Error;
@@ -36,20 +36,30 @@ impl<T> Clone for ThreadSafeRef<T> {
 #[derive(Default)]
 pub struct CommandUploader {
     command_pool: vk::CommandPool,
+    command_buffer: vk::CommandBuffer,
     fence: vk::Fence,
 }
 
 impl CommandUploader {
     pub(crate) fn new(device: &ash::Device, queue_index: u32) -> Result<Self, Error> {
-        let command_pool_info =
-            vk::CommandPoolCreateInfo::builder().queue_family_index(queue_index);
+        let command_pool_info = vk::CommandPoolCreateInfo::builder()
+            .queue_family_index(queue_index)
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
         let command_pool = unsafe { device.create_command_pool(&command_pool_info, None) }?;
 
         let fence_info = vk::FenceCreateInfo::default();
         let fence = unsafe { device.create_fence(&fence_info, None) }?;
 
+        let cmd_buffer_info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool(command_pool)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+        let command_buffer =
+            unsafe { device.allocate_command_buffers(&cmd_buffer_info) }?.swap_remove(0);
+
         Ok(Self {
             command_pool,
+            command_buffer,
             fence,
         })
     }
@@ -70,28 +80,22 @@ impl CommandUploader {
     where
         F: FnOnce(&vk::CommandBuffer),
     {
-        // Allocate command buffer
-        let cmd_buffer_info = vk::CommandBufferAllocateInfo::builder()
-            .command_pool(self.command_pool)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(1);
-        let cmd_buffer =
-            unsafe { device.allocate_command_buffers(&cmd_buffer_info) }?.swap_remove(0);
-
         let begin_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
-        unsafe { device.begin_command_buffer(cmd_buffer, &begin_info) }?;
-        function(&cmd_buffer);
-        unsafe { device.end_command_buffer(cmd_buffer) }?;
+        unsafe { device.begin_command_buffer(self.command_buffer, &begin_info) }?;
+        function(&self.command_buffer);
+        unsafe { device.end_command_buffer(self.command_buffer) }?;
 
         let submit_info =
-            vk::SubmitInfo::builder().command_buffers(std::slice::from_ref(&cmd_buffer));
+            vk::SubmitInfo::builder().command_buffers(std::slice::from_ref(&self.command_buffer));
         unsafe { device.queue_submit(graphics_queue, &[*submit_info], self.fence) }?;
 
         unsafe { device.wait_for_fences(std::slice::from_ref(&self.fence), true, u64::MAX) }?;
         unsafe { device.reset_fences(std::slice::from_ref(&self.fence)) }?;
-        unsafe { device.reset_command_pool(self.command_pool, CommandPoolResetFlags::default()) }?;
+        unsafe {
+            device.reset_command_buffer(self.command_buffer, CommandBufferResetFlags::default())
+        }?;
 
         Ok(())
     }

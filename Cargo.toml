@@ -7,6 +7,9 @@ edition = "2021"
 [lib]
 name = "morrigu"
 
+[build-dependencies]
+shaderc = "0.8"
+
 [dependencies]
 log = "0.4"
 winit = "0.26"
@@ -17,19 +20,17 @@ ash = { version = "0.37", default-features = false, features = [
 ash-window = "0.10"
 gpu-allocator = { git = "https://github.com/Ithyx/gpu-allocator", rev = "027b89ed49f11e08facb968eea82c58cbb0d5729" }
 spirv-reflect = "0.2"
-nalgebra-glm = "0.17"
+nalgebra-glm = { version = "0.17", features = ["convert-bytemuck"] }
 image = "0.24"
 memoffset = "0.6"
+bytemuck = "1.9"
 bevy_ecs = "0.7"
 
 ply-rs = "0.1"
 tobj = "3.2"
 
-imgui = "0.8"
-imgui-winit-support = { version = "^0.8", default-features = false, features = [
-	"winit-26",
-] }
-imgui-rs-vulkan-renderer = { version = "1.3", features = ["gpu-allocator"] }
+egui = { version = "0.18", optional = true, features = ["bytemuck"] }
+egui-winit = { version = "0.18", optional = true }
 
 [patch.crates-io]
 gpu-allocator = { git = "https://github.com/Ithyx/gpu-allocator", rev = "027b89ed49f11e08facb968eea82c58cbb0d5729" }
@@ -39,3 +40,6 @@ members = [".", "macha"]
 
 [profile.release]
 debug = true
+
+[features]
+egui = ["dep:egui", "dep:egui-winit"]

@@ -1,4 +1,4 @@
-use bevy_ecs::{entity::Entity, schedule::SystemStage};
+use bevy_ecs::schedule::SystemStage;
 use morrigu::{
     application::{ApplicationBuilder, ApplicationState, BuildableApplicationState, StateContext},
     components::{
@@ -19,13 +19,6 @@ type Material = morrigu::material::Material<Vertex>;
 type Mesh = morrigu::mesh::Mesh<Vertex>;
 type MeshRendering = morrigu::components::mesh_rendering::MeshRendering<Vertex>;
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-struct ShaderOptions {
-    pub flow_speed: f32,
-    pub flow_intensity: f32,
-}
-
 struct MachaState {
     shader_ref: ThreadSafeRef<Shader>,
     material_ref: ThreadSafeRef<Material>,
@@ -34,17 +27,15 @@ struct MachaState {
     texture_ref: ThreadSafeRef<Texture>,
     flowmap_ref: ThreadSafeRef<Texture>,
     gradient_ref: ThreadSafeRef<Texture>,
-    planet: Entity,
 
-    shader_options: ShaderOptions,
+    shader_options: glm::Vec2,
 }
 
 impl BuildableApplicationState<()> for MachaState {
     fn build(context: &mut StateContext, _: ()) -> Self {
-        let shader_options = ShaderOptions {
-            flow_speed: 0.2,
-            flow_intensity: 0.4,
-        };
+        let flow_speed = 0.2_f32;
+        let flow_intensity = 0.4_f32;
+        let shader_options = glm::vec2(flow_speed, flow_intensity);
 
         let camera = Camera::builder().build(
             morrigu::components::camera::Projection::Perspective(PerspectiveData {
@@ -124,13 +115,12 @@ impl BuildableApplicationState<()> for MachaState {
             .rotate(f32::to_radians(-90.0), Axis::X)
             .scale(&glm::vec3(4.0, 4.0, 4.0));
 
-        let planet = context
+        context
             .ecs_manager
             .world
             .spawn()
             .insert(tranform)
-            .insert(mesh_rendering_ref.clone())
-            .id();
+            .insert(mesh_rendering_ref.clone());
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
             schedule.add_stage(
@@ -147,28 +137,44 @@ impl BuildableApplicationState<()> for MachaState {
             texture_ref,
             flowmap_ref,
             gradient_ref,
-            planet,
             shader_options,
         }
     }
 }
 
 impl ApplicationState for MachaState {
-    fn on_update_imgui(&mut self, ui: &mut imgui::Ui, _context: &mut StateContext) {
-        if let Some(window) = imgui::Window::new("shader uniforms").begin(ui) {
-            imgui::Slider::new("speed", 0.0, 1.0).build(ui, &mut self.shader_options.flow_speed);
-            imgui::Slider::new("intensity", 0.0, 1.0)
-                .build(ui, &mut self.shader_options.flow_intensity);
+    fn on_update_egui(
+        &mut self,
+        dt: std::time::Duration,
+        egui_context: &egui::Context,
+        _context: &mut StateContext,
+    ) {
+        egui::Window::new("Debug info").show(egui_context, |ui| {
+            let color = match dt.as_millis() {
+                0..=25 => [51, 204, 51],
+                26..=50 => [255, 153, 0],
+                _ => [204, 51, 51],
+            };
+            ui.colored_label(
+                egui::Color32::from_rgb(color[0], color[1], color[2]),
+                format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()),
+            );
+        });
+        egui::Window::new("Shader uniforms").show(egui_context, |ui| {
+            ui.add(egui::Slider::new(&mut self.shader_options[0], 0.0..=1.0).text("flow speed"));
+            ui.add(
+                egui::Slider::new(&mut self.shader_options[1], 0.0..=1.0).text("flow intensity"),
+            );
 
-            if ui.button("apply") {
+            if ui.button("Apply changes").clicked() {
                 self.mesh_rendering_ref
                     .lock()
                     .upload_uniform(4, self.shader_options)
                     .expect("Failed to upload flow settings");
             }
 
-            window.end();
-        }
+            ui.allocate_space(ui.available_size());
+        });
     }
 
     fn on_drop(&mut self, context: &mut StateContext) {
