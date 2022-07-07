@@ -157,14 +157,16 @@ impl Painter {
     ) {
         assert!(mesh.is_valid());
 
+        let width = renderer.framebuffer_width as f32;
+        let height = renderer.framebuffer_height as f32;
+        let width_in_points = width / pixels_per_point;
+        let height_in_points = height / pixels_per_point;
+
         let vertices: &[EguiVertex] = &mesh
             .vertices
             .iter()
             .map(|vertex| EguiVertex {
-                position: glm::vec2(
-                    vertex.pos.x,
-                    renderer.framebuffer_height as f32 - vertex.pos.y,
-                ),
+                position: glm::vec2(vertex.pos.x, height_in_points - vertex.pos.y),
                 texture_coords: glm::vec2(vertex.uv.x, vertex.uv.y),
                 color: glm::vec4(
                     vertex.color.r() as f32 / u8::MAX as f32,
@@ -186,15 +188,12 @@ impl Painter {
             index_buffer: Some(index_buffer),
         });
 
-        let width = renderer.framebuffer_width as f32 / pixels_per_point;
-        let height = renderer.framebuffer_height as f32 / pixels_per_point;
-
         let texture = self.textures.get(&mesh.texture_id);
         if texture.is_none() {
             return;
         }
         let texture = texture.unwrap();
-        let push_constants = glm::vec2(width, height);
+        let push_constants = glm::vec2(width_in_points, height_in_points);
 
         let mesh_rendering_ref = MeshRendering::new(&mesh_ref, &self.material, renderer)
             .expect("Failed to create mesh rendering for egui mesh");
@@ -221,42 +220,38 @@ impl Painter {
                 &[],
             )
         };
-        let y: f32 = u16::try_from(renderer.framebuffer_height)
-            .expect("Invalid width")
-            .into();
 
         let viewport = vk::Viewport::builder()
             .x(0.0)
-            .y(y)
-            .width(
-                u16::try_from(renderer.framebuffer_width)
-                    .expect("Invalid width")
-                    .into(),
-            )
-            .height(-y)
+            .y(height)
+            .width(width)
+            .height(-height)
             .min_depth(0.0)
             .max_depth(1.0);
 
-        let min_x = (pixels_per_point * clip_rect.min.x)
-            .clamp(0.0, width)
-            .round();
-        let min_y = (pixels_per_point * clip_rect.min.y)
-            .clamp(0.0, height)
-            .round();
-        let max_x = (pixels_per_point * clip_rect.max.x)
-            .clamp(pixels_per_point * clip_rect.min.x, width)
-            .round();
-        let max_y = (pixels_per_point * clip_rect.max.y)
-            .clamp(pixels_per_point * clip_rect.min.y, height)
-            .round();
+        let min_x = pixels_per_point * clip_rect.min.x;
+        let min_y = pixels_per_point * clip_rect.min.y;
+        let max_x = pixels_per_point * clip_rect.max.x;
+        let max_y = pixels_per_point * clip_rect.max.y;
+
+        let min_x = min_x.clamp(0.0, width);
+        let min_y = min_y.clamp(0.0, height);
+        let max_x = max_x.clamp(min_x, width);
+        let max_y = max_y.clamp(min_y, height);
+
+        let min_x = min_x.round() as u32;
+        let min_y = min_y.round() as u32;
+        let max_x = max_x.round() as u32;
+        let max_y = max_y.round() as u32;
+
         let scissor = vk::Rect2D::builder()
             .offset(vk::Offset2D {
                 x: min_x as i32,
                 y: min_y as i32,
             })
             .extent(vk::Extent2D {
-                width: (max_x - min_x) as u32,
-                height: (max_y - min_y) as u32,
+                width: max_x - min_x,
+                height: max_y - min_y,
             });
         unsafe {
             device.cmd_bind_pipeline(
