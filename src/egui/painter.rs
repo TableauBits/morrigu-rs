@@ -156,6 +156,9 @@ impl Painter {
         renderer: &mut Renderer,
     ) {
         assert!(mesh.is_valid());
+        if mesh.is_empty() {
+            return;
+        }
 
         let width = renderer.framebuffer_width as f32;
         let height = renderer.framebuffer_height as f32;

@@ -172,8 +172,6 @@ impl ApplicationState for MachaState {
                     .upload_uniform(4, self.shader_options)
                     .expect("Failed to upload flow settings");
             }
-
-            ui.allocate_space(ui.available_size());
         });
     }
 
