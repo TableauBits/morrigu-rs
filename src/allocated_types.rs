@@ -104,13 +104,20 @@ pub struct AllocatedImage {
 
 impl AllocatedImage {
     pub fn destroy(&mut self, renderer: &mut Renderer) {
+        self.destroy_internal(&renderer.device, &mut renderer.allocator())
+    }
+
+    pub(crate) fn destroy_internal(
+        &mut self,
+        device: &ash::Device,
+        allocator: &mut gpu_allocator::vulkan::Allocator,
+    ) {
         if let Some(allocation) = self.allocation.take() {
-            unsafe { renderer.device.destroy_image_view(self.view, None) };
-            renderer
-                .allocator()
+            unsafe { device.destroy_image_view(self.view, None) };
+            allocator
                 .free(allocation)
                 .expect("Failed to free image memory");
-            unsafe { renderer.device.destroy_image(self.handle, None) };
+            unsafe { device.destroy_image(self.handle, None) };
         }
     }
 }

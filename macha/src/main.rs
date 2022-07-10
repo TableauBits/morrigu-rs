@@ -89,21 +89,15 @@ impl BuildableApplicationState<()> for MachaState {
         mesh_rendering_ref
             .lock()
             .bind_texture(1, &texture_ref, context.renderer)
-            .expect("Failed to bind base texture")
-            .lock()
-            .destroy(context.renderer);
+            .expect("Failed to bind base texture");
         mesh_rendering_ref
             .lock()
             .bind_texture(2, &flowmap_ref, context.renderer)
-            .expect("Failed to bind flowmap texture")
-            .lock()
-            .destroy(context.renderer);
+            .expect("Failed to bind flowmap texture");
         mesh_rendering_ref
             .lock()
             .bind_texture(3, &gradient_ref, context.renderer)
-            .expect("Failed to bind gradient texture")
-            .lock()
-            .destroy(context.renderer);
+            .expect("Failed to bind gradient texture");
         mesh_rendering_ref
             .lock()
             .upload_uniform(4, shader_options)

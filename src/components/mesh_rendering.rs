@@ -123,7 +123,7 @@ where
                     uniform_buffers.insert(binding.slot, buffer);
                 }
                 vk::DescriptorType::COMBINED_IMAGE_SAMPLER => {
-                    let texture_ref = Texture::builder().build_default(renderer)?;
+                    let texture_ref = renderer.default_texture_ref.clone();
                     let texture = texture_ref.lock();
 
                     let descriptor_image_info = vk::DescriptorImageInfo::builder()
@@ -229,12 +229,6 @@ where
             .sampled_images
             .insert(binding_slot, texture_ref)
             .unwrap())
-    }
-
-    pub fn destroy_owned_textures(&mut self, renderer: &mut Renderer) {
-        for texture_ref in self.sampled_images.values() {
-            texture_ref.lock().destroy(renderer);
-        }
     }
 
     pub fn destroy(&mut self, renderer: &mut Renderer) {

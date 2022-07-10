@@ -203,9 +203,7 @@ impl Painter {
         let mut mesh_rendering = mesh_rendering_ref.lock();
         mesh_rendering
             .bind_texture(1, texture, renderer)
-            .expect("Texture binding for Egui should succeed")
-            .lock()
-            .destroy(renderer);
+            .expect("Texture binding for Egui should succeed");
 
         let device = &renderer.device;
         let cmd_buffer = &renderer.primary_command_buffer;

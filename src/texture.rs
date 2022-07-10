@@ -1,5 +1,8 @@
 use crate::{
-    allocated_types::AllocatedImage, error::Error, renderer::Renderer, utils::ThreadSafeRef,
+    allocated_types::AllocatedImage,
+    error::Error,
+    renderer::Renderer,
+    utils::{CommandUploader, ThreadSafeRef},
 };
 
 use ash::vk;
@@ -38,17 +41,6 @@ impl TextureBuilder {
         self
     }
 
-    pub fn build_default(self, renderer: &mut Renderer) -> Result<ThreadSafeRef<Texture>, Error> {
-        self.build_from_data(
-            &[
-                255, 255, 255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255,
-            ],
-            2,
-            2,
-            renderer,
-        )
-    }
-
     pub fn build_from_path(
         self,
         path: &std::path::Path,
@@ -70,21 +62,57 @@ impl TextureBuilder {
         height: u32,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Texture>, Error> {
-        let device = &renderer.device;
+        self.build_from_data_internal(
+            data,
+            width,
+            height,
+            &renderer.device,
+            renderer.graphics_queue.handle,
+            &mut renderer.allocator.as_mut().unwrap().lock(),
+            &mut renderer.command_uploader,
+        )
+    }
+}
 
+impl TextureBuilder {
+    // Used internally to build default texture in the renderer
+    pub(crate) fn build_default_internal(
+        self,
+        device: &ash::Device,
+        graphics_queue: vk::Queue,
+        allocator: &mut gpu_allocator::vulkan::Allocator,
+        command_uploader: &mut CommandUploader,
+    ) -> Result<ThreadSafeRef<Texture>, Error> {
+        self.build_from_data_internal(
+            &[
+                255, 255, 255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255,
+            ],
+            2,
+            2,
+            device,
+            graphics_queue,
+            allocator,
+            command_uploader,
+        )
+    }
+
+    fn build_from_data_internal(
+        self,
+        data: &[u8],
+        width: u32,
+        height: u32,
+        device: &ash::Device,
+        graphics_queue: vk::Queue,
+        allocator: &mut gpu_allocator::vulkan::Allocator,
+        command_uploader: &mut CommandUploader,
+    ) -> Result<ThreadSafeRef<Texture>, Error> {
         let image = AllocatedImage::builder(vk::Extent3D {
             width,
             height,
             depth: 1,
         })
         .texture_default(self.format)
-        .build(
-            data,
-            device,
-            renderer.graphics_queue.handle,
-            &mut renderer.allocator(),
-            &renderer.command_uploader,
-        )?;
+        .build(data, device, graphics_queue, allocator, command_uploader)?;
 
         let sampler_info = vk::SamplerCreateInfo::builder()
             .mag_filter(vk::Filter::NEAREST)
@@ -234,8 +262,16 @@ impl Texture {
     }
 
     pub fn destroy(&mut self, renderer: &mut Renderer) {
-        unsafe { renderer.device.destroy_sampler(self.sampler, None) };
+        self.destroy_internal(&renderer.device, &mut renderer.allocator())
+    }
 
-        self.image.destroy(renderer)
+    pub(crate) fn destroy_internal(
+        &mut self,
+        device: &ash::Device,
+        allocator: &mut gpu_allocator::vulkan::Allocator,
+    ) {
+        unsafe { device.destroy_sampler(self.sampler, None) };
+
+        self.image.destroy_internal(device, allocator);
     }
 }

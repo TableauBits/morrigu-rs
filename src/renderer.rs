@@ -1,6 +1,7 @@
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage},
     error::Error,
+    texture::Texture,
     utils::{CommandUploader, ThreadSafeRef},
 };
 
@@ -128,6 +129,8 @@ pub struct Renderer {
 
     #[allow(dead_code)]
     debug_messenger: Option<DebugMessengerInfo>,
+
+    pub(crate) default_texture_ref: ThreadSafeRef<Texture>,
 
     pub(crate) command_uploader: CommandUploader,
 
@@ -829,12 +832,12 @@ impl<'a> RendererBuilder<'a> {
         );
 
         let device = self.create_device(&instance, physical_device, queue_family_index);
-        let present_queue = QueueInfo {
+        let graphics_queue = QueueInfo {
             handle: unsafe { device.get_device_queue(queue_family_index, 0) },
             family_index: queue_family_index,
         };
 
-        let command_uploader = CommandUploader::new(&device, queue_family_index)
+        let mut command_uploader = CommandUploader::new(&device, queue_family_index)
             .expect("Failed to create a command uploader");
 
         let mut gpu_allocator =
@@ -865,7 +868,7 @@ impl<'a> RendererBuilder<'a> {
 
         let command_pool_create_info = vk::CommandPoolCreateInfo::builder()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(present_queue.family_index);
+            .queue_family_index(graphics_queue.family_index);
         let command_pool = unsafe { device.create_command_pool(&command_pool_create_info, None) }
             .expect("Failed to create renderer command pool");
         let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
@@ -880,6 +883,15 @@ impl<'a> RendererBuilder<'a> {
 
         let (descriptor_pool, descriptors) = self.create_descriptors(&device, &mut gpu_allocator);
 
+        let default_texture_ref = Texture::builder()
+            .build_default_internal(
+                &device,
+                graphics_queue.handle,
+                &mut gpu_allocator,
+                &mut command_uploader,
+            )
+            .expect("Default texture creation failed");
+
         ThreadSafeRef::new(Renderer {
             clear_color: [0.0_f32, 0.0_f32, 0.0_f32, 1.0_f32],
 
@@ -891,6 +903,8 @@ impl<'a> RendererBuilder<'a> {
 
             debug_messenger,
 
+            default_texture_ref,
+
             command_uploader,
             descriptors,
             descriptor_pool,
@@ -900,7 +914,7 @@ impl<'a> RendererBuilder<'a> {
             swapchain_framebuffers,
             primary_render_pass,
             swapchain,
-            graphics_queue: present_queue,
+            graphics_queue,
             allocator: Some(ThreadSafeRef::new(gpu_allocator)),
             device,
             device_properties,
@@ -1121,6 +1135,10 @@ impl Drop for Renderer {
             self.device
                 .device_wait_idle()
                 .expect("Failed to wait for device");
+
+            self.default_texture_ref
+                .lock()
+                .destroy_internal(&self.device, &mut self.allocator());
 
             self.device
                 .destroy_descriptor_set_layout(self.descriptors[1].layout, None);
