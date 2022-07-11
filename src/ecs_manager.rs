@@ -10,7 +10,10 @@ use crate::{components::camera::Camera, renderer::Renderer, utils::ThreadSafeRef
 pub struct ECSManager {
     pub world: World,
     pub resize_callback: Option<Box<dyn Fn(u32, u32)>>,
+
     systems_schedule: Schedule,
+    #[cfg(feature = "egui")]
+    ui_systems_schedule: Schedule,
 }
 
 impl ECSManager {
@@ -19,15 +22,30 @@ impl ECSManager {
 
         let mut world = World::new();
         let systems_schedule = bevy_ecs::schedule::Schedule::default();
+        #[cfg(feature = "egui")]
+        let ui_systems_schedule = bevy_ecs::schedule::Schedule::default();
 
         world.insert_resource(camera);
         world.insert_resource(Instant::now());
         world.insert_resource(renderer_ref);
 
-        Self {
-            world,
-            resize_callback: None,
-            systems_schedule,
+        #[cfg(feature = "egui")]
+        {
+            Self {
+                world,
+                resize_callback: None,
+                systems_schedule,
+                ui_systems_schedule,
+            }
+        }
+
+        #[cfg(not(feature = "egui"))]
+        {
+            Self {
+                world,
+                resize_callback: None,
+                systems_schedule,
+            }
         }
     }
 
@@ -56,5 +74,24 @@ impl ECSManager {
 
     pub(crate) fn run_schedule(&mut self) {
         self.systems_schedule.run(&mut self.world);
+    }
+
+    #[cfg(feature = "egui")]
+    pub fn redefine_ui_systems_schedule<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut Schedule),
+    {
+        let mut new_ui_schedule = Schedule::default();
+
+        f(&mut new_ui_schedule);
+
+        self.ui_systems_schedule = new_ui_schedule;
+    }
+
+    #[cfg(feature = "egui")]
+    pub(crate) fn run_ui_schedule(&mut self, egui_context: &egui::Context) {
+        self.world.insert_resource(egui_context.clone());
+        self.ui_systems_schedule.run(&mut self.world);
+        self.world.remove_resource::<egui::Context>();
     }
 }

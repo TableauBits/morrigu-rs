@@ -31,7 +31,13 @@ pub trait ApplicationState {
     fn on_attach(&mut self, _context: &mut StateContext) {}
     fn on_update(&mut self, _dt: Duration, _context: &mut StateContext) {}
     #[cfg(feature = "egui")]
-    fn on_update_egui(&mut self, _dt: Duration, _egui_context: &egui::Context, _context: &mut StateContext) {}
+    fn on_update_egui(
+        &mut self,
+        _dt: Duration,
+        _egui_context: &egui::Context,
+        _context: &mut StateContext,
+    ) {
+    }
     fn on_event(&mut self, _event: Event<()>, _context: &mut StateContext) {}
     fn on_drop(&mut self, _context: &mut StateContext) {}
 }
@@ -229,7 +235,9 @@ impl<'a> ApplicationBuilder<'a> {
                                         window,
                                     },
                                 );
+                                ecs_manager.run_ui_schedule(egui_context);
                             });
+
                             egui.paint(&mut renderer)
                         }
 

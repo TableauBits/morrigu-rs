@@ -81,6 +81,16 @@ impl Transform {
         self
     }
 
+    pub fn set_matrix(&mut self, matrix: &glm::Mat4) -> &mut Self {
+        self.cached_transform = *matrix;
+
+        // @TODO(Ithyx)
+        // Find a way to revert tranform matrix to it's original components
+        // https://github.com/g-truc/glm/blob/master/glm/gtx/matrix_decompose.inl
+        
+        self
+    }
+
     pub fn matrix(&self) -> &glm::Mat4 {
         &self.cached_transform
     }

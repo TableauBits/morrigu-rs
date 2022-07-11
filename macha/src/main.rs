@@ -1,4 +1,8 @@
+mod components;
+mod systems;
+
 use bevy_ecs::schedule::SystemStage;
+use components::selected_entity::SelectedEntity;
 use morrigu::{
     application::{ApplicationBuilder, ApplicationState, BuildableApplicationState, StateContext},
     components::{
@@ -11,6 +15,7 @@ use morrigu::{
     utils::ThreadSafeRef,
 };
 use nalgebra_glm as glm;
+use systems::gizmo_drawer;
 
 use std::path::Path;
 
@@ -39,7 +44,7 @@ impl BuildableApplicationState<()> for MachaState {
 
         let camera = Camera::builder().build(
             morrigu::components::camera::Projection::Perspective(PerspectiveData {
-                horizontal_fov: f32::to_radians(90.0),
+                horizontal_fov: f32::to_radians(50.0),
                 near_plane: 0.001,
                 far_plane: 1000.0,
             }),
@@ -114,7 +119,8 @@ impl BuildableApplicationState<()> for MachaState {
             .world
             .spawn()
             .insert(tranform)
-            .insert(mesh_rendering_ref.clone());
+            .insert(mesh_rendering_ref.clone())
+            .insert(SelectedEntity {});
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
             schedule.add_stage(
@@ -122,6 +128,15 @@ impl BuildableApplicationState<()> for MachaState {
                 SystemStage::parallel().with_system(mesh_renderer::render_meshes::<Vertex>),
             );
         });
+
+        context
+            .ecs_manager
+            .redefine_ui_systems_schedule(|schedule| {
+                schedule.add_stage(
+                    "gizmo stage",
+                    SystemStage::parallel().with_system(gizmo_drawer::draw_gizmo),
+                );
+            });
 
         MachaState {
             shader_ref,
