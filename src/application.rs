@@ -30,8 +30,17 @@ pub struct StateContext<'a> {
 pub trait ApplicationState {
     fn on_attach(&mut self, _context: &mut StateContext) {}
     fn on_update(&mut self, _dt: Duration, _context: &mut StateContext) {}
+    fn after_systems(&mut self, _dt: Duration, _context: &mut StateContext) {}
     #[cfg(feature = "egui")]
     fn on_update_egui(
+        &mut self,
+        _dt: Duration,
+        _egui_context: &egui::Context,
+        _context: &mut StateContext,
+    ) {
+    }
+    #[cfg(feature = "egui")]
+    fn after_ui_systems(
         &mut self,
         _dt: Duration,
         _egui_context: &egui::Context,
@@ -221,6 +230,16 @@ impl<'a> ApplicationBuilder<'a> {
                         drop(renderer);
 
                         ecs_manager.run_schedule();
+                        let mut renderer = renderer_ref.lock();
+                        state.after_systems(
+                            delta,
+                            &mut StateContext {
+                                renderer: &mut renderer,
+                                ecs_manager,
+                                window,
+                            },
+                        );
+                        drop(renderer);
 
                         #[cfg(feature = "egui")]
                         {
@@ -236,6 +255,15 @@ impl<'a> ApplicationBuilder<'a> {
                                     },
                                 );
                                 ecs_manager.run_ui_schedule(egui_context);
+                                state.after_ui_systems(
+                                    delta,
+                                    egui_context,
+                                    &mut StateContext {
+                                        renderer: &mut renderer,
+                                        ecs_manager,
+                                        window,
+                                    },
+                                );
                             });
 
                             egui.paint(&mut renderer)

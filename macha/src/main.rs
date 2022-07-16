@@ -1,8 +1,10 @@
 mod components;
+mod ecs_buffer;
 mod systems;
 
-use bevy_ecs::schedule::SystemStage;
-use components::selected_entity::SelectedEntity;
+use bevy_ecs::{prelude::Entity, schedule::SystemStage};
+use components::{macha_options::MachaOptions, selected_entity::SelectedEntity};
+use ecs_buffer::ECSBuffer;
 use morrigu::{
     application::{ApplicationBuilder, ApplicationState, BuildableApplicationState, StateContext},
     components::{
@@ -15,7 +17,7 @@ use morrigu::{
     utils::ThreadSafeRef,
 };
 use nalgebra_glm as glm;
-use systems::gizmo_drawer;
+use systems::{gizmo_drawer, hierarchy_panel};
 
 use std::path::Path;
 
@@ -114,13 +116,18 @@ impl BuildableApplicationState<()> for MachaState {
             .rotate(f32::to_radians(-90.0), Axis::X)
             .scale(&glm::vec3(4.0, 4.0, 4.0));
 
+        context.ecs_manager.world.insert_resource(ECSBuffer::new());
+
         context
             .ecs_manager
             .world
             .spawn()
             .insert(tranform)
             .insert(mesh_rendering_ref.clone())
-            .insert(SelectedEntity {});
+            .insert(MachaOptions {
+                name: "planet".to_owned(),
+            });
+        // .insert(SelectedEntity {});
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
             schedule.add_stage(
@@ -133,7 +140,11 @@ impl BuildableApplicationState<()> for MachaState {
             .ecs_manager
             .redefine_ui_systems_schedule(|schedule| {
                 schedule.add_stage(
-                    "gizmo stage",
+                    "hierarchy panel",
+                    SystemStage::parallel().with_system(hierarchy_panel::draw_hierarchy_panel),
+                );
+                schedule.add_stage(
+                    "gizmo",
                     SystemStage::parallel().with_system(gizmo_drawer::draw_gizmo),
                 );
             });
@@ -182,6 +193,51 @@ impl ApplicationState for MachaState {
                     .expect("Failed to upload flow settings");
             }
         });
+    }
+
+    fn after_ui_systems(
+        &mut self,
+        _dt: std::time::Duration,
+        _egui_context: &egui::Context,
+        context: &mut StateContext,
+    ) {
+        // Re-take ownership of buffer while processing it
+        let mut ecs_buffer = context
+            .ecs_manager
+            .world
+            .remove_resource::<ECSBuffer>()
+            .expect("Failed to fetch ECS command buffer");
+        for job in &ecs_buffer.command_buffer {
+            match job {
+                ecs_buffer::ECSJob::SelectEntity {
+                    entity: new_selected_entity,
+                } => {
+                    let mut old_selected = None;
+                    context
+                        .ecs_manager
+                        .world
+                        .query::<(Entity, &SelectedEntity)>()
+                        .for_each(&context.ecs_manager.world, |(entity, _)| {
+                            old_selected = Some(entity);
+                        });
+                    if let Some(old_selected_entity) = old_selected {
+                        context
+                            .ecs_manager
+                            .world
+                            .entity_mut(old_selected_entity)
+                            .remove::<SelectedEntity>();
+                    }
+                    context
+                        .ecs_manager
+                        .world
+                        .entity_mut(*new_selected_entity)
+                        .insert(SelectedEntity {});
+                }
+                _ => (),
+            }
+        }
+        ecs_buffer.command_buffer.clear();
+        context.ecs_manager.world.insert_resource(ecs_buffer);
     }
 
     fn on_drop(&mut self, context: &mut StateContext) {

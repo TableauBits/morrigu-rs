@@ -96,6 +96,8 @@ impl TextureBuilder {
         )
     }
 
+    // Internal function only, I can deal with this
+    #[allow(clippy::too_many_arguments)]
     fn build_from_data_internal(
         self,
         data: &[u8],

@@ -1,5 +1,6 @@
 use bevy_ecs::prelude::Component;
 
-// Tag component
 #[derive(Component)]
-pub struct SelectedEntity;
+pub struct MachaOptions {
+    pub name: String,
+}
