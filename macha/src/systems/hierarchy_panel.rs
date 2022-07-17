@@ -2,12 +2,12 @@ use bevy_ecs::prelude::{Entity, Query, Res, ResMut};
 use egui::collapsing_header::CollapsingState;
 
 use crate::{
-    components::{macha_options::MachaOptions, selected_entity::SelectedEntity},
+    components::{macha_options::MachaEntityOptions, selected_entity::SelectedEntity},
     ecs_buffer::{ECSBuffer, ECSJob},
 };
 
 pub fn draw_hierarchy_panel(
-    query: Query<(Entity, &MachaOptions, Option<&SelectedEntity>)>,
+    query: Query<(Entity, &MachaEntityOptions, Option<&SelectedEntity>)>,
     egui_context: Res<egui::Context>,
     mut ecs_buffer: ResMut<ECSBuffer>,
 ) {

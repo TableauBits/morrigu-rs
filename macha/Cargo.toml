@@ -14,3 +14,4 @@ bevy_ecs = "0.7.0"
 nalgebra-glm = { version = "0.17.0", features = ["convert-bytemuck"] }
 egui = "0.18"
 egui-gizmo = "0.7"
+winit = "0.26"

@@ -4,11 +4,12 @@ use egui_gizmo::Gizmo;
 use morrigu::components::{camera::Camera, transform::Transform};
 use nalgebra_glm as glm;
 
-use crate::components::selected_entity::SelectedEntity;
+use crate::components::{selected_entity::SelectedEntity, macha_options::MachaGlobalOptions};
 
 pub fn draw_gizmo(
     mut query: Query<(&mut Transform, &mut SelectedEntity)>,
     camera: Res<Camera>,
+    macha_options: Res<MachaGlobalOptions>,
     egui_context: Res<egui::Context>,
 ) {
     for (mut transform, _) in query.iter_mut() {
@@ -20,7 +21,7 @@ pub fn draw_gizmo(
                         .view_matrix(*camera.view())
                         .projection_matrix(*camera.projection())
                         .model_matrix(*transform.matrix())
-                        .mode(egui_gizmo::GizmoMode::Translate);
+                        .mode(macha_options.preferred_gizmo);
 
                     if let Some(response) = gizmo.interact(ui) {
                         let vec = response.transform.to_vec();

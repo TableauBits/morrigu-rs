@@ -3,10 +3,15 @@ mod ecs_buffer;
 mod systems;
 
 use bevy_ecs::{prelude::Entity, schedule::SystemStage};
-use components::{macha_options::MachaOptions, selected_entity::SelectedEntity};
+use components::{
+    macha_options::{MachaEntityOptions, MachaGlobalOptions},
+    selected_entity::SelectedEntity,
+};
 use ecs_buffer::ECSBuffer;
 use morrigu::{
-    application::{ApplicationBuilder, ApplicationState, BuildableApplicationState, StateContext},
+    application::{
+        ApplicationBuilder, ApplicationState, BuildableApplicationState, Event, StateContext,
+    },
     components::{
         camera::{Camera, PerspectiveData},
         transform::{Axis, Transform},
@@ -18,6 +23,7 @@ use morrigu::{
 };
 use nalgebra_glm as glm;
 use systems::{gizmo_drawer, hierarchy_panel};
+use winit::event::KeyboardInput;
 
 use std::path::Path;
 
@@ -117,17 +123,29 @@ impl BuildableApplicationState<()> for MachaState {
             .scale(&glm::vec3(4.0, 4.0, 4.0));
 
         context.ecs_manager.world.insert_resource(ECSBuffer::new());
+        context
+            .ecs_manager
+            .world
+            .insert_resource(MachaGlobalOptions::new());
 
         context
             .ecs_manager
             .world
             .spawn()
-            .insert(tranform)
+            .insert(tranform.clone())
             .insert(mesh_rendering_ref.clone())
-            .insert(MachaOptions {
+            .insert(MachaEntityOptions {
                 name: "planet".to_owned(),
             });
-        // .insert(SelectedEntity {});
+
+        context
+            .ecs_manager
+            .world
+            .spawn()
+            .insert(tranform.clone())
+            .insert(MachaEntityOptions {
+                name: "empty".to_owned(),
+            });
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
             schedule.add_stage(
@@ -232,12 +250,21 @@ impl ApplicationState for MachaState {
                         .world
                         .entity_mut(*new_selected_entity)
                         .insert(SelectedEntity {});
-                }
-                _ => (),
+                } // _ => (),
             }
         }
         ecs_buffer.command_buffer.clear();
         context.ecs_manager.world.insert_resource(ecs_buffer);
+    }
+
+    fn on_event(&mut self, event: Event<()>, context: &mut StateContext) {
+        match event {
+            morrigu::application::Event::WindowEvent {
+                event: winit::event::WindowEvent::KeyboardInput { input, .. },
+                ..
+            } => self.on_keyboard_input(input, context),
+            _ => (),
+        }
     }
 
     fn on_drop(&mut self, context: &mut StateContext) {
@@ -248,6 +275,39 @@ impl ApplicationState for MachaState {
         self.mesh_ref.lock().destroy(context.renderer);
         self.material_ref.lock().destroy(context.renderer);
         self.shader_ref.lock().destroy(&context.renderer.device);
+    }
+}
+
+impl MachaState {
+    fn on_keyboard_input(&mut self, input: KeyboardInput, context: &mut StateContext) {
+        match input.scancode {
+            16 => {
+                context
+                    .ecs_manager
+                    .world
+                    .get_resource_mut::<MachaGlobalOptions>()
+                    .unwrap()
+                    .preferred_gizmo = egui_gizmo::GizmoMode::Translate
+            }
+            18 => {
+                context
+                    .ecs_manager
+                    .world
+                    .get_resource_mut::<MachaGlobalOptions>()
+                    .unwrap()
+                    .preferred_gizmo = egui_gizmo::GizmoMode::Rotate
+            }
+            19 => {
+                context
+                    .ecs_manager
+                    .world
+                    .get_resource_mut::<MachaGlobalOptions>()
+                    .unwrap()
+                    .preferred_gizmo = egui_gizmo::GizmoMode::Scale
+            }
+
+            _ => (),
+        }
     }
 }
 
