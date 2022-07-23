@@ -2,6 +2,7 @@ pub use winit::{
     event::{self, Event},
     window::Window,
 };
+use winit_input_helper::WinitInputHelper;
 
 use crate::{
     components::camera::{Camera, PerspectiveData, Projection},
@@ -25,6 +26,7 @@ pub struct StateContext<'a> {
     pub renderer: &'a mut Renderer,
     pub ecs_manager: &'a mut ECSManager,
     pub window: &'a Window,
+    pub window_input_state: &'a WinitInputHelper,
 }
 
 pub trait ApplicationState {
@@ -63,6 +65,7 @@ struct ApplicationContext {
     pub renderer_ref: ThreadSafeRef<Renderer>,
     pub window: Window,
     pub event_loop: EventLoop<()>,
+    pub window_input_state: WinitInputHelper,
 }
 
 pub struct ApplicationBuilder<'a> {
@@ -152,6 +155,8 @@ impl<'a> ApplicationBuilder<'a> {
             ),
         );
 
+        let winit_state = WinitInputHelper::new();
+
         #[cfg(feature = "egui")]
         {
             let mut renderer = renderer_ref.lock();
@@ -165,6 +170,7 @@ impl<'a> ApplicationBuilder<'a> {
                 renderer_ref,
                 window,
                 event_loop,
+                window_input_state: winit_state,
             }
         }
 
@@ -175,6 +181,7 @@ impl<'a> ApplicationBuilder<'a> {
                 renderer_ref,
                 window,
                 event_loop,
+                winit_state,
             }
         }
     }
@@ -187,6 +194,7 @@ impl<'a> ApplicationBuilder<'a> {
         let renderer_ref = &context.renderer_ref;
         let window = &context.window;
         let event_loop = &mut context.event_loop;
+        let window_input_state = &mut context.window_input_state;
 
         let mut prev_time = Instant::now();
 
@@ -197,6 +205,9 @@ impl<'a> ApplicationBuilder<'a> {
             if egui.handle_event(&event) {
                 return;
             }
+
+            // We handle events ouselves, this simply stores input for easy access
+            window_input_state.update(&event);
 
             match event {
                 WindowEvent {
@@ -225,6 +236,7 @@ impl<'a> ApplicationBuilder<'a> {
                                 renderer: &mut renderer,
                                 ecs_manager,
                                 window,
+                                window_input_state,
                             },
                         );
                         drop(renderer);
@@ -237,6 +249,7 @@ impl<'a> ApplicationBuilder<'a> {
                                 renderer: &mut renderer,
                                 ecs_manager,
                                 window,
+                                window_input_state,
                             },
                         );
                         drop(renderer);
@@ -252,6 +265,7 @@ impl<'a> ApplicationBuilder<'a> {
                                         renderer: &mut renderer,
                                         ecs_manager,
                                         window,
+                                        window_input_state,
                                     },
                                 );
                                 ecs_manager.run_ui_schedule(egui_context);
@@ -262,6 +276,7 @@ impl<'a> ApplicationBuilder<'a> {
                                         renderer: &mut renderer,
                                         ecs_manager,
                                         window,
+                                        window_input_state,
                                     },
                                 );
                             });
@@ -283,6 +298,7 @@ impl<'a> ApplicationBuilder<'a> {
                     renderer: &mut renderer,
                     ecs_manager,
                     window,
+                    window_input_state,
                 },
             );
         });
@@ -300,6 +316,7 @@ impl<'a> ApplicationBuilder<'a> {
             renderer: &mut renderer,
             ecs_manager: &mut context.ecs_manager,
             window: &context.window,
+            window_input_state: &context.window_input_state,
         });
 
         #[cfg(feature = "egui")]
@@ -317,6 +334,7 @@ impl<'a> ApplicationBuilder<'a> {
             renderer: &mut renderer,
             ecs_manager: &mut context.ecs_manager,
             window: &context.window,
+            window_input_state: &context.window_input_state,
         };
         let mut state = StateType::build(&mut state_context, data);
         state.on_attach(&mut state_context);
@@ -335,6 +353,7 @@ impl<'a> ApplicationBuilder<'a> {
             renderer: &mut renderer,
             ecs_manager: &mut context.ecs_manager,
             window: &context.window,
+            window_input_state: &context.window_input_state,
         });
         drop(renderer);
 

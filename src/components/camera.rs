@@ -127,6 +127,14 @@ impl Camera {
         &self.position
     }
 
+    pub fn pitch(&self) -> &f32 {
+        &self.pitch
+    }
+
+    pub fn yaw(&self) -> &f32 {
+        &self.yaw
+    }
+
     pub fn set_projection_type(&mut self, projection_type: Projection) {
         self.projection_type = projection_type;
         self.projection = Self::compute_projection(&self.projection_type, self.aspect_ratio);
@@ -157,6 +165,27 @@ impl Camera {
         self.orientation = Self::compute_orientation(self.pitch, self.yaw);
         self.view = Self::compute_view(&self.position, &self.orientation);
         self.view_projection = Self::compute_view_projection(&self.view, &self.projection)
+    }
+
+    pub fn forward_vector(&self) -> glm::Vec3 {
+        glm::quat_rotate_vec3(
+            &Self::compute_orientation(self.pitch, self.yaw),
+            &glm::vec3(0.0, 0.0, -1.0),
+        )
+    }
+
+    pub fn right_vector(&self) -> glm::Vec3 {
+        glm::quat_rotate_vec3(
+            &Self::compute_orientation(self.pitch, self.yaw),
+            &glm::vec3(1.0, 0.0, 0.0),
+        )
+    }
+
+    pub fn up_vector(&self) -> glm::Vec3 {
+        glm::quat_rotate_vec3(
+            &Self::compute_orientation(self.pitch, self.yaw),
+            &glm::vec3(0.0, 1.0, 0.0),
+        )
     }
 
     pub(crate) fn on_resize(&mut self, width: u32, height: u32) {

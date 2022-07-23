@@ -1,8 +1,10 @@
+mod camera;
 mod components;
 mod ecs_buffer;
 mod systems;
 
 use bevy_ecs::{prelude::Entity, schedule::SystemStage};
+use camera::MachaEditorCamera;
 use components::{
     macha_options::{MachaEntityOptions, MachaGlobalOptions},
     selected_entity::SelectedEntity,
@@ -23,7 +25,7 @@ use morrigu::{
 };
 use nalgebra_glm as glm;
 use systems::{gizmo_drawer, hierarchy_panel};
-use winit::event::KeyboardInput;
+use winit::event::{KeyboardInput, VirtualKeyCode};
 
 use std::path::Path;
 
@@ -33,6 +35,8 @@ type Mesh = morrigu::mesh::Mesh<Vertex>;
 type MeshRendering = morrigu::components::mesh_rendering::MeshRendering<Vertex>;
 
 struct MachaState {
+    camera: MachaEditorCamera,
+
     shader_ref: ThreadSafeRef<Shader>,
     material_ref: ThreadSafeRef<Material>,
     mesh_ref: ThreadSafeRef<Mesh>,
@@ -58,7 +62,7 @@ impl BuildableApplicationState<()> for MachaState {
             }),
             16.0 / 9.0,
         );
-        context.ecs_manager.world.insert_resource(camera);
+        let camera = MachaEditorCamera::new(camera);
 
         let shader_ref = Shader::from_spirv_u8(
             include_bytes!("../assets/gen/shaders/test/test.vert"),
@@ -132,7 +136,7 @@ impl BuildableApplicationState<()> for MachaState {
             .ecs_manager
             .world
             .spawn()
-            .insert(tranform.clone())
+            .insert(tranform)
             .insert(mesh_rendering_ref.clone())
             .insert(MachaEntityOptions {
                 name: "planet".to_owned(),
@@ -142,7 +146,7 @@ impl BuildableApplicationState<()> for MachaState {
             .ecs_manager
             .world
             .spawn()
-            .insert(tranform.clone())
+            .insert(tranform)
             .insert(MachaEntityOptions {
                 name: "empty".to_owned(),
             });
@@ -168,6 +172,7 @@ impl BuildableApplicationState<()> for MachaState {
             });
 
         MachaState {
+            camera,
             shader_ref,
             material_ref,
             mesh_ref,
@@ -181,6 +186,14 @@ impl BuildableApplicationState<()> for MachaState {
 }
 
 impl ApplicationState for MachaState {
+    fn on_update(&mut self, dt: std::time::Duration, context: &mut StateContext) {
+        self.camera.on_update(dt, context.window_input_state);
+        context
+            .ecs_manager
+            .world
+            .insert_resource(self.camera.mrg_camera);
+    }
+
     fn on_update_egui(
         &mut self,
         dt: std::time::Duration,
@@ -258,6 +271,7 @@ impl ApplicationState for MachaState {
     }
 
     fn on_event(&mut self, event: Event<()>, context: &mut StateContext) {
+        #[allow(clippy::single_match)] // Temporary
         match event {
             morrigu::application::Event::WindowEvent {
                 event: winit::event::WindowEvent::KeyboardInput { input, .. },
@@ -280,8 +294,13 @@ impl ApplicationState for MachaState {
 
 impl MachaState {
     fn on_keyboard_input(&mut self, input: KeyboardInput, context: &mut StateContext) {
-        match input.scancode {
-            16 => {
+        if input.virtual_keycode.is_none() {
+            return;
+        }
+        let virtual_keycode = input.virtual_keycode.unwrap();
+
+        match virtual_keycode {
+            VirtualKeyCode::Q => {
                 context
                     .ecs_manager
                     .world
@@ -289,7 +308,7 @@ impl MachaState {
                     .unwrap()
                     .preferred_gizmo = egui_gizmo::GizmoMode::Translate
             }
-            18 => {
+            VirtualKeyCode::E => {
                 context
                     .ecs_manager
                     .world
@@ -297,7 +316,7 @@ impl MachaState {
                     .unwrap()
                     .preferred_gizmo = egui_gizmo::GizmoMode::Rotate
             }
-            19 => {
+            VirtualKeyCode::R => {
                 context
                     .ecs_manager
                     .world

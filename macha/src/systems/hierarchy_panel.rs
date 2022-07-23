@@ -24,7 +24,7 @@ pub fn draw_hierarchy_panel(
                     }
                 })
                 .body(|ui| {
-                    ui.label("BODY WORKS");
+                    ui.label("nothing to see here");
                 });
         }
     });
