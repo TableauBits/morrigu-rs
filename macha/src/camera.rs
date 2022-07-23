@@ -19,15 +19,20 @@ impl MachaEditorCamera {
     pub fn new(mrg_camera: Camera) -> Self {
         let size = 2.4;
         let pan_speed = 0.0366 * (size * size) - 0.1778 * size + 0.3021;
+        let focal_point = Default::default();
 
-        Self {
+        let mut new_camera = Self {
             mrg_camera,
             move_speed: 2.0,
             distance: 7.0,
             mouse_input_factor: 0.0003,
             pan_speed,
-            focal_point: Default::default(),
-        }
+            focal_point,
+        };
+
+        new_camera.set_focal_point(&focal_point);
+
+        new_camera
     }
 
     pub fn focal_point(&self) -> &glm::Vec3 {
@@ -44,7 +49,7 @@ impl MachaEditorCamera {
     pub fn on_update(&mut self, dt: Duration, input: &WinitInputHelper) {
         if input.held_alt() {
             let diff = input.mouse_diff();
-            let mouse_delta = glm::vec2(diff.0, diff.1) * self.mouse_input_factor;
+            let mouse_delta = glm::vec2(diff.0, -diff.1) * self.mouse_input_factor;
 
             #[repr(usize)]
             enum MouseButton {
