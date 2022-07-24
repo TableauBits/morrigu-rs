@@ -60,9 +60,9 @@ impl BuildableApplicationState<()> for MachaState {
                 near_plane: 0.001,
                 far_plane: 1000.0,
             }),
-            16.0 / 9.0,
+            &glm::vec2(1280.0, 720.0),
         );
-        let camera = MachaEditorCamera::new(camera);
+        let mut camera = MachaEditorCamera::new(camera);
 
         let shader_ref = Shader::from_spirv_u8(
             include_bytes!("../assets/gen/shaders/test/test.vert"),
@@ -123,8 +123,9 @@ impl BuildableApplicationState<()> for MachaState {
         let mut tranform = Transform::default();
         tranform
             .translate(&glm::vec3(0.0, 0.0, -15.0))
-            .rotate(f32::to_radians(-90.0), Axis::X)
-            .scale(&glm::vec3(4.0, 4.0, 4.0));
+            .rotate(f32::to_radians(-90.0), Axis::X);
+
+        camera.set_focal_point(tranform.position());
 
         context.ecs_manager.world.insert_resource(ECSBuffer::new());
         context
@@ -163,7 +164,7 @@ impl BuildableApplicationState<()> for MachaState {
             .redefine_ui_systems_schedule(|schedule| {
                 schedule.add_stage(
                     "hierarchy panel",
-                    SystemStage::parallel().with_system(hierarchy_panel::draw_hierarchy_panel),
+                    SystemStage::parallel().with_system(hierarchy_panel::draw_hierarchy_panel_stable),
                 );
                 schedule.add_stage(
                     "gizmo",
@@ -277,6 +278,11 @@ impl ApplicationState for MachaState {
                 event: winit::event::WindowEvent::KeyboardInput { input, .. },
                 ..
             } => self.on_keyboard_input(input, context),
+            morrigu::application::Event::WindowEvent {
+                event: winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize{width, height, ..}), ..
+            } => {
+                self.camera.on_resize(width, height);
+            }
             _ => (),
         }
     }

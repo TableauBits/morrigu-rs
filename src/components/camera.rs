@@ -34,9 +34,10 @@ impl CameraBuilder {
         Default::default()
     }
 
-    pub fn build(self, projection_type: Projection, aspect_ratio: f32) -> Camera {
+    pub fn build(self, projection_type: Projection, size: &glm::Vec2) -> Camera {
         let orientation = Camera::compute_orientation(self.pitch, self.yaw);
 
+        let aspect_ratio = size.x / size.y;
         let projection = Camera::compute_projection(&projection_type, aspect_ratio);
         let view = Camera::compute_view(&self.position, &orientation);
         let view_projection = Camera::compute_view_projection(&view, &projection);
@@ -53,6 +54,8 @@ impl CameraBuilder {
             projection,
             view,
             view_projection,
+
+            size: *size,
         }
     }
 }
@@ -70,6 +73,8 @@ pub struct Camera {
     projection: glm::Mat4,
     view: glm::Mat4,
     view_projection: glm::Mat4,
+
+    size: glm::Vec2,
 }
 
 impl Camera {
@@ -135,13 +140,20 @@ impl Camera {
         &self.yaw
     }
 
+    pub fn size(&self) -> &glm::Vec2 {
+        &self.size
+    }
+
     pub fn set_projection_type(&mut self, projection_type: Projection) {
         self.projection_type = projection_type;
         self.projection = Self::compute_projection(&self.projection_type, self.aspect_ratio);
         self.view_projection = Self::compute_view_projection(&self.view, &self.projection);
     }
 
-    pub fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
+    pub fn set_size(&mut self, size: &glm::Vec2) {
+        self.size = *size;
+
+        let aspect_ratio = size.x / size.y;
         self.aspect_ratio = aspect_ratio;
         self.projection = Self::compute_projection(&self.projection_type, self.aspect_ratio);
         self.view_projection = Self::compute_view_projection(&self.view, &self.projection);
@@ -188,7 +200,7 @@ impl Camera {
         )
     }
 
-    pub(crate) fn on_resize(&mut self, width: u32, height: u32) {
-        self.set_aspect_ratio(width as f32 / height as f32);
+    pub fn on_resize(&mut self, width: u32, height: u32) {
+        self.set_size(&glm::vec2(width as f32, height as f32));
     }
 }

@@ -10,15 +10,12 @@ pub struct MachaEditorCamera {
     pub move_speed: f32,
     pub distance: f32,
     pub mouse_input_factor: f32,
-    pub pan_speed: f32,
 
     focal_point: glm::Vec3,
 }
 
 impl MachaEditorCamera {
     pub fn new(mrg_camera: Camera) -> Self {
-        let size = 2.4;
-        let pan_speed = 0.0366 * (size * size) - 0.1778 * size + 0.3021;
         let focal_point = Default::default();
 
         let mut new_camera = Self {
@@ -26,7 +23,6 @@ impl MachaEditorCamera {
             move_speed: 2.0,
             distance: 7.0,
             mouse_input_factor: 0.0003,
-            pan_speed,
             focal_point,
         };
 
@@ -44,6 +40,10 @@ impl MachaEditorCamera {
         let forward = self.mrg_camera.forward_vector();
         let new_position = self.focal_point - forward * self.distance;
         self.mrg_camera.set_position(&new_position);
+    }
+
+    pub fn on_resize(&mut self, width: u32, height: u32) {
+        self.mrg_camera.on_resize(width, height);
     }
 
     pub fn on_update(&mut self, dt: Duration, input: &WinitInputHelper) {
@@ -115,10 +115,15 @@ impl MachaEditorCamera {
     }
 
     fn mouse_pan(&mut self, delta: &glm::Vec2) {
+        let x_pan_unit = f32::min(self.mrg_camera.size().x / 1000.0, 2.4);
+        let x_pan_speed = 0.0366 * (x_pan_unit * x_pan_unit) - 0.1778 * x_pan_unit + 0.3021;
+        let y_pan_unit = f32::min(self.mrg_camera.size().y / 1000.0, 2.4);
+        let y_pan_speed = 0.0366 * (y_pan_unit * y_pan_unit) - 0.1778 * y_pan_unit + 0.3021;
+
         let mut new_focal_point = *self.focal_point();
         new_focal_point +=
-            self.mrg_camera.right_vector() * delta.x * self.pan_speed * self.distance;
-        new_focal_point += self.mrg_camera.up_vector() * delta.y * self.pan_speed * self.distance;
+            self.mrg_camera.right_vector() * delta.x * x_pan_speed * self.distance;
+        new_focal_point += self.mrg_camera.up_vector() * delta.y * y_pan_speed * self.distance;
         self.set_focal_point(&new_focal_point);
     }
 }

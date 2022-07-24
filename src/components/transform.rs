@@ -17,6 +17,18 @@ pub struct Transform {
 }
 
 impl Transform {
+    pub fn position(&self) -> &glm::Vec3 {
+        &self.position
+    }
+
+    pub fn rotation(&self) -> &glm::Vec3 {
+        &self.rotation
+    }
+
+    pub fn scale(&self) -> &glm::Vec3 {
+        &self.scale
+    }
+
     fn recompute_matrix(&mut self) {
         let translation_matrix = glm::translate(&glm::Mat4::identity(), &self.position);
         let rotation_matrix = {
@@ -74,7 +86,7 @@ impl Transform {
         self
     }
 
-    pub fn scale(&mut self, scale: &glm::Vec3) -> &mut Self {
+    pub fn rescale(&mut self, scale: &glm::Vec3) -> &mut Self {
         self.scale = self.scale.component_mul(scale);
         self.recompute_matrix();
 

@@ -2,7 +2,6 @@ pub use winit::{
     event::{self, Event},
     window::Window,
 };
-use winit_input_helper::WinitInputHelper;
 
 use crate::{
     components::camera::{Camera, PerspectiveData, Projection},
@@ -19,6 +18,8 @@ use winit::{
     platform::run_return::EventLoopExtRunReturn,
     window::WindowBuilder,
 };
+use winit_input_helper::WinitInputHelper;
+use nalgebra_glm as glm;
 
 use std::time::{Duration, Instant};
 
@@ -151,7 +152,7 @@ impl<'a> ApplicationBuilder<'a> {
                     near_plane: 0.001,
                     far_plane: 1000.0,
                 }),
-                self.width as f32 / self.height as f32,
+                &glm::vec2(self.width as f32, self.height as f32),
             ),
         );
 
@@ -201,13 +202,13 @@ impl<'a> ApplicationBuilder<'a> {
         event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
 
+            // We handle events ouselves, this simply stores input for easy access
+            window_input_state.update(&event);
+
             #[cfg(feature = "egui")]
             if egui.handle_event(&event) {
                 return;
             }
-
-            // We handle events ouselves, this simply stores input for easy access
-            window_input_state.update(&event);
 
             match event {
                 WindowEvent {
