@@ -6,11 +6,13 @@ pub use winit::{
 use crate::{
     components::camera::{Camera, PerspectiveData, Projection},
     ecs_manager::ECSManager,
+    egui::EguiIntegration,
     renderer::{Renderer, RendererBuilder},
     utils::ThreadSafeRef,
 };
 
 use ash::vk;
+use nalgebra_glm as glm;
 use winit::{
     dpi::PhysicalSize,
     event::Event::WindowEvent,
@@ -19,11 +21,23 @@ use winit::{
     window::WindowBuilder,
 };
 use winit_input_helper::WinitInputHelper;
-use nalgebra_glm as glm;
 
 use std::time::{Duration, Instant};
 
 pub struct StateContext<'a> {
+    #[cfg(feature = "egui")]
+    pub egui: &'a mut EguiIntegration,
+
+    pub renderer: &'a mut Renderer,
+    pub ecs_manager: &'a mut ECSManager,
+    pub window: &'a Window,
+    pub window_input_state: &'a WinitInputHelper,
+}
+
+#[cfg(feature = "egui")]
+pub struct EguiUpdateContext<'a> {
+    pub egui_context: &'a egui::Context,
+
     pub renderer: &'a mut Renderer,
     pub ecs_manager: &'a mut ECSManager,
     pub window: &'a Window,
@@ -35,21 +49,9 @@ pub trait ApplicationState {
     fn on_update(&mut self, _dt: Duration, _context: &mut StateContext) {}
     fn after_systems(&mut self, _dt: Duration, _context: &mut StateContext) {}
     #[cfg(feature = "egui")]
-    fn on_update_egui(
-        &mut self,
-        _dt: Duration,
-        _egui_context: &egui::Context,
-        _context: &mut StateContext,
-    ) {
-    }
+    fn on_update_egui(&mut self, _dt: Duration, _context: &mut EguiUpdateContext) {}
     #[cfg(feature = "egui")]
-    fn after_ui_systems(
-        &mut self,
-        _dt: Duration,
-        _egui_context: &egui::Context,
-        _context: &mut StateContext,
-    ) {
-    }
+    fn after_ui_systems(&mut self, _dt: Duration, _context: &mut EguiUpdateContext) {}
     fn on_event(&mut self, _event: Event<()>, _context: &mut StateContext) {}
     fn on_drop(&mut self, _context: &mut StateContext) {}
 }
@@ -188,25 +190,16 @@ impl<'a> ApplicationBuilder<'a> {
     }
 
     fn main_loop(&self, context: &mut ApplicationContext, state: &mut dyn ApplicationState) {
-        #[cfg(feature = "egui")]
-        let egui = &mut context.egui;
-
-        let ecs_manager = &mut context.ecs_manager;
-        let renderer_ref = &context.renderer_ref;
-        let window = &context.window;
-        let event_loop = &mut context.event_loop;
-        let window_input_state = &mut context.window_input_state;
-
         let mut prev_time = Instant::now();
 
-        event_loop.run_return(|event, _, control_flow| {
+        context.event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
 
             // We handle events ouselves, this simply stores input for easy access
-            window_input_state.update(&event);
+            context.window_input_state.update(&event);
 
             #[cfg(feature = "egui")]
-            if egui.handle_event(&event) {
+            if context.egui.handle_event(&event) {
                 return;
             }
 
@@ -219,89 +212,80 @@ impl<'a> ApplicationBuilder<'a> {
                     event: event::WindowEvent::Resized(PhysicalSize { width, height, .. }),
                     ..
                 } => {
-                    renderer_ref.lock().on_resize(width, height);
-                    ecs_manager.on_resize(width, height);
+                    context.renderer_ref.lock().on_resize(width, height);
+                    context.ecs_manager.on_resize(width, height);
                 }
                 Event::MainEventsCleared => {
                     let delta = prev_time.elapsed();
                     prev_time = Instant::now();
 
-                    let mut renderer = renderer_ref.lock();
+                    let mut renderer = context.renderer_ref.lock();
                     if renderer.begin_frame() {
                         #[cfg(feature = "egui")]
-                        egui.painter.cleanup_previous_frame(&mut renderer);
+                        context.egui.painter.cleanup_previous_frame(&mut renderer);
 
-                        state.on_update(
-                            delta,
-                            &mut StateContext {
-                                renderer: &mut renderer,
-                                ecs_manager,
-                                window,
-                                window_input_state,
-                            },
-                        );
+                        let mut state_context = StateContext {
+                            #[cfg(feature = "egui")]
+                            egui: &mut context.egui,
+                            renderer: &mut renderer,
+                            ecs_manager: &mut context.ecs_manager,
+                            window: &context.window,
+                            window_input_state: &context.window_input_state,
+                        };
+                        state.on_update(delta, &mut state_context);
                         drop(renderer);
 
-                        ecs_manager.run_schedule();
-                        let mut renderer = renderer_ref.lock();
-                        state.after_systems(
-                            delta,
-                            &mut StateContext {
-                                renderer: &mut renderer,
-                                ecs_manager,
-                                window,
-                                window_input_state,
-                            },
-                        );
+                        context.ecs_manager.run_schedule();
+                        let mut renderer = context.renderer_ref.lock();
+                        let mut state_context = StateContext {
+                            #[cfg(feature = "egui")]
+                            egui: &mut context.egui,
+                            renderer: &mut renderer,
+                            ecs_manager: &mut context.ecs_manager,
+                            window: &context.window,
+                            window_input_state: &context.window_input_state,
+                        };
+                        state.after_systems(delta, &mut state_context);
                         drop(renderer);
 
                         #[cfg(feature = "egui")]
                         {
-                            let mut renderer = renderer_ref.lock();
-                            egui.run(&context.window, |egui_context| {
-                                state.on_update_egui(
-                                    delta,
+                            let mut renderer = context.renderer_ref.lock();
+                            context.egui.run(&context.window, |egui_context| {
+                                let mut egui_update_context = EguiUpdateContext {
                                     egui_context,
-                                    &mut StateContext {
-                                        renderer: &mut renderer,
-                                        ecs_manager,
-                                        window,
-                                        window_input_state,
-                                    },
-                                );
-                                ecs_manager.run_ui_schedule(egui_context);
-                                state.after_ui_systems(
-                                    delta,
-                                    egui_context,
-                                    &mut StateContext {
-                                        renderer: &mut renderer,
-                                        ecs_manager,
-                                        window,
-                                        window_input_state,
-                                    },
-                                );
+                                    renderer: &mut renderer,
+                                    ecs_manager: &mut context.ecs_manager,
+                                    window: &context.window,
+                                    window_input_state: &context.window_input_state,
+                                };
+                                state.on_update_egui(delta, &mut egui_update_context);
+                                egui_update_context
+                                    .ecs_manager
+                                    .run_ui_schedule(&egui_update_context.egui_context);
+                                state.after_ui_systems(delta, &mut egui_update_context);
                             });
 
-                            egui.paint(&mut renderer)
+                            context.egui.paint(&mut renderer)
                         }
 
-                        let renderer = renderer_ref.lock();
+                        let renderer = context.renderer_ref.lock();
                         renderer.end_frame();
                     }
                 }
                 _ => (),
             }
 
-            let mut renderer = renderer_ref.lock();
-            state.on_event(
-                event,
-                &mut StateContext {
-                    renderer: &mut renderer,
-                    ecs_manager,
-                    window,
-                    window_input_state,
-                },
-            );
+            let mut renderer = context.renderer_ref.lock();
+            let mut state_context = StateContext {
+                #[cfg(feature = "egui")]
+                egui: &mut context.egui,
+                renderer: &mut renderer,
+                ecs_manager: &mut context.ecs_manager,
+                window: &context.window,
+                window_input_state: &context.window_input_state,
+            };
+            state.on_event(event, &mut state_context);
         });
     }
 
@@ -313,12 +297,15 @@ impl<'a> ApplicationBuilder<'a> {
                 .device_wait_idle()
                 .expect("Failed to wait for device");
         }
-        state.on_drop(&mut StateContext {
+        let mut state_context = StateContext {
+            #[cfg(feature = "egui")]
+            egui: &mut context.egui,
             renderer: &mut renderer,
             ecs_manager: &mut context.ecs_manager,
             window: &context.window,
             window_input_state: &context.window_input_state,
-        });
+        };
+        state.on_drop(&mut state_context);
 
         #[cfg(feature = "egui")]
         context.egui.painter.destroy(&mut renderer);
@@ -332,6 +319,8 @@ impl<'a> ApplicationBuilder<'a> {
 
         let mut renderer = context.renderer_ref.lock();
         let mut state_context = StateContext {
+            #[cfg(feature = "egui")]
+            egui: &mut context.egui,
             renderer: &mut renderer,
             ecs_manager: &mut context.ecs_manager,
             window: &context.window,
@@ -350,12 +339,15 @@ impl<'a> ApplicationBuilder<'a> {
         let mut context = self.setup_context();
 
         let mut renderer = context.renderer_ref.lock();
-        state.on_attach(&mut StateContext {
+        let mut state_context = StateContext {
+            #[cfg(feature = "egui")]
+            egui: &mut context.egui,
             renderer: &mut renderer,
             ecs_manager: &mut context.ecs_manager,
             window: &context.window,
             window_input_state: &context.window_input_state,
-        });
+        };
+        state.on_attach(&mut state_context);
         drop(renderer);
 
         self.main_loop(&mut context, state);

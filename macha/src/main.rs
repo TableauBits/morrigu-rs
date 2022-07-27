@@ -12,7 +12,7 @@ use components::{
 use ecs_buffer::ECSBuffer;
 use morrigu::{
     application::{
-        ApplicationBuilder, ApplicationState, BuildableApplicationState, Event, StateContext,
+        ApplicationBuilder, ApplicationState, BuildableApplicationState, Event, StateContext, EguiUpdateContext,
     },
     components::{
         camera::{Camera, PerspectiveData},
@@ -164,7 +164,8 @@ impl BuildableApplicationState<()> for MachaState {
             .redefine_ui_systems_schedule(|schedule| {
                 schedule.add_stage(
                     "hierarchy panel",
-                    SystemStage::parallel().with_system(hierarchy_panel::draw_hierarchy_panel_stable),
+                    SystemStage::parallel()
+                        .with_system(hierarchy_panel::draw_hierarchy_panel_stable),
                 );
                 schedule.add_stage(
                     "gizmo",
@@ -187,6 +188,17 @@ impl BuildableApplicationState<()> for MachaState {
 }
 
 impl ApplicationState for MachaState {
+    fn on_attach(&mut self, context: &mut StateContext) {
+        let selection_style = egui::style::Selection {
+            bg_fill: egui::Color32::from_rgb(165, 20, 61),
+            ..Default::default()
+        };
+        let mut new_visuals = egui::Visuals::dark();
+        new_visuals.selection = selection_style;
+
+        context.egui.context.set_visuals(new_visuals);
+    }
+
     fn on_update(&mut self, dt: std::time::Duration, context: &mut StateContext) {
         self.camera.on_update(dt, context.window_input_state);
         context
@@ -198,10 +210,9 @@ impl ApplicationState for MachaState {
     fn on_update_egui(
         &mut self,
         dt: std::time::Duration,
-        egui_context: &egui::Context,
-        _context: &mut StateContext,
+        context: &mut EguiUpdateContext,
     ) {
-        egui::Window::new("Debug info").show(egui_context, |ui| {
+        egui::Window::new("Debug info").show(&context.egui_context, |ui| {
             let color = match dt.as_millis() {
                 0..=25 => [51, 204, 51],
                 26..=50 => [255, 153, 0],
@@ -212,7 +223,7 @@ impl ApplicationState for MachaState {
                 format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()),
             );
         });
-        egui::Window::new("Shader uniforms").show(egui_context, |ui| {
+        egui::Window::new("Shader uniforms").show(&context.egui_context, |ui| {
             ui.add(egui::Slider::new(&mut self.shader_options[0], 0.0..=1.0).text("flow speed"));
             ui.add(
                 egui::Slider::new(&mut self.shader_options[1], 0.0..=1.0).text("flow intensity"),
@@ -230,8 +241,7 @@ impl ApplicationState for MachaState {
     fn after_ui_systems(
         &mut self,
         _dt: std::time::Duration,
-        _egui_context: &egui::Context,
-        context: &mut StateContext,
+        context: &mut EguiUpdateContext,
     ) {
         // Re-take ownership of buffer while processing it
         let mut ecs_buffer = context
@@ -279,7 +289,11 @@ impl ApplicationState for MachaState {
                 ..
             } => self.on_keyboard_input(input, context),
             morrigu::application::Event::WindowEvent {
-                event: winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize{width, height, ..}), ..
+                event:
+                    winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize {
+                        width, height, ..
+                    }),
+                ..
             } => {
                 self.camera.on_resize(width, height);
             }

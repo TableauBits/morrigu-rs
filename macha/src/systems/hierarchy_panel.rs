@@ -47,13 +47,20 @@ pub fn draw_hierarchy_panel_stable(
     egui_context: Res<egui::Context>,
     mut ecs_buffer: ResMut<ECSBuffer>,
 ) {
+    let iter = query.iter();
+    let hint = iter.size_hint();
+
     let mut stable_entity_list = vec![];
-    for element in query.iter() {
+    if let Some(upper_bound) = hint.1 {
+        stable_entity_list.reserve(upper_bound)
+    }
+    for element in iter {
         stable_entity_list.push(element);
     }
     stable_entity_list.sort_by(|element1, element2| element1.0.cmp(&element2.0));
 
     egui::Window::new("Entity list (stable)").show(&egui_context, |ui| {
+        ui.label(format!("count hint: {:?}", hint.1));
         for entity_info in stable_entity_list {
             draw_single_entity(entity_info, ui, &mut ecs_buffer);
         }
