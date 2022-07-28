@@ -19,9 +19,9 @@ fn draw_single_entity(
     CollapsingState::load_with_default_open(ui.ctx(), id, false)
         .show_header(ui, |ui| {
             if ui.selectable_label(is_selected, &options.name).clicked() && !is_selected {
-                ecs_buffer
-                    .command_buffer
-                    .push(ECSJob::SelectEntity { entity });
+                ecs_buffer.command_buffer.push(ECSJob::SelectEntity {
+                    entity: Some(entity),
+                });
             }
         })
         .body(|ui| {
@@ -59,10 +59,18 @@ pub fn draw_hierarchy_panel_stable(
     }
     stable_entity_list.sort_by(|element1, element2| element1.0.cmp(&element2.0));
 
-    egui::Window::new("Entity list (stable)").show(&egui_context, |ui| {
-        ui.label(format!("count hint: {:?}", hint.1));
-        for entity_info in stable_entity_list {
-            draw_single_entity(entity_info, ui, &mut ecs_buffer);
+    if let Some(window_sense) =
+        egui::Window::new("Entity list (stable)").show(&egui_context, |ui| {
+            ui.label(format!("count hint: {:?}", hint.1));
+            for entity_info in stable_entity_list {
+                draw_single_entity(entity_info, ui, &mut ecs_buffer);
+            }
+        })
+    {
+        if window_sense.response.clicked() {
+            ecs_buffer
+                .command_buffer
+                .push(ECSJob::SelectEntity { entity: None });
         }
-    });
+    }
 }

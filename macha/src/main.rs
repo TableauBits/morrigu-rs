@@ -273,11 +273,13 @@ impl ApplicationState for MachaState {
                             .entity_mut(old_selected_entity)
                             .remove::<SelectedEntity>();
                     }
-                    context
-                        .ecs_manager
-                        .world
-                        .entity_mut(*new_selected_entity)
-                        .insert(SelectedEntity {});
+                    if let Some(new_selected_entity) = new_selected_entity {
+                        context
+                            .ecs_manager
+                            .world
+                            .entity_mut(*new_selected_entity)
+                            .insert(SelectedEntity {});
+                    }
                 }
             }
         }

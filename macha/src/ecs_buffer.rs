@@ -2,7 +2,7 @@ use bevy_ecs::prelude::{Component, Entity};
 
 #[non_exhaustive]
 pub enum ECSJob {
-    SelectEntity { entity: Entity },
+    SelectEntity { entity: Option<Entity> },
 }
 
 #[derive(Component, Default)]
