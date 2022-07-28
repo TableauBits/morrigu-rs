@@ -22,7 +22,7 @@ impl MachaEditorCamera {
             mrg_camera,
             move_speed: 2.0,
             distance: 7.0,
-            mouse_input_factor: 0.0003,
+            mouse_input_factor: 0.003,
             focal_point,
         };
 
@@ -121,8 +121,7 @@ impl MachaEditorCamera {
         let y_pan_speed = 0.0366 * (y_pan_unit * y_pan_unit) - 0.1778 * y_pan_unit + 0.3021;
 
         let mut new_focal_point = *self.focal_point();
-        new_focal_point +=
-            self.mrg_camera.right_vector() * delta.x * x_pan_speed * self.distance;
+        new_focal_point += self.mrg_camera.right_vector() * delta.x * x_pan_speed * self.distance;
         new_focal_point += self.mrg_camera.up_vector() * delta.y * y_pan_speed * self.distance;
         self.set_focal_point(&new_focal_point);
     }

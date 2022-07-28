@@ -83,7 +83,7 @@ impl Camera {
     }
 
     fn compute_orientation(pitch: f32, yaw: f32) -> glm::Quat {
-        glm::quat(-pitch, -yaw, 0.0, 1.0)
+        glm::quat_normalize(&glm::quat(pitch, yaw, 0.0, 1.0))
     }
 
     fn compute_projection(projection_type: &Projection, aspect_ratio: f32) -> glm::Mat4 {
