@@ -76,13 +76,19 @@ impl Vertex for EguiVertex {
     }
 }
 
+struct TextureInfo {
+    handle: ThreadSafeRef<Texture>,
+    is_user: bool,
+}
+
 pub struct Painter {
     pub max_texture_size: usize,
 
     material: ThreadSafeRef<Material<EguiVertex>>,
 
-    textures: std::collections::HashMap<egui::TextureId, ThreadSafeRef<Texture>>,
+    textures: std::collections::HashMap<egui::TextureId, TextureInfo>,
     frame_meshes: Vec<ThreadSafeRef<MeshRendering<EguiVertex>>>,
+    user_texture_id: u64,
 }
 
 impl Painter {
@@ -105,6 +111,7 @@ impl Painter {
             material,
             textures: Default::default(),
             frame_meshes: Default::default(),
+            user_texture_id: 0,
         })
     }
 
@@ -202,7 +209,7 @@ impl Painter {
             .expect("Failed to create mesh rendering for egui mesh");
         let mut mesh_rendering = mesh_rendering_ref.lock();
         mesh_rendering
-            .bind_texture(1, texture, renderer)
+            .bind_texture(1, &texture.handle, renderer)
             .expect("Texture binding for Egui should succeed");
 
         let device = &renderer.device;
@@ -370,7 +377,7 @@ impl Painter {
                 if original_texture.is_none() {
                     return;
                 }
-                let original_texture = original_texture.unwrap().lock();
+                let original_texture = original_texture.unwrap().handle.lock();
 
                 let mut texture = texture.lock();
                 let subresource = vk::ImageSubresourceLayers {
@@ -466,22 +473,68 @@ impl Painter {
                 texture.destroy(renderer);
             }
             None => {
-                self.textures.insert(tex_id, texture);
+                self.textures.insert(
+                    tex_id,
+                    TextureInfo {
+                        handle: texture,
+                        is_user: false,
+                    },
+                );
             }
         }
     }
 
-    fn free_texture(&mut self, tex_id: egui::TextureId, renderer: &mut Renderer) {
-        if let Some(texture) = self.textures.remove(&tex_id) {
-            texture.lock().destroy(renderer);
+    pub(crate) fn free_texture(&mut self, tex_id: egui::TextureId, renderer: &mut Renderer) {
+        if let Some(TextureInfo { handle, .. }) = self.textures.remove(&tex_id) {
+            handle.lock().destroy(renderer);
         }
+    }
+
+    pub fn register_user_texture(&mut self, texture: ThreadSafeRef<Texture>) -> egui::TextureId {
+        let id = egui::TextureId::User(self.user_texture_id);
+        self.user_texture_id += 1;
+
+        self.textures.insert(
+            id,
+            TextureInfo {
+                handle: texture,
+                is_user: true,
+            },
+        );
+
+        id
+    }
+
+    pub fn retreive_user_texture(
+        &mut self,
+        tex_id: egui::TextureId,
+    ) -> Option<ThreadSafeRef<Texture>> {
+        self.textures.remove(&tex_id).map(|info| info.handle)
+    }
+
+    pub fn replace_user_texture(
+        &mut self,
+        tex_id: egui::TextureId,
+        new_texture: ThreadSafeRef<Texture>,
+    ) -> Option<ThreadSafeRef<Texture>> {
+        self.textures
+            .insert(
+                tex_id,
+                TextureInfo {
+                    handle: new_texture,
+                    is_user: true,
+                },
+            )
+            .map(|info| info.handle)
     }
 
     pub(crate) fn destroy(&mut self, renderer: &mut Renderer) {
         self.cleanup_previous_frame(renderer);
 
-        for (_, texture) in self.textures.drain() {
-            texture.lock().destroy(renderer);
+        for (_, TextureInfo { handle, is_user }) in self.textures.drain() {
+            if !is_user {
+                handle.lock().destroy(renderer);
+            }
         }
 
         let mut material = self.material.lock();

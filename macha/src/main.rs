@@ -45,6 +45,7 @@ struct MachaState {
     texture_ref: ThreadSafeRef<Texture>,
     flowmap_ref: ThreadSafeRef<Texture>,
     gradient_ref: ThreadSafeRef<Texture>,
+    egui_texture_id: egui::TextureId,
 
     shader_options: glm::Vec2,
 }
@@ -183,6 +184,7 @@ impl BuildableApplicationState<()> for MachaState {
             texture_ref,
             flowmap_ref,
             gradient_ref,
+            egui_texture_id: egui::TextureId::default(),
             shader_options,
         }
     }
@@ -198,6 +200,14 @@ impl ApplicationState for MachaState {
         new_visuals.selection = selection_style;
 
         context.egui.context.set_visuals(new_visuals);
+
+        let egui_texture = Texture::builder()
+            .build_from_path(
+                std::path::Path::new("assets/textures/jupiter_base.png"),
+                context.renderer,
+            )
+            .expect("Failed to build egui texture");
+        self.egui_texture_id = context.egui.painter.register_user_texture(egui_texture);
     }
 
     fn on_update(&mut self, dt: std::time::Duration, context: &mut StateContext) {
@@ -221,6 +231,7 @@ impl ApplicationState for MachaState {
             );
         });
         egui::Window::new("Shader uniforms").show(context.egui_context, |ui| {
+            ui.image(self.egui_texture_id, (128.0, 128.0));
             ui.add(egui::Slider::new(&mut self.shader_options[0], 0.0..=1.0).text("flow speed"));
             ui.add(
                 egui::Slider::new(&mut self.shader_options[1], 0.0..=1.0).text("flow intensity"),
@@ -267,7 +278,7 @@ impl ApplicationState for MachaState {
                         .world
                         .entity_mut(*new_selected_entity)
                         .insert(SelectedEntity {});
-                } // _ => (),
+                }
             }
         }
         ecs_buffer.command_buffer.clear();
@@ -295,6 +306,14 @@ impl ApplicationState for MachaState {
     }
 
     fn on_drop(&mut self, context: &mut StateContext) {
+        if let Some(texture) = context
+            .egui
+            .painter
+            .retreive_user_texture(self.egui_texture_id)
+        {
+            texture.lock().destroy(context.renderer);
+        }
+
         self.gradient_ref.lock().destroy(context.renderer);
         self.flowmap_ref.lock().destroy(context.renderer);
         self.texture_ref.lock().destroy(context.renderer);
