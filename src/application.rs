@@ -262,7 +262,7 @@ impl<'a> ApplicationBuilder<'a> {
                                 state.on_update_egui(delta, &mut egui_update_context);
                                 egui_update_context
                                     .ecs_manager
-                                    .run_ui_schedule(&egui_update_context.egui_context);
+                                    .run_ui_schedule(egui_update_context.egui_context);
                                 state.after_ui_systems(delta, &mut egui_update_context);
                             });
 

@@ -12,7 +12,8 @@ use components::{
 use ecs_buffer::ECSBuffer;
 use morrigu::{
     application::{
-        ApplicationBuilder, ApplicationState, BuildableApplicationState, Event, StateContext, EguiUpdateContext,
+        ApplicationBuilder, ApplicationState, BuildableApplicationState, EguiUpdateContext, Event,
+        StateContext,
     },
     components::{
         camera::{Camera, PerspectiveData},
@@ -207,12 +208,8 @@ impl ApplicationState for MachaState {
             .insert_resource(self.camera.mrg_camera);
     }
 
-    fn on_update_egui(
-        &mut self,
-        dt: std::time::Duration,
-        context: &mut EguiUpdateContext,
-    ) {
-        egui::Window::new("Debug info").show(&context.egui_context, |ui| {
+    fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        egui::Window::new("Debug info").show(context.egui_context, |ui| {
             let color = match dt.as_millis() {
                 0..=25 => [51, 204, 51],
                 26..=50 => [255, 153, 0],
@@ -223,7 +220,7 @@ impl ApplicationState for MachaState {
                 format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()),
             );
         });
-        egui::Window::new("Shader uniforms").show(&context.egui_context, |ui| {
+        egui::Window::new("Shader uniforms").show(context.egui_context, |ui| {
             ui.add(egui::Slider::new(&mut self.shader_options[0], 0.0..=1.0).text("flow speed"));
             ui.add(
                 egui::Slider::new(&mut self.shader_options[1], 0.0..=1.0).text("flow intensity"),
@@ -238,11 +235,7 @@ impl ApplicationState for MachaState {
         });
     }
 
-    fn after_ui_systems(
-        &mut self,
-        _dt: std::time::Duration,
-        context: &mut EguiUpdateContext,
-    ) {
+    fn after_ui_systems(&mut self, _dt: std::time::Duration, context: &mut EguiUpdateContext) {
         // Re-take ownership of buffer while processing it
         let mut ecs_buffer = context
             .ecs_manager
