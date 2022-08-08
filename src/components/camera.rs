@@ -189,14 +189,14 @@ impl Camera {
     pub fn right_vector(&self) -> glm::Vec3 {
         glm::quat_rotate_vec3(
             &Self::compute_orientation(self.pitch, self.yaw),
-            &glm::vec3(1.0, 0.0, 0.0),
+            &glm::vec3(-1.0, 0.0, 0.0),
         )
     }
 
     pub fn up_vector(&self) -> glm::Vec3 {
         glm::quat_rotate_vec3(
             &Self::compute_orientation(self.pitch, self.yaw),
-            &glm::vec3(0.0, 1.0, 0.0),
+            &glm::vec3(0.0, -1.0, 0.0),
         )
     }
 

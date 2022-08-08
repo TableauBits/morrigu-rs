@@ -20,7 +20,7 @@ impl MachaEditorCamera {
 
         let mut new_camera = Self {
             mrg_camera,
-            move_speed: 2.0,
+            move_speed: 4.0,
             distance: 7.0,
             mouse_input_factor: 0.003,
             focal_point,
@@ -80,13 +80,13 @@ impl MachaEditorCamera {
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::W) {
+        if input.key_held(VirtualKeyCode::A) {
             let right = self.mrg_camera.right_vector();
             let new_focal_point = self.focal_point() + right * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::W) {
+        if input.key_held(VirtualKeyCode::D) {
             let right = self.mrg_camera.right_vector();
             let new_focal_point = self.focal_point() - right * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
@@ -94,10 +94,11 @@ impl MachaEditorCamera {
     }
 
     fn mouse_rotate(&mut self, delta: &glm::Vec2) {
-        let new_pitch = self.mrg_camera.pitch() + delta.y * 0.8;
-        let new_yaw = self.mrg_camera.yaw() + -1.0 * delta.x * 0.8;
-        self.mrg_camera.set_pitch(new_pitch);
+        let new_yaw = self.mrg_camera.yaw() + -delta.x * 0.8;
         self.mrg_camera.set_yaw(new_yaw);
+
+        let new_pitch = self.mrg_camera.pitch() + delta.y * 0.8;
+        self.mrg_camera.set_pitch(new_pitch);
 
         let new_position = self.focal_point() - self.mrg_camera.forward_vector() * self.distance;
         self.mrg_camera.set_position(&new_position);
