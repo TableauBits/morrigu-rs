@@ -6,7 +6,6 @@ pub use winit::{
 use crate::{
     components::camera::{Camera, PerspectiveData, Projection},
     ecs_manager::ECSManager,
-    egui::EguiIntegration,
     renderer::{Renderer, RendererBuilder},
     utils::ThreadSafeRef,
 };
@@ -26,7 +25,7 @@ use std::time::{Duration, Instant};
 
 pub struct StateContext<'a> {
     #[cfg(feature = "egui")]
-    pub egui: &'a mut EguiIntegration,
+    pub egui: &'a mut crate::egui::EguiIntegration,
 
     pub renderer: &'a mut Renderer,
     pub ecs_manager: &'a mut ECSManager,
@@ -184,7 +183,7 @@ impl<'a> ApplicationBuilder<'a> {
                 renderer_ref,
                 window,
                 event_loop,
-                winit_state,
+                window_input_state: winit_state,
             }
         }
     }
