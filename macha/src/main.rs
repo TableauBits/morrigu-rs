@@ -39,12 +39,9 @@ struct MachaState {
     camera: MachaEditorCamera,
 
     shader_ref: ThreadSafeRef<Shader>,
-    debug_shader_ref: ThreadSafeRef<Shader>,
     material_ref: ThreadSafeRef<Material>,
-    debug_material_ref: ThreadSafeRef<Material>,
     mesh_ref: ThreadSafeRef<Mesh>,
     mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
-    debug_mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
     texture_ref: ThreadSafeRef<Texture>,
     flowmap_ref: ThreadSafeRef<Texture>,
     gradient_ref: ThreadSafeRef<Texture>,
@@ -75,19 +72,10 @@ impl BuildableApplicationState<()> for MachaState {
             &context.renderer.device,
         )
         .expect("Failed to create shader");
-        let debug_shader_ref = Shader::from_spirv_u8(
-            include_bytes!("../assets/gen/shaders/flat/flat.vert"),
-            include_bytes!("../assets/gen/shaders/flat/flat.frag"),
-            &context.renderer.device,
-        )
-        .expect("Failed to create debug shader");
 
         let material_ref = Material::builder()
             .build(&shader_ref, context.renderer)
             .expect("Failed to create material");
-        let debug_material_ref = Material::builder()
-            .build(&debug_shader_ref, context.renderer)
-            .expect("Failed to create debug material");
 
         let mesh_ref = Vertex::load_model_from_path_ply(
             Path::new("assets/meshes/sphere.ply"),
@@ -135,17 +123,8 @@ impl BuildableApplicationState<()> for MachaState {
             .upload_uniform(4, shader_options)
             .expect("Failed to upload flow settings");
 
-        let debug_mesh_rendering_ref =
-            MeshRendering::new(&mesh_ref, &debug_material_ref, context.renderer)
-                .expect("Failed to create mesh rendering");
-        debug_mesh_rendering_ref
-            .lock()
-            .upload_uniform(1, glm::vec3(0.2, 0.8, 0.2))
-            .expect("Failed to set flat color");
-
         let mut tranform = Transform::default();
         tranform
-            .translate(&glm::vec3(0.0, 0.0, -15.0))
             .rotate(f32::to_radians(-90.0), Axis::X);
 
         camera.set_focal_point(tranform.position());
@@ -164,18 +143,6 @@ impl BuildableApplicationState<()> for MachaState {
             .insert(mesh_rendering_ref.clone())
             .insert(MachaEntityOptions {
                 name: "planet".to_owned(),
-            });
-
-        tranform.rescale(&glm::vec3(0.25, 0.25, 0.25));
-
-        context
-            .ecs_manager
-            .world
-            .spawn()
-            .insert(tranform)
-            .insert(debug_mesh_rendering_ref.clone())
-            .insert(MachaEntityOptions {
-                name: "debug sphere".to_owned(),
             });
 
         context
@@ -211,12 +178,9 @@ impl BuildableApplicationState<()> for MachaState {
         MachaState {
             camera,
             shader_ref,
-            debug_shader_ref,
             material_ref,
-            debug_material_ref,
             mesh_ref,
             mesh_rendering_ref,
-            debug_mesh_rendering_ref,
             texture_ref,
             flowmap_ref,
             gradient_ref,
@@ -262,9 +226,10 @@ impl ApplicationState for MachaState {
                 self.camera.mrg_camera.forward_vector()
             ));
             ui.label(format!(
-                "Pitch, Yaw: {:?}, {:?}",
+                "Pitch, Yaw, Roll: {:?}, {:?}, {:?}",
                 self.camera.mrg_camera.pitch(),
-                self.camera.mrg_camera.yaw()
+                self.camera.mrg_camera.yaw(),
+                self.camera.mrg_camera.roll()
             ));
 
             let color = match dt.as_millis() {
@@ -366,14 +331,9 @@ impl ApplicationState for MachaState {
         self.gradient_ref.lock().destroy(context.renderer);
         self.flowmap_ref.lock().destroy(context.renderer);
         self.texture_ref.lock().destroy(context.renderer);
-        self.debug_mesh_rendering_ref
-            .lock()
-            .destroy(context.renderer);
         self.mesh_rendering_ref.lock().destroy(context.renderer);
         self.mesh_ref.lock().destroy(context.renderer);
-        self.debug_material_ref.lock().destroy(context.renderer);
         self.material_ref.lock().destroy(context.renderer);
-        self.debug_shader_ref.lock().destroy(&context.renderer.device);
         self.shader_ref.lock().destroy(&context.renderer.device);
     }
 }

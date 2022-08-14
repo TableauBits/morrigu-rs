@@ -1,4 +1,5 @@
 use nalgebra_glm as glm;
+use nalgebra as na;
 
 use std::default::Default;
 
@@ -27,6 +28,7 @@ pub struct CameraBuilder {
     pub position: glm::Vec3,
     pub pitch: f32,
     pub yaw: f32,
+    pub roll: f32,
 }
 
 impl CameraBuilder {
@@ -35,7 +37,7 @@ impl CameraBuilder {
     }
 
     pub fn build(self, projection_type: Projection, size: &glm::Vec2) -> Camera {
-        let orientation = Camera::compute_orientation(self.pitch, self.yaw);
+        let orientation = Camera::compute_orientation(self.pitch, self.yaw, self.roll);
 
         let aspect_ratio = size.x / size.y;
         let projection = Camera::compute_projection(&projection_type, aspect_ratio);
@@ -49,6 +51,7 @@ impl CameraBuilder {
 
             pitch: self.pitch,
             yaw: self.yaw,
+            roll: self.roll,
             orientation,
 
             projection,
@@ -68,7 +71,8 @@ pub struct Camera {
 
     pitch: f32,
     yaw: f32,
-    orientation: glm::Quat,
+    roll: f32,
+    orientation: na::UnitQuaternion<f32>,
 
     projection: glm::Mat4,
     view: glm::Mat4,
@@ -82,8 +86,8 @@ impl Camera {
         CameraBuilder::new()
     }
 
-    fn compute_orientation(pitch: f32, yaw: f32) -> glm::Quat {
-        glm::quat_normalize(&glm::quat(pitch, yaw, 0.0, 1.0))
+    fn compute_orientation(pitch: f32, yaw: f32, roll: f32) -> na::UnitQuaternion<f32> {
+        na::UnitQuaternion::from_euler_angles(roll, pitch, yaw)
     }
 
     fn compute_projection(projection_type: &Projection, aspect_ratio: f32) -> glm::Mat4 {
@@ -106,7 +110,7 @@ impl Camera {
         }
     }
 
-    fn compute_view(position: &glm::Vec3, orientation: &glm::Quat) -> glm::Mat4 {
+    fn compute_view(position: &glm::Vec3, orientation: &na::UnitQuaternion<f32>) -> glm::Mat4 {
         let view_inverse =
             glm::translate(&glm::Mat4::identity(), position) * glm::quat_to_mat4(orientation);
         glm::inverse(&view_inverse)
@@ -140,6 +144,10 @@ impl Camera {
         &self.yaw
     }
 
+    pub fn roll(&self) -> &f32 {
+        &self.roll
+    }
+
     pub fn size(&self) -> &glm::Vec2 {
         &self.size
     }
@@ -167,35 +175,42 @@ impl Camera {
 
     pub fn set_pitch(&mut self, pitch: f32) {
         self.pitch = pitch;
-        self.orientation = Self::compute_orientation(self.pitch, self.yaw);
+        self.orientation = Self::compute_orientation(self.pitch, self.yaw, self.roll);
         self.view = Self::compute_view(&self.position, &self.orientation);
         self.view_projection = Self::compute_view_projection(&self.view, &self.projection)
     }
 
     pub fn set_yaw(&mut self, yaw: f32) {
         self.yaw = yaw;
-        self.orientation = Self::compute_orientation(self.pitch, self.yaw);
+        self.orientation = Self::compute_orientation(self.pitch, self.yaw, self.roll);
+        self.view = Self::compute_view(&self.position, &self.orientation);
+        self.view_projection = Self::compute_view_projection(&self.view, &self.projection)
+    }
+
+    pub fn set_roll(&mut self, roll: f32) {
+        self.roll = roll;
+        self.orientation = Self::compute_orientation(self.pitch, self.yaw, self.roll);
         self.view = Self::compute_view(&self.position, &self.orientation);
         self.view_projection = Self::compute_view_projection(&self.view, &self.projection)
     }
 
     pub fn forward_vector(&self) -> glm::Vec3 {
         glm::quat_rotate_vec3(
-            &Self::compute_orientation(self.pitch, self.yaw),
+            &Self::compute_orientation(self.pitch, self.yaw, self.roll),
             &glm::vec3(0.0, 0.0, -1.0),
         )
     }
 
     pub fn right_vector(&self) -> glm::Vec3 {
         glm::quat_rotate_vec3(
-            &Self::compute_orientation(self.pitch, self.yaw),
+            &Self::compute_orientation(self.pitch, self.yaw, self.roll),
             &glm::vec3(-1.0, 0.0, 0.0),
         )
     }
 
     pub fn up_vector(&self) -> glm::Vec3 {
         glm::quat_rotate_vec3(
-            &Self::compute_orientation(self.pitch, self.yaw),
+            &Self::compute_orientation(self.pitch, self.yaw, self.roll),
             &glm::vec3(0.0, -1.0, 0.0),
         )
     }

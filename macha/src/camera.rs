@@ -94,11 +94,11 @@ impl MachaEditorCamera {
     }
 
     fn mouse_rotate(&mut self, delta: &glm::Vec2) {
-        let new_yaw = self.mrg_camera.yaw() + -delta.x * 0.8;
-        self.mrg_camera.set_yaw(new_yaw);
-
-        let new_pitch = self.mrg_camera.pitch() + delta.y * 0.8;
+        let new_pitch = self.mrg_camera.pitch() + -delta.x * 0.8;
         self.mrg_camera.set_pitch(new_pitch);
+
+        let new_roll = self.mrg_camera.roll() + delta.y * 0.8;
+        self.mrg_camera.set_roll(new_roll);
 
         let new_position = self.focal_point() - self.mrg_camera.forward_vector() * self.distance;
         self.mrg_camera.set_position(&new_position);
