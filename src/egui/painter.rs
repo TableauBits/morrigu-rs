@@ -7,19 +7,19 @@ use crate::{
     shader::Shader,
     texture::{Texture, TextureFormat},
     utils::ThreadSafeRef,
+    vector_type::{Vec2, Vec4},
 };
 
 use ash::vk;
 use bytemuck::{bytes_of, Pod, Zeroable};
 use egui::Rect;
-use nalgebra_glm as glm;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 struct EguiVertex {
-    position: glm::Vec2,
-    texture_coords: glm::Vec2,
-    color: glm::Vec4,
+    position: Vec2,
+    texture_coords: Vec2,
+    color: Vec4,
 }
 unsafe impl Zeroable for EguiVertex {}
 unsafe impl Pod for EguiVertex {}
@@ -176,9 +176,9 @@ impl Painter {
             .vertices
             .iter()
             .map(|vertex| EguiVertex {
-                position: glm::vec2(vertex.pos.x, height_in_points - vertex.pos.y),
-                texture_coords: glm::vec2(vertex.uv.x, vertex.uv.y),
-                color: glm::vec4(
+                position: Vec2::new(vertex.pos.x, height_in_points - vertex.pos.y),
+                texture_coords: Vec2::new(vertex.uv.x, vertex.uv.y),
+                color: Vec4::new(
                     vertex.color.r() as f32 / u8::MAX as f32,
                     vertex.color.g() as f32 / u8::MAX as f32,
                     vertex.color.b() as f32 / u8::MAX as f32,
@@ -203,7 +203,7 @@ impl Painter {
             return;
         }
         let texture = texture.unwrap();
-        let push_constants = glm::vec2(width_in_points, height_in_points);
+        let push_constants = Vec2::new(width_in_points, height_in_points);
 
         let mesh_rendering_ref = MeshRendering::new(&mesh_ref, &self.material, renderer)
             .expect("Failed to create mesh rendering for egui mesh");

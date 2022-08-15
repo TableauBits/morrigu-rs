@@ -8,10 +8,8 @@ use crate::{
     renderer::Renderer,
     shader::{binding_type_cast, Shader},
     texture::Texture,
-    utils::ThreadSafeRef,
+    utils::ThreadSafeRef, vector_type::{Mat4, Vec4},
 };
-
-use nalgebra_glm as glm;
 
 pub struct VertexInputDescription {
     pub bindings: Vec<vk::VertexInputBindingDescription>,
@@ -24,8 +22,8 @@ pub trait Vertex: std::marker::Sync + std::marker::Send + 'static {
 
 #[allow(dead_code)] // We never "read" value from this struct, it's directly uploaded to the GPU withou any field access
 struct CameraData {
-    view_projection_matrix: glm::Mat4,
-    world_position: glm::Vec4,
+    view_projection_matrix: Mat4,
+    world_position: Vec4,
 }
 
 pub struct Material<VertexType>

@@ -1,10 +1,9 @@
 use bevy_ecs::prelude::{Query, Res};
 use egui::LayerId;
 use egui_gizmo::Gizmo;
-use morrigu::components::{camera::Camera, transform::Transform};
-use nalgebra_glm as glm;
+use morrigu::{components::{camera::Camera, transform::Transform}, vector_type::Mat4};
 
-use crate::components::{selected_entity::SelectedEntity, macha_options::MachaGlobalOptions};
+use crate::components::{macha_options::MachaGlobalOptions, selected_entity::SelectedEntity};
 
 pub fn draw_gizmo(
     mut query: Query<(&mut Transform, &mut SelectedEntity)>,
@@ -29,7 +28,7 @@ pub fn draw_gizmo(
                             .iter()
                             .flat_map(|slice| slice.to_vec())
                             .collect::<Vec<_>>();
-                        transform.set_matrix(&glm::make_mat4(&vec));
+                        transform.set_matrix(&Mat4::from_column_slice(&vec));
                     }
                 });
             });

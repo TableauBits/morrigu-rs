@@ -7,11 +7,10 @@ use crate::{
     components::camera::{Camera, PerspectiveData, Projection},
     ecs_manager::ECSManager,
     renderer::{Renderer, RendererBuilder},
-    utils::ThreadSafeRef,
+    utils::ThreadSafeRef, vector_type::Vec2,
 };
 
 use ash::vk;
-use nalgebra_glm as glm;
 use winit::{
     dpi::PhysicalSize,
     event::Event::WindowEvent,
@@ -153,7 +152,7 @@ impl<'a> ApplicationBuilder<'a> {
                     near_plane: 0.001,
                     far_plane: 1000.0,
                 }),
-                &glm::vec2(self.width as f32, self.height as f32),
+                &Vec2::new(self.width as f32, self.height as f32),
             ),
         );
 

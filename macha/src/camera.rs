@@ -1,7 +1,9 @@
 use std::time::Duration;
 
-use morrigu::components::camera::Camera;
-use nalgebra_glm as glm;
+use morrigu::{
+    components::camera::Camera,
+    vector_type::{Vec2, Vec3},
+};
 use winit::event::VirtualKeyCode;
 use winit_input_helper::WinitInputHelper;
 
@@ -11,7 +13,7 @@ pub struct MachaEditorCamera {
     pub distance: f32,
     pub mouse_input_factor: f32,
 
-    focal_point: glm::Vec3,
+    focal_point: Vec3,
 }
 
 impl MachaEditorCamera {
@@ -31,11 +33,11 @@ impl MachaEditorCamera {
         new_camera
     }
 
-    pub fn focal_point(&self) -> &glm::Vec3 {
+    pub fn focal_point(&self) -> &Vec3 {
         &self.focal_point
     }
 
-    pub fn set_focal_point(&mut self, new_focal_point: &glm::Vec3) {
+    pub fn set_focal_point(&mut self, new_focal_point: &Vec3) {
         self.focal_point = *new_focal_point;
         let forward = self.mrg_camera.forward_vector();
         let new_position = self.focal_point - forward * self.distance;
@@ -49,7 +51,7 @@ impl MachaEditorCamera {
     pub fn on_update(&mut self, dt: Duration, input: &WinitInputHelper) {
         if input.held_alt() {
             let diff = input.mouse_diff();
-            let mouse_delta = glm::vec2(diff.0, -diff.1) * self.mouse_input_factor;
+            let mouse_delta = Vec2::new(diff.0, -diff.1) * self.mouse_input_factor;
 
             #[repr(usize)]
             enum MouseButton {
@@ -93,7 +95,7 @@ impl MachaEditorCamera {
         }
     }
 
-    fn mouse_rotate(&mut self, delta: &glm::Vec2) {
+    fn mouse_rotate(&mut self, delta: &Vec2) {
         let new_pitch = self.mrg_camera.pitch() + -delta.x * 0.8;
         self.mrg_camera.set_pitch(new_pitch);
 
@@ -115,7 +117,7 @@ impl MachaEditorCamera {
         self.mrg_camera.set_position(&new_position);
     }
 
-    fn mouse_pan(&mut self, delta: &glm::Vec2) {
+    fn mouse_pan(&mut self, delta: &Vec2) {
         let x_pan_unit = f32::min(self.mrg_camera.size().x / 1000.0, 2.4);
         let x_pan_speed = 0.0366 * (x_pan_unit * x_pan_unit) - 0.1778 * x_pan_unit + 0.3021;
         let y_pan_unit = f32::min(self.mrg_camera.size().y / 1000.0, 2.4);

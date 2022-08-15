@@ -1,21 +1,20 @@
 use ash::vk;
-use nalgebra_glm as glm;
 
 use crate::{
     error::Error,
     material::{Vertex, VertexInputDescription},
     mesh::{upload_index_buffer, upload_mesh_data, upload_vertex_buffer, Mesh},
     renderer::Renderer,
-    utils::ThreadSafeRef,
+    utils::ThreadSafeRef, vector_type::{Vec3, Vec2},
 };
 
 use ply_rs::{parser, ply};
 
 #[repr(C)]
 pub struct TexturedVertex {
-    position: glm::Vec3,
-    normal: glm::Vec3,
-    texture_coords: glm::Vec2,
+    position: Vec3,
+    normal: Vec3,
+    texture_coords: Vec2,
 }
 
 impl Vertex for TexturedVertex {
@@ -73,9 +72,9 @@ impl Vertex for TexturedVertex {
 impl ply::PropertyAccess for TexturedVertex {
     fn new() -> Self {
         Self {
-            position: glm::Vec3::default(),
-            normal: glm::Vec3::default(),
-            texture_coords: glm::Vec2::default(),
+            position: Vec3::default(),
+            normal: Vec3::default(),
+            texture_coords: Vec2::default(),
         }
     }
 
@@ -133,18 +132,18 @@ impl TexturedVertex {
         let positions = mesh
             .positions
             .chunks_exact(3)
-            .map(|slice| glm::Vec3::new(slice[0], slice[1], slice[2]))
-            .collect::<Vec<glm::Vec3>>();
+            .map(|slice| Vec3::new(slice[0], slice[1], slice[2]))
+            .collect::<Vec<Vec3>>();
         let normals = mesh
             .normals
             .chunks_exact(3)
-            .map(|slice| glm::Vec3::new(slice[0], slice[1], slice[2]))
-            .collect::<Vec<glm::Vec3>>();
+            .map(|slice| Vec3::new(slice[0], slice[1], slice[2]))
+            .collect::<Vec<Vec3>>();
         let texture_coordinates = mesh
             .texcoords
             .chunks_exact(2)
-            .map(|slice| glm::Vec2::new(slice[0], slice[1]))
-            .collect::<Vec<glm::Vec2>>();
+            .map(|slice| Vec2::new(slice[0], slice[1]))
+            .collect::<Vec<Vec2>>();
 
         let mut vertices = Vec::with_capacity(positions.len());
         for index in 0..positions.len() {

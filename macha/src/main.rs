@@ -23,8 +23,8 @@ use morrigu::{
     systems::mesh_renderer,
     texture::{Texture, TextureFormat},
     utils::ThreadSafeRef,
+    vector_type::Vec2,
 };
-use nalgebra_glm as glm;
 use systems::{gizmo_drawer, hierarchy_panel};
 use winit::event::{KeyboardInput, VirtualKeyCode};
 
@@ -47,14 +47,14 @@ struct MachaState {
     gradient_ref: ThreadSafeRef<Texture>,
     egui_texture_id: egui::TextureId,
 
-    shader_options: glm::Vec2,
+    shader_options: Vec2,
 }
 
 impl BuildableApplicationState<()> for MachaState {
     fn build(context: &mut StateContext, _: ()) -> Self {
         let flow_speed = 0.2_f32;
         let flow_intensity = 0.4_f32;
-        let shader_options = glm::vec2(flow_speed, flow_intensity);
+        let shader_options = Vec2::new(flow_speed, flow_intensity);
 
         let camera = Camera::builder().build(
             morrigu::components::camera::Projection::Perspective(PerspectiveData {
@@ -62,7 +62,7 @@ impl BuildableApplicationState<()> for MachaState {
                 near_plane: 0.001,
                 far_plane: 1000.0,
             }),
-            &glm::vec2(1280.0, 720.0),
+            &Vec2::new(1280.0, 720.0),
         );
         let mut camera = MachaEditorCamera::new(camera);
 
@@ -124,8 +124,7 @@ impl BuildableApplicationState<()> for MachaState {
             .expect("Failed to upload flow settings");
 
         let mut tranform = Transform::default();
-        tranform
-            .rotate(f32::to_radians(-90.0), Axis::X);
+        tranform.rotate(f32::to_radians(-90.0), Axis::X);
 
         camera.set_focal_point(tranform.position());
 
@@ -220,18 +219,6 @@ impl ApplicationState for MachaState {
 
     fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
         egui::Window::new("Debug info").show(context.egui_context, |ui| {
-            ui.label(format!("Position: {:?}", self.camera.mrg_camera.position()));
-            ui.label(format!(
-                "Forward: {:?}",
-                self.camera.mrg_camera.forward_vector()
-            ));
-            ui.label(format!(
-                "Pitch, Yaw, Roll: {:?}, {:?}, {:?}",
-                self.camera.mrg_camera.pitch(),
-                self.camera.mrg_camera.yaw(),
-                self.camera.mrg_camera.roll()
-            ));
-
             let color = match dt.as_millis() {
                 0..=25 => [51, 204, 51],
                 26..=50 => [255, 153, 0],

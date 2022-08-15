@@ -3,6 +3,8 @@ use nalgebra as na;
 
 use std::default::Default;
 
+use crate::vector_type::{Vec2, Vec3, Mat4};
+
 #[derive(Debug, Clone, Copy)]
 pub struct PerspectiveData {
     pub horizontal_fov: f32,
@@ -25,7 +27,7 @@ pub enum Projection {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct CameraBuilder {
-    pub position: glm::Vec3,
+    pub position: Vec3,
     pub pitch: f32,
     pub yaw: f32,
     pub roll: f32,
@@ -36,7 +38,7 @@ impl CameraBuilder {
         Default::default()
     }
 
-    pub fn build(self, projection_type: Projection, size: &glm::Vec2) -> Camera {
+    pub fn build(self, projection_type: Projection, size: &Vec2) -> Camera {
         let orientation = Camera::compute_orientation(self.pitch, self.yaw, self.roll);
 
         let aspect_ratio = size.x / size.y;
@@ -67,18 +69,18 @@ impl CameraBuilder {
 pub struct Camera {
     projection_type: Projection,
     aspect_ratio: f32,
-    position: glm::Vec3,
+    position: Vec3,
 
     pitch: f32,
     yaw: f32,
     roll: f32,
     orientation: na::UnitQuaternion<f32>,
 
-    projection: glm::Mat4,
-    view: glm::Mat4,
-    view_projection: glm::Mat4,
+    projection: Mat4,
+    view: Mat4,
+    view_projection: Mat4,
 
-    size: glm::Vec2,
+    size: Vec2,
 }
 
 impl Camera {
@@ -90,7 +92,7 @@ impl Camera {
         na::UnitQuaternion::from_euler_angles(roll, pitch, yaw)
     }
 
-    fn compute_projection(projection_type: &Projection, aspect_ratio: f32) -> glm::Mat4 {
+    fn compute_projection(projection_type: &Projection, aspect_ratio: f32) -> Mat4 {
         match projection_type {
             Projection::Perspective(data) => glm::perspective(
                 aspect_ratio,
@@ -110,29 +112,29 @@ impl Camera {
         }
     }
 
-    fn compute_view(position: &glm::Vec3, orientation: &na::UnitQuaternion<f32>) -> glm::Mat4 {
+    fn compute_view(position: &Vec3, orientation: &na::UnitQuaternion<f32>) -> Mat4 {
         let view_inverse =
-            glm::translate(&glm::Mat4::identity(), position) * glm::quat_to_mat4(orientation);
+            glm::translate(&Mat4::identity(), position) * glm::quat_to_mat4(orientation);
         glm::inverse(&view_inverse)
     }
 
-    pub fn compute_view_projection(view: &glm::Mat4, projection: &glm::Mat4) -> glm::Mat4 {
+    pub fn compute_view_projection(view: &Mat4, projection: &Mat4) -> Mat4 {
         projection * view
     }
 
-    pub fn view(&self) -> &glm::Mat4 {
+    pub fn view(&self) -> &Mat4 {
         &self.view
     }
 
-    pub fn projection(&self) -> &glm::Mat4 {
+    pub fn projection(&self) -> &Mat4 {
         &self.projection
     }
 
-    pub fn view_projection(&self) -> &glm::Mat4 {
+    pub fn view_projection(&self) -> &Mat4 {
         &self.view_projection
     }
 
-    pub fn position(&self) -> &glm::Vec3 {
+    pub fn position(&self) -> &Vec3 {
         &self.position
     }
 
@@ -148,7 +150,7 @@ impl Camera {
         &self.roll
     }
 
-    pub fn size(&self) -> &glm::Vec2 {
+    pub fn size(&self) -> &Vec2 {
         &self.size
     }
 
@@ -158,7 +160,7 @@ impl Camera {
         self.view_projection = Self::compute_view_projection(&self.view, &self.projection);
     }
 
-    pub fn set_size(&mut self, size: &glm::Vec2) {
+    pub fn set_size(&mut self, size: &Vec2) {
         self.size = *size;
 
         let aspect_ratio = size.x / size.y;
@@ -167,7 +169,7 @@ impl Camera {
         self.view_projection = Self::compute_view_projection(&self.view, &self.projection);
     }
 
-    pub fn set_position(&mut self, position: &glm::Vec3) {
+    pub fn set_position(&mut self, position: &Vec3) {
         self.position = *position;
         self.view = Self::compute_view(&self.position, &self.orientation);
         self.view_projection = Self::compute_view_projection(&self.view, &self.projection)
@@ -194,28 +196,28 @@ impl Camera {
         self.view_projection = Self::compute_view_projection(&self.view, &self.projection)
     }
 
-    pub fn forward_vector(&self) -> glm::Vec3 {
+    pub fn forward_vector(&self) -> Vec3 {
         glm::quat_rotate_vec3(
             &Self::compute_orientation(self.pitch, self.yaw, self.roll),
-            &glm::vec3(0.0, 0.0, -1.0),
+            &Vec3::new(0.0, 0.0, -1.0),
         )
     }
 
-    pub fn right_vector(&self) -> glm::Vec3 {
+    pub fn right_vector(&self) -> Vec3 {
         glm::quat_rotate_vec3(
             &Self::compute_orientation(self.pitch, self.yaw, self.roll),
-            &glm::vec3(-1.0, 0.0, 0.0),
+            &Vec3::new(-1.0, 0.0, 0.0),
         )
     }
 
-    pub fn up_vector(&self) -> glm::Vec3 {
+    pub fn up_vector(&self) -> Vec3 {
         glm::quat_rotate_vec3(
             &Self::compute_orientation(self.pitch, self.yaw, self.roll),
-            &glm::vec3(0.0, -1.0, 0.0),
+            &Vec3::new(0.0, -1.0, 0.0),
         )
     }
 
     pub fn on_resize(&mut self, width: u32, height: u32) {
-        self.set_size(&glm::vec2(width as f32, height as f32));
+        self.set_size(&Vec2::new(width as f32, height as f32));
     }
 }

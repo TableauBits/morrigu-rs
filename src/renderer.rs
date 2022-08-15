@@ -2,7 +2,7 @@ use crate::{
     allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage},
     error::Error,
     texture::Texture,
-    utils::{CommandUploader, ThreadSafeRef},
+    utils::{CommandUploader, ThreadSafeRef}, vector_type::Vec4,
 };
 
 use ash::{
@@ -14,7 +14,6 @@ use ash::{
     Entry, Instance,
 };
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
-use nalgebra_glm as glm;
 use winit::window::Window;
 
 use std::{
@@ -695,7 +694,7 @@ impl<'a> RendererBuilder<'a> {
             .set_layouts(std::slice::from_ref(&level_0_layout));
         let level_0_handle = unsafe { device.allocate_descriptor_sets(&level_0_allocation_info) }
             .expect("Failed to allocate level 0 descriptor")[0];
-        let time_buffer_size: u64 = mem::size_of::<glm::Vec4>().try_into().unwrap();
+        let time_buffer_size: u64 = mem::size_of::<Vec4>().try_into().unwrap();
         let time_buffer = AllocatedBufferBuilder::uniform_buffer_default(time_buffer_size)
             .build(device, allocator)
             .expect("Failed to create time buffer");

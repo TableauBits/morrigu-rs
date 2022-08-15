@@ -5,6 +5,7 @@ use crate::{
     material::Vertex,
     renderer::Renderer,
     utils::ThreadSafeRef,
+    vector_type::{Mat4, Vec4},
 };
 
 use ash::vk;
@@ -15,8 +16,8 @@ use nalgebra_glm as glm;
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 struct CameraData {
-    pub(crate) view_projection: glm::Mat4,
-    pub(crate) world_position: glm::Vec4,
+    pub(crate) view_projection: Mat4,
+    pub(crate) world_position: Vec4,
 }
 unsafe impl Zeroable for CameraData {}
 unsafe impl Pod for CameraData {}
@@ -32,7 +33,7 @@ pub fn render_meshes<VertexType>(
     let mut renderer = renderer_ref.lock();
 
     let current_time = timer.elapsed().as_secs_f32();
-    let time_data = glm::Vec4::new(
+    let time_data = Vec4::new(
         current_time / 20.0,
         current_time,
         current_time * 2.0,
