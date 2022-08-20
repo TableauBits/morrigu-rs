@@ -214,6 +214,10 @@ impl ApplicationState for MachaState {
         context
             .ecs_manager
             .world
+            .insert_resource(context.window_input_state.clone());
+        context
+            .ecs_manager
+            .world
             .insert_resource(self.camera.mrg_camera);
     }
 
