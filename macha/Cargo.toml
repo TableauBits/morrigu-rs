@@ -12,6 +12,6 @@ flexi_logger = "0.23"
 morrigu = { path = "../", features = ["egui"] }
 bevy_ecs = "0.8"
 egui = "0.19"
-egui-gizmo = "0.7"
+egui-gizmo = { git = "https://github.com/Ithyx/egui-gizmo", rev = "2b8c74058fb955ae08f947c3e9a2fc23e75313fa" }
 winit = "0.27"
 winit_input_helper = "0.13"

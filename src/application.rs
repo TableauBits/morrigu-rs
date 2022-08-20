@@ -161,7 +161,7 @@ impl<'a> ApplicationBuilder<'a> {
         #[cfg(feature = "egui")]
         {
             let mut renderer = renderer_ref.lock();
-            let egui = crate::egui::EguiIntegration::new(&window, &mut renderer)
+            let egui = crate::egui::EguiIntegration::new(&event_loop, &mut renderer)
                 .expect("Failed to create Egui intergration");
             drop(renderer);
 

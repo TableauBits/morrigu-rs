@@ -13,9 +13,12 @@ pub struct EguiIntegration {
 }
 
 impl EguiIntegration {
-    pub fn new(window: &winit::window::Window, renderer: &mut Renderer) -> Result<Self, Error> {
+    pub fn new(
+        event_loop: &winit::event_loop::EventLoopWindowTarget<()>,
+        renderer: &mut Renderer,
+    ) -> Result<Self, Error> {
         let painter = Painter::new(renderer)?;
-        let egui_platform_state = egui_winit::State::new(painter.max_texture_size, window);
+        let egui_platform_state = egui_winit::State::new(event_loop);
 
         Ok(Self {
             context: Default::default(),
@@ -41,11 +44,11 @@ impl EguiIntegration {
         &mut self,
         window: &winit::window::Window,
         ui_callback: impl FnMut(&egui::Context),
-    ) -> bool {
+    ) -> std::time::Duration {
         let raw_input = self.egui_platform_state.take_egui_input(window);
         let egui::FullOutput {
             platform_output,
-            needs_repaint,
+            repaint_after,
             textures_delta,
             shapes,
         } = self.context.run(raw_input, ui_callback);
@@ -55,7 +58,7 @@ impl EguiIntegration {
         self.shapes = shapes;
         self.textures_delta.append(textures_delta);
 
-        needs_repaint
+        repaint_after
     }
 
     pub fn paint(&mut self, renderer: &mut Renderer) {
