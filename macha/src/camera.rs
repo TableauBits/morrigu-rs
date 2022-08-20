@@ -70,6 +70,11 @@ impl MachaEditorCamera {
             }
         }
 
+        let scroll = input.scroll_diff();
+        if scroll != 0.0 {
+            self.mouse_zoom(input.scroll_diff() * 0.4);
+        }
+
         if input.key_held(VirtualKeyCode::W) {
             let forward = self.mrg_camera.forward_vector();
             let new_focal_point = self.focal_point() + forward * dt.as_secs_f32() * self.move_speed;
