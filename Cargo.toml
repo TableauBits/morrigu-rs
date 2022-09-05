@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "macha"]
+
 [package]
 name = "morrigu"
 version = "0.1.0"
@@ -43,11 +46,13 @@ egui-winit = { version = "0.19", optional = true }
 [patch.crates-io]
 gpu-allocator = { git = "https://github.com/Ithyx/gpu-allocator", rev = "027b89ed49f11e08facb968eea82c58cbb0d5729" }
 
-[workspace]
-members = [".", "macha"]
-
-[profile.release]
-debug = true
-
 [features]
 egui = ["dep:egui", "dep:egui-winit"]
+
+# Enable max optimizations for dependencies, but not for our code:
+[profile.dev.package."*"]
+opt-level = 3
+
+# Enable only a small amount of optimization in debug mode
+[profile.dev]
+opt-level = 1

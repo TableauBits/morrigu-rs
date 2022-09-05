@@ -7,7 +7,8 @@ use crate::{
     components::camera::{Camera, PerspectiveData, Projection},
     ecs_manager::ECSManager,
     renderer::{Renderer, RendererBuilder},
-    utils::ThreadSafeRef, vector_type::Vec2,
+    utils::ThreadSafeRef,
+    vector_type::Vec2,
 };
 
 use ash::vk;
@@ -313,7 +314,10 @@ impl<'a> ApplicationBuilder<'a> {
     where
         StateType: BuildableApplicationState<UserData>,
     {
+        let instant = std::time::Instant::now();
         let mut context = self.setup_context();
+        let engine_init_time = instant.elapsed();
+        log::debug!("Engine startup time: {}ms", engine_init_time.as_millis());
 
         let mut renderer = context.renderer_ref.lock();
         let mut state_context = StateContext {
@@ -324,8 +328,17 @@ impl<'a> ApplicationBuilder<'a> {
             window: &context.window,
             window_input_state: &context.window_input_state,
         };
+
+        let instant = std::time::Instant::now();
         let mut state = StateType::build(&mut state_context, data);
+        let engine_init_time = instant.elapsed();
+        log::debug!("Custom state creation time: {}ms", engine_init_time.as_millis());
+
+        let instant = std::time::Instant::now();
         state.on_attach(&mut state_context);
+        let engine_init_time = instant.elapsed();
+        log::debug!("Custom state attach time: {}ms", engine_init_time.as_millis());
+
         drop(renderer);
 
         self.main_loop(&mut context, &mut state);
@@ -334,7 +347,10 @@ impl<'a> ApplicationBuilder<'a> {
     }
 
     pub fn build_and_run(self, state: &mut impl ApplicationState) {
+        let instant = std::time::Instant::now();
         let mut context = self.setup_context();
+        let engine_init_time = instant.elapsed();
+        log::debug!("Engine startup time: {}ms", engine_init_time.as_millis());
 
         let mut renderer = context.renderer_ref.lock();
         let mut state_context = StateContext {
@@ -345,7 +361,12 @@ impl<'a> ApplicationBuilder<'a> {
             window: &context.window,
             window_input_state: &context.window_input_state,
         };
+
+        let instant = std::time::Instant::now();
         state.on_attach(&mut state_context);
+        let engine_init_time = instant.elapsed();
+        log::debug!("Custom state attach time: {}ms", engine_init_time.as_millis());
+        
         drop(renderer);
 
         self.main_loop(&mut context, state);
