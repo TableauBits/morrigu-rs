@@ -332,12 +332,18 @@ impl<'a> ApplicationBuilder<'a> {
         let instant = std::time::Instant::now();
         let mut state = StateType::build(&mut state_context, data);
         let engine_init_time = instant.elapsed();
-        log::debug!("Custom state creation time: {}ms", engine_init_time.as_millis());
+        log::debug!(
+            "Custom state creation time: {}ms",
+            engine_init_time.as_millis()
+        );
 
         let instant = std::time::Instant::now();
         state.on_attach(&mut state_context);
         let engine_init_time = instant.elapsed();
-        log::debug!("Custom state attach time: {}ms", engine_init_time.as_millis());
+        log::debug!(
+            "Custom state attach time: {}ms",
+            engine_init_time.as_millis()
+        );
 
         drop(renderer);
 
@@ -365,8 +371,11 @@ impl<'a> ApplicationBuilder<'a> {
         let instant = std::time::Instant::now();
         state.on_attach(&mut state_context);
         let engine_init_time = instant.elapsed();
-        log::debug!("Custom state attach time: {}ms", engine_init_time.as_millis());
-        
+        log::debug!(
+            "Custom state attach time: {}ms",
+            engine_init_time.as_millis()
+        );
+
         drop(renderer);
 
         self.main_loop(&mut context, state);
