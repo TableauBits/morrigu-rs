@@ -1,9 +1,9 @@
-use nalgebra_glm as glm;
 use nalgebra as na;
+use nalgebra_glm as glm;
 
 use std::default::Default;
 
-use crate::vector_type::{Vec2, Vec3, Mat4};
+use crate::vector_type::{Mat4, Vec2, Vec3};
 
 #[derive(Debug, Clone, Copy)]
 pub struct PerspectiveData {
@@ -148,6 +148,10 @@ impl Camera {
 
     pub fn roll(&self) -> &f32 {
         &self.roll
+    }
+
+    pub fn aspect_ratio(&self) -> &f32 {
+        &self.aspect_ratio
     }
 
     pub fn size(&self) -> &Vec2 {
