@@ -99,10 +99,115 @@ pub struct AllocatedImage {
     pub view: vk::ImageView,
     pub allocation: Option<Allocation>,
     pub handle: vk::Image,
+
+    pub layout: vk::ImageLayout,
     pub format: vk::Format,
+    pub extent: vk::Extent3D,
 }
 
 impl AllocatedImage {
+    pub fn upload_data(
+        &mut self,
+        data: &[u8],
+        device: &ash::Device,
+        graphics_queue: vk::Queue,
+        allocator: &mut Allocator,
+        command_uploader: &CommandUploader,
+    ) -> Result<(), Error> {
+        let mut staging_buffer = AllocatedBufferBuilder::staging_buffer_default(u64::try_from(
+            data.len() * std::mem::size_of::<u8>(), // Multiplication is redundant, but just in case :3 (technically a byte is not necessarily 8 bits)
+        )?)
+        .build(device, allocator)?;
+
+        let slice = staging_buffer
+            .allocation
+            .as_mut()
+            .ok_or("use after free")?
+            .mapped_slice_mut()
+            .ok_or_else(|| {
+                gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
+            })?;
+        // copy_from_slice panics if slices are of diffrent lengths, so we have to set a limit
+        // just in case the allocation decides to allocate more
+        slice[..data.len()].copy_from_slice(data);
+
+        command_uploader.immediate_command(
+            device,
+            graphics_queue,
+            |cmd_buffer: &vk::CommandBuffer| {
+                let range = vk::ImageSubresourceRange::builder()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1);
+                if self.layout != vk::ImageLayout::TRANSFER_DST_OPTIMAL {
+                    let transfer_dst_barrier = vk::ImageMemoryBarrier::builder()
+                        .src_access_mask(vk::AccessFlags::NONE)
+                        .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                        .old_layout(self.layout)
+                        .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                        .image(self.handle)
+                        .subresource_range(*range);
+                    unsafe {
+                        device.cmd_pipeline_barrier(
+                            *cmd_buffer,
+                            vk::PipelineStageFlags::TOP_OF_PIPE,
+                            vk::PipelineStageFlags::TRANSFER,
+                            vk::DependencyFlags::empty(),
+                            &[],
+                            &[],
+                            std::slice::from_ref(&transfer_dst_barrier),
+                        )
+                    };
+                }
+
+                let copy_region = vk::BufferImageCopy::builder()
+                    .image_subresource(vk::ImageSubresourceLayers {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        mip_level: 0,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    })
+                    .image_extent(self.extent);
+                unsafe {
+                    device.cmd_copy_buffer_to_image(
+                        *cmd_buffer,
+                        staging_buffer.handle,
+                        self.handle,
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        std::slice::from_ref(&copy_region),
+                    )
+                };
+
+                let shader_read_barrier = vk::ImageMemoryBarrier::builder()
+                    .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                    .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                    .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .image(self.handle)
+                    .subresource_range(*range);
+                unsafe {
+                    device.cmd_pipeline_barrier(
+                        *cmd_buffer,
+                        vk::PipelineStageFlags::TRANSFER,
+                        vk::PipelineStageFlags::FRAGMENT_SHADER,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        std::slice::from_ref(&shader_read_barrier),
+                    )
+                };
+            },
+        )?;
+
+        self.layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
+
+        staging_buffer.destroy(device, allocator);
+
+        Ok(())
+    }
+
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         self.destroy_internal(&renderer.device, &mut renderer.allocator())
     }
@@ -189,102 +294,21 @@ impl<'a> AllocatedImageBuilder<'a> {
         })?;
         unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }?;
 
-        let mut staging_buffer = AllocatedBufferBuilder::staging_buffer_default(u64::try_from(
-            data.len() * std::mem::size_of::<u8>(), // Multiplication is redundant, but just in case :3 (technically a byte is not necessarily 8 bits)
-        )?)
-        .build(device, allocator)?;
-
-        let slice = staging_buffer
-            .allocation
-            .as_mut()
-            .ok_or("use after free")?
-            .mapped_slice_mut()
-            .ok_or_else(|| {
-                gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
-            })?;
-        // copy_from_slice panics if slices are of diffrent lengths, so we have to set a limit
-        // just in case the allocation decides to allocate more
-        slice[..data.len()].copy_from_slice(data);
-
-        command_uploader.immediate_command(
-            device,
-            graphics_queue,
-            |cmd_buffer: &vk::CommandBuffer| {
-                let range = vk::ImageSubresourceRange::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .base_mip_level(0)
-                    .level_count(1)
-                    .base_array_layer(0)
-                    .layer_count(1);
-                let transfer_dst_barrier = vk::ImageMemoryBarrier::builder()
-                    .src_access_mask(vk::AccessFlags::NONE)
-                    .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-                    .old_layout(vk::ImageLayout::UNDEFINED)
-                    .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .image(handle)
-                    .subresource_range(*range);
-                unsafe {
-                    device.cmd_pipeline_barrier(
-                        *cmd_buffer,
-                        vk::PipelineStageFlags::TOP_OF_PIPE,
-                        vk::PipelineStageFlags::TRANSFER,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        std::slice::from_ref(&transfer_dst_barrier),
-                    )
-                };
-
-                let copy_region = vk::BufferImageCopy::builder()
-                    .image_subresource(vk::ImageSubresourceLayers {
-                        aspect_mask: vk::ImageAspectFlags::COLOR,
-                        mip_level: 0,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    })
-                    .image_extent(self.image_create_info_builder.extent);
-                unsafe {
-                    device.cmd_copy_buffer_to_image(
-                        *cmd_buffer,
-                        staging_buffer.handle,
-                        handle,
-                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                        std::slice::from_ref(&copy_region),
-                    )
-                };
-
-                let shader_read_barrier = vk::ImageMemoryBarrier::builder()
-                    .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-                    .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                    .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .image(handle)
-                    .subresource_range(*range);
-                unsafe {
-                    device.cmd_pipeline_barrier(
-                        *cmd_buffer,
-                        vk::PipelineStageFlags::TRANSFER,
-                        vk::PipelineStageFlags::FRAGMENT_SHADER,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        std::slice::from_ref(&shader_read_barrier),
-                    )
-                };
-            },
-        )?;
-
-        staging_buffer.destroy(device, allocator);
-
         self.image_view_create_info_builder = self.image_view_create_info_builder.image(handle);
         let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }?;
 
-        Ok(AllocatedImage {
+        let mut image = AllocatedImage {
             view,
             allocation: Some(allocation),
             handle,
+            layout: vk::ImageLayout::UNDEFINED,
             format: self.image_create_info_builder.format,
-        })
+            extent: self.image_create_info_builder.extent,
+        };
+
+        image.upload_data(data, device, graphics_queue, allocator, command_uploader)?;
+
+        Ok(image)
     }
 
     /// Used internally for texture cloning.
@@ -314,7 +338,9 @@ impl<'a> AllocatedImageBuilder<'a> {
             view,
             allocation: Some(allocation),
             handle,
+            layout: vk::ImageLayout::UNDEFINED,
             format: self.image_create_info_builder.format,
+            extent: self.image_create_info_builder.extent,
         })
     }
 }

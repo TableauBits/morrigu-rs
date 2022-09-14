@@ -12,9 +12,9 @@ use ply_rs::{parser, ply};
 
 #[repr(C)]
 pub struct TexturedVertex {
-    position: Vec3,
-    normal: Vec3,
-    texture_coords: Vec2,
+    pub position: Vec3,
+    pub normal: Vec3,
+    pub texture_coords: Vec2,
 }
 
 impl Vertex for TexturedVertex {

@@ -263,6 +263,25 @@ impl Texture {
         })
     }
 
+    pub fn upload_data(&mut self, data: &[u8], renderer: &mut Renderer) -> Result<(), Error> {
+        let expected_size = usize::try_from(self.dimensions[0] * self.dimensions[1])?;
+        if expected_size != data.len() {
+            return Err(Error::GenericError(format!(
+                "Invalid data size, expected {} bytes, got {}",
+                expected_size,
+                data.len()
+            )));
+        }
+
+        self.image.upload_data(
+            data,
+            &renderer.device,
+            renderer.graphics_queue.handle,
+            &mut renderer.allocator(),
+            &renderer.command_uploader,
+        )
+    }
+
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         self.destroy_internal(&renderer.device, &mut renderer.allocator())
     }
