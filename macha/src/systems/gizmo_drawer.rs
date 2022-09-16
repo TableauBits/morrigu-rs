@@ -21,7 +21,7 @@ pub fn draw_gizmo(
             .fixed_pos((0.0, 0.0))
             .show(&egui_context, |ui| {
                 ui.with_layer_id(LayerId::background(), |ui| {
-                    let is_snapping_enabled = window_input.held_shift();
+                    let is_snapping_enabled = window_input.held_control();
 
                     let size = camera.size();
                     let scaling = if size.x < size.y {
