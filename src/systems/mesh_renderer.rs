@@ -1,7 +1,10 @@
 use std::time::Instant;
 
 use crate::{
-    components::{camera::Camera, mesh_rendering::MeshRendering, transform::Transform},
+    components::{
+        camera::Camera, mesh_rendering::MeshRendering, resource_wrapper::ResourceWrapper,
+        transform::Transform,
+    },
     material::Vertex,
     renderer::Renderer,
     utils::ThreadSafeRef,
@@ -24,12 +27,13 @@ unsafe impl Pod for CameraData {}
 
 pub fn render_meshes<VertexType>(
     query: Query<(&Transform, &ThreadSafeRef<MeshRendering<VertexType>>)>,
-    timer: Res<Instant>,
+    timer: Res<ResourceWrapper<Instant>>,
     camera: Res<Camera>,
     renderer_ref: Res<ThreadSafeRef<Renderer>>,
 ) where
     VertexType: Vertex,
 {
+    let timer = timer.data;
     let mut renderer = renderer_ref.lock();
 
     let current_time = timer.elapsed().as_secs_f32();

@@ -1,3 +1,4 @@
+use bevy_ecs::system::Resource;
 use nalgebra as na;
 use nalgebra_glm as glm;
 
@@ -65,7 +66,7 @@ impl CameraBuilder {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Resource)]
 pub struct Camera {
     projection_type: Projection,
     aspect_ratio: f32,

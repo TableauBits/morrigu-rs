@@ -2,7 +2,8 @@ use crate::{
     allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage},
     error::Error,
     texture::Texture,
-    utils::{CommandUploader, ThreadSafeRef}, vector_type::Vec4,
+    utils::{CommandUploader, ThreadSafeRef},
+    vector_type::Vec4,
 };
 
 use ash::{
@@ -14,6 +15,7 @@ use ash::{
     Entry, Instance,
 };
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::Window;
 
 use std::{
@@ -31,7 +33,7 @@ unsafe extern "system" fn vulkan_debug_callback(
     _user_data: *mut std::ffi::c_void,
 ) -> u32 {
     let callback_data_deref = *callback_data;
-    let message_id_str = (callback_data_deref.message_id_number as i32).to_string();
+    let message_id_str = callback_data_deref.message_id_number.to_string();
     let message = if callback_data_deref.p_message.is_null() {
         std::borrow::Cow::from("")
     } else {
@@ -329,8 +331,8 @@ fn create_framebuffers(
 
     let mut framebuffers = vec![];
     for swapchain_image_view in swapchain.image_views.clone() {
-        framebuffer_create_info.p_attachments =
-            [swapchain_image_view, swapchain.depth_image.view].as_ptr();
+        let attachments = [swapchain_image_view, swapchain.depth_image.view];
+        framebuffer_create_info.p_attachments = attachments.as_ptr();
         framebuffers.push(
             unsafe { device.create_framebuffer(&framebuffer_create_info, None) }
                 .expect("Failed to create framebuffer"),
@@ -351,9 +353,10 @@ impl<'a> RendererBuilder<'a> {
             .api_version(vk::make_api_version(0, 1, 2, 0));
 
         #[allow(unused_mut)]
-        let mut required_extensions = ash_window::enumerate_required_extensions(self.window_handle)
-            .expect("Failed to query extensions")
-            .to_vec();
+        let mut required_extensions =
+            ash_window::enumerate_required_extensions(self.window_handle.raw_display_handle())
+                .expect("Failed to query extensions")
+                .to_vec();
 
         #[allow(unused_assignments)]
         #[allow(unused_mut)]
@@ -783,8 +786,14 @@ impl<'a> RendererBuilder<'a> {
         let debug_messenger = self.create_debug_messenger(&entry, &instance);
 
         let surface_handle = unsafe {
-            ash_window::create_surface(&entry, &instance, &self.window_handle, None)
-                .expect("Failed to create rendering surface")
+            ash_window::create_surface(
+                &entry,
+                &instance,
+                self.window_handle.raw_display_handle(),
+                self.window_handle.raw_window_handle(),
+                None,
+            )
+            .expect("Failed to create rendering surface")
         };
         let surface_loader = Surface::new(&entry, &instance);
 

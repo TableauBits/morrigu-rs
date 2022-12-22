@@ -349,7 +349,7 @@ impl Painter {
                 .flat_map(|pixel| pixel.to_array())
                 .collect(),
             egui::ImageData::Font(image) => image
-                .srgba_pixels(1.0)
+                .srgba_pixels(None)
                 .flat_map(|pixel| pixel.to_array())
                 .collect(),
         };

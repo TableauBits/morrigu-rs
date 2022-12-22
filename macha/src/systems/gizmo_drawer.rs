@@ -2,7 +2,7 @@ use bevy_ecs::prelude::{Query, Res};
 use egui::LayerId;
 use egui_gizmo::{Gizmo, GizmoVisuals};
 use morrigu::{
-    components::{camera::Camera, transform::Transform},
+    components::{camera::Camera, resource_wrapper::ResourceWrapper, transform::Transform},
     vector_type::Mat4,
 };
 use winit_input_helper::WinitInputHelper;
@@ -13,13 +13,14 @@ pub fn draw_gizmo(
     mut query: Query<(&mut Transform, &mut SelectedEntity)>,
     camera: Res<Camera>,
     macha_options: Res<MachaGlobalOptions>,
-    egui_context: Res<egui::Context>,
-    window_input: Res<WinitInputHelper>,
+    egui_context: Res<ResourceWrapper<egui::Context>>,
+    window_input: Res<ResourceWrapper<WinitInputHelper>>,
 ) {
+    let window_input = &window_input.data;
     for (mut transform, _) in query.iter_mut() {
         egui::Area::new("Gizmo viewport")
             .fixed_pos((0.0, 0.0))
-            .show(&egui_context, |ui| {
+            .show(&egui_context.data, |ui| {
                 ui.with_layer_id(LayerId::background(), |ui| {
                     let is_snapping_enabled = window_input.held_control();
 

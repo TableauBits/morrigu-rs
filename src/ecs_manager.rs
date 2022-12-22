@@ -5,7 +5,11 @@ use bevy_ecs::{
     schedule::{Schedule, Stage},
 };
 
-use crate::{components::camera::Camera, renderer::Renderer, utils::ThreadSafeRef};
+use crate::{
+    components::{camera::Camera, resource_wrapper::ResourceWrapper},
+    renderer::Renderer,
+    utils::ThreadSafeRef,
+};
 
 pub struct ECSManager {
     pub world: World,
@@ -26,7 +30,7 @@ impl ECSManager {
         let ui_systems_schedule = bevy_ecs::schedule::Schedule::default();
 
         world.insert_resource(camera);
-        world.insert_resource(Instant::now());
+        world.insert_resource(ResourceWrapper::new(Instant::now()));
         world.insert_resource(renderer_ref);
 
         #[cfg(feature = "egui")]
@@ -90,8 +94,10 @@ impl ECSManager {
 
     #[cfg(feature = "egui")]
     pub(crate) fn run_ui_schedule(&mut self, egui_context: &egui::Context) {
-        self.world.insert_resource(egui_context.clone());
+        self.world
+            .insert_resource(ResourceWrapper::new(egui_context.clone()));
         self.ui_systems_schedule.run(&mut self.world);
-        self.world.remove_resource::<egui::Context>();
+        self.world
+            .remove_resource::<ResourceWrapper<egui::Context>>();
     }
 }

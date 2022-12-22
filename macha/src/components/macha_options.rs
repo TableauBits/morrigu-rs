@@ -1,10 +1,11 @@
-use bevy_ecs::prelude::Component;
+use bevy_ecs::{prelude::Component, system::Resource};
 
 #[derive(Component)]
 pub struct MachaEntityOptions {
     pub name: String,
 }
 
+#[derive(Resource)]
 pub struct MachaGlobalOptions {
     pub preferred_gizmo: egui_gizmo::GizmoMode,
 }

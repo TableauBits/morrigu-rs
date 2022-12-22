@@ -34,7 +34,12 @@ impl EguiIntegration {
             winit::event::Event::WindowEvent {
                 window_id: _,
                 event,
-            } => self.egui_platform_state.on_event(&self.context, event),
+            } => {
+                !self
+                    .egui_platform_state
+                    .on_event(&self.context, event)
+                    .consumed
+            }
 
             _ => false,
         }

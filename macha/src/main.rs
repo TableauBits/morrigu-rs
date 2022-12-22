@@ -17,6 +17,7 @@ use morrigu::{
     },
     components::{
         camera::{Camera, PerspectiveData},
+        resource_wrapper::ResourceWrapper,
         transform::{Axis, Transform},
     },
     shader::Shader,
@@ -123,10 +124,10 @@ impl BuildableApplicationState<()> for MachaState {
             .upload_uniform(4, shader_options)
             .expect("Failed to upload flow settings");
 
-        let mut tranform = Transform::default();
-        tranform.rotate(f32::to_radians(-90.0), Axis::X);
+        let mut transform = Transform::default();
+        transform.rotate(f32::to_radians(-90.0), Axis::X);
 
-        camera.set_focal_point(tranform.position());
+        camera.set_focal_point(transform.position());
 
         context.ecs_manager.world.insert_resource(ECSBuffer::new());
         context
@@ -134,24 +135,20 @@ impl BuildableApplicationState<()> for MachaState {
             .world
             .insert_resource(MachaGlobalOptions::new());
 
-        context
-            .ecs_manager
-            .world
-            .spawn()
-            .insert(tranform)
-            .insert(mesh_rendering_ref.clone())
-            .insert(MachaEntityOptions {
+        context.ecs_manager.world.spawn((
+            transform,
+            mesh_rendering_ref.clone(),
+            MachaEntityOptions {
                 name: "planet".to_owned(),
-            });
+            },
+        ));
 
-        context
-            .ecs_manager
-            .world
-            .spawn()
-            .insert(tranform)
-            .insert(MachaEntityOptions {
+        context.ecs_manager.world.spawn((
+            transform,
+            MachaEntityOptions {
                 name: "empty".to_owned(),
-            });
+            },
+        ));
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
             schedule.add_stage(
@@ -214,7 +211,7 @@ impl ApplicationState for MachaState {
         context
             .ecs_manager
             .world
-            .insert_resource(context.window_input_state.clone());
+            .insert_resource(ResourceWrapper::new(context.window_input_state.clone()));
         context
             .ecs_manager
             .world

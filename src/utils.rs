@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use ash::vk::{self, CommandBufferResetFlags};
-use bevy_ecs::prelude::Component;
+use bevy_ecs::{prelude::Component, system::Resource};
 
 use crate::error::Error;
 
-#[derive(Component)]
+#[derive(Component, Resource)]
 pub struct ThreadSafeRef<T>(Arc<Mutex<T>>);
 
 impl<T> ThreadSafeRef<T> {
