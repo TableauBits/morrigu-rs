@@ -28,8 +28,8 @@ ash-window = "0.12.0"
 gpu-allocator = { git = "https://github.com/Ithyx/gpu-allocator", rev = "027b89ed49f11e08facb968eea82c58cbb0d5729" }
 spirv-reflect = "0.2"
 
-nalgebra = { version = "0.31", features = ["bytemuck"] }
-nalgebra-glm = { version = "0.17", features = ["convert-bytemuck"] }
+nalgebra = { version = "0.32", features = ["bytemuck"] }
+nalgebra-glm = { version = "0.18", features = ["convert-bytemuck"] }
 
 image = "0.24"
 
