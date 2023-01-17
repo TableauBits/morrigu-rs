@@ -1,5 +1,6 @@
 pub mod allocated_types;
 pub mod application;
+pub mod compute_shader;
 pub mod error;
 pub mod material;
 pub mod mesh;
