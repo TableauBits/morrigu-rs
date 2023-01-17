@@ -52,6 +52,7 @@ fn compile_shader(entry: Result<DirEntry, io::Error>) {
     {
         "vert" => Ok(shaderc::ShaderKind::Vertex),
         "frag" => Ok(shaderc::ShaderKind::Fragment),
+        "comp" => Ok(shaderc::ShaderKind::Compute),
         _ => Err("Invalid extension"),
     }
     .expect("Failed to parse shader type");

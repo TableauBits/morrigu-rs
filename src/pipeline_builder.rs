@@ -15,7 +15,7 @@ pub(crate) struct PipelineBuilder {
 }
 
 impl PipelineBuilder {
-    pub fn build(
+    pub(crate) fn build(
         self,
         device: &ash::Device,
         render_pass: vk::RenderPass,
@@ -57,6 +57,33 @@ impl PipelineBuilder {
         match result {
             Ok(pipelines) => Ok(pipelines[0]),
             Err((_, result)) => Err(result.into()),
+        }
+    }
+}
+
+pub(crate) struct ComputePipelineBuilder {
+    stage: vk::PipelineShaderStageCreateInfo,
+    layout: vk::PipelineLayout,
+    pub(crate) cache: Option<vk::PipelineCache>,
+}
+
+impl ComputePipelineBuilder {
+    pub(crate) fn build(self, device: &ash::Device) -> Result<vk::Pipeline, Error> {
+        let pipeline_info = vk::ComputePipelineCreateInfo::builder()
+            .stage(self.stage)
+            .layout(self.layout);
+
+        let result = unsafe {
+            device.create_compute_pipelines(
+                self.cache.unwrap_or_default(),
+                std::slice::from_ref(&pipeline_info),
+                None,
+            )
+        };
+
+        match result {
+            Ok(pipelines) => Ok(pipelines[0]),
+            Err((_, error)) => Err(error.into()),
         }
     }
 }
