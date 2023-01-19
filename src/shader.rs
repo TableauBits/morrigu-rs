@@ -41,63 +41,44 @@ pub struct Shader {
 pub(crate) fn create_dsl(
     device: &Device,
     set_level: u32,
-    vertex_bindings: &[ReflectDescriptorBinding],
-    fragment_bindings: &[ReflectDescriptorBinding],
+    stage_bindings: &[(Vec<ReflectDescriptorBinding>, vk::ShaderStageFlags)],
 ) -> Result<vk::DescriptorSetLayout, Error> {
     let mut bindings_infos = vec![];
 
     let mut ubo_map = std::collections::HashMap::new();
     let mut sampler_map = std::collections::HashMap::new();
 
-    for binding_reflection in vertex_bindings {
-        if binding_reflection.set != set_level {
-            continue;
-        }
+    for (bindings, stage) in stage_bindings {
+        for binding_reflection in bindings {
+            if binding_reflection.set != set_level {
+                continue;
+            }
 
-        let binding_type = binding_type_cast(binding_reflection.descriptor_type)?;
-        let set_binding = vk::DescriptorSetLayoutBinding {
-            binding: binding_reflection.binding,
-            descriptor_type: binding_type,
-            descriptor_count: 1,
-            stage_flags: vk::ShaderStageFlags::VERTEX,
-            ..Default::default()
-        };
+            let binding_type = binding_type_cast(binding_reflection.descriptor_type)?;
+            let map = match binding_type {
+                vk::DescriptorType::UNIFORM_BUFFER => Ok(&mut ubo_map),
+                vk::DescriptorType::COMBINED_IMAGE_SAMPLER => Ok(&mut sampler_map),
+                _ => Err("Unsupported binding type in shader"),
+            }?;
 
-        let map = match binding_type {
-            vk::DescriptorType::UNIFORM_BUFFER => Ok(&mut ubo_map),
-            vk::DescriptorType::COMBINED_IMAGE_SAMPLER => Ok(&mut sampler_map),
-            _ => Err("Unsupported binding type in shader"),
-        }?;
+            match map.get(&binding_reflection.binding) {
+                None => {
+                    let set_binding = vk::DescriptorSetLayoutBinding {
+                        binding: binding_reflection.binding,
+                        descriptor_type: binding_type,
+                        descriptor_count: 1,
+                        stage_flags: *stage,
+                        ..Default::default()
+                    };
 
-        map.insert(binding_reflection.binding, set_binding);
-    }
-
-    for binding_reflection in fragment_bindings {
-        if binding_reflection.set != set_level {
-            continue;
-        }
-
-        let binding_type = binding_type_cast(binding_reflection.descriptor_type)?;
-        let map = match binding_type {
-            vk::DescriptorType::UNIFORM_BUFFER => Ok(&mut ubo_map),
-            vk::DescriptorType::COMBINED_IMAGE_SAMPLER => Ok(&mut sampler_map),
-            _ => Err("Unsupported binding type in shader"),
-        }?;
-
-        if let Some(&old_binding) = map.get(&binding_reflection.binding) {
-            let mut new_binding = old_binding;
-            new_binding.stage_flags |= vk::ShaderStageFlags::FRAGMENT;
-            map.insert(binding_reflection.binding, new_binding);
-        } else {
-            let set_binding = vk::DescriptorSetLayoutBinding {
-                binding: binding_reflection.binding,
-                descriptor_type: binding_type,
-                descriptor_count: 1,
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                ..Default::default()
-            };
-
-            map.insert(binding_reflection.binding, set_binding);
+                    map.insert(binding_reflection.binding, set_binding);
+                }
+                Some(&old_binding) => {
+                    let mut new_binding = old_binding;
+                    new_binding.stage_flags |= *stage;
+                    map.insert(binding_reflection.binding, new_binding);
+                }
+            }
         }
     }
 
@@ -113,15 +94,13 @@ pub(crate) fn create_dsl(
     Ok(unsafe { device.create_descriptor_set_layout(&dsl_create_info, None)? })
 }
 
-impl Shader {
-    fn create_shader_module(
-        device: &Device,
-        source: &[u32],
-    ) -> Result<vk::ShaderModule, vk::Result> {
-        let module_info = vk::ShaderModuleCreateInfo::builder().code(source);
+pub(crate) fn create_shader_module(
+    device: &Device,
+    source: &[u32],
+) -> Result<vk::ShaderModule, vk::Result> {
+    let module_info = vk::ShaderModuleCreateInfo::builder().code(source);
 
-        unsafe { device.create_shader_module(&module_info, None) }
-    }
+    unsafe { device.create_shader_module(&module_info, None) }
 }
 
 impl Shader {
@@ -155,8 +134,8 @@ impl Shader {
         vertex_spirv: &[u32],
         fragment_spirv: &[u32],
     ) -> Result<ThreadSafeRef<Self>, Error> {
-        let vertex_module = Self::create_shader_module(device, vertex_spirv)?;
-        let fragment_module = Self::create_shader_module(device, fragment_spirv)?;
+        let vertex_module = create_shader_module(device, vertex_spirv)?;
+        let fragment_module = create_shader_module(device, fragment_spirv)?;
 
         let vertex_reflection_module = spirv_reflect::ShaderModule::load_u32_data(vertex_spirv)?;
         let vertex_entry_point = vertex_reflection_module.enumerate_entry_points()?[0].clone();
@@ -176,14 +155,18 @@ impl Shader {
         let level_2_dsl = create_dsl(
             device,
             2,
-            &vertex_bindings_reflection,
-            &fragment_bindings_reflection,
+            &[
+                (vertex_bindings_reflection.clone(), vk::ShaderStageFlags::VERTEX),
+                (fragment_bindings_reflection.clone(), vk::ShaderStageFlags::FRAGMENT),
+            ],
         )?;
         let level_3_dsl = create_dsl(
             device,
             3,
-            &vertex_bindings_reflection,
-            &fragment_bindings_reflection,
+            &[
+                (vertex_bindings_reflection.clone(), vk::ShaderStageFlags::VERTEX),
+                (fragment_bindings_reflection.clone(), vk::ShaderStageFlags::FRAGMENT),
+            ],
         )?;
 
         let vertex_bindings = vertex_bindings_reflection
