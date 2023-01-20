@@ -184,11 +184,14 @@ impl MaterialBuilder {
         }
 
         let mut pc_shader_stages = vk::ShaderStageFlags::empty();
+        let mut size = None;
         if !shader.vertex_push_constants.is_empty() {
             pc_shader_stages |= vk::ShaderStageFlags::VERTEX;
+            size = Some(shader.vertex_push_constants[0].size);
         }
         if !shader.fragment_push_constants.is_empty() {
             pc_shader_stages |= vk::ShaderStageFlags::FRAGMENT;
+            size = Some(shader.fragment_push_constants[0].size);
         }
 
         let mut pc_ranges = vec![];
@@ -196,7 +199,7 @@ impl MaterialBuilder {
             pc_ranges = vec![vk::PushConstantRange::builder()
                 .stage_flags(pc_shader_stages)
                 .offset(0)
-                .size(std::mem::size_of::<CameraData>().try_into()?)
+                .size(size.ok_or("Invalid push constant size")?)
                 .build()]
         }
         let layouts = [

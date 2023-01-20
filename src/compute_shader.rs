@@ -2,8 +2,9 @@ use std::fs;
 use std::path::Path;
 
 use crate::error::Error;
+use crate::pipeline_builder::ComputePipelineBuilder;
 use crate::renderer::Renderer;
-use crate::shader::{create_shader_module, create_dsl};
+use crate::shader::{binding_type_cast, create_dsl, create_shader_module};
 use crate::{
     allocated_types::AllocatedBuffer, shader::BindingData, texture::Texture, utils::ThreadSafeRef,
 };
@@ -17,8 +18,7 @@ pub struct ComputeShaderBuilder {}
 pub struct ComputeShader {
     pub(crate) shader_module: vk::ShaderModule,
 
-    pub(crate) level_2_dsl: vk::DescriptorSetLayout,
-    pub(crate) level_3_dsl: vk::DescriptorSetLayout,
+    pub(crate) dsl: vk::DescriptorSetLayout,
 
     pub bindings: Vec<BindingData>,
     pub push_constants: Vec<ReflectBlockVariable>,
@@ -58,7 +58,7 @@ impl ComputeShaderBuilder {
         source_spirv: &[u32],
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<ComputeShader>, Error> {
-        let shader_module = create_shader_module(device, source_spirv);
+        let shader_module = create_shader_module(device, source_spirv)?;
 
         let reflection_module = spirv_reflect::ShaderModule::load_u32_data(source_spirv)?;
         let entry_point = reflection_module.enumerate_entry_points()?[0].clone();
@@ -67,16 +67,11 @@ impl ComputeShaderBuilder {
         let push_constants =
             reflection_module.enumerate_push_constant_blocks(Some(entry_point.name.as_str()))?;
 
-        let level_2_dsl = create_dsl(
+        let dsl = create_dsl(
             device,
-            2,
+            0,
             &[(bindings_reflection.clone(), vk::ShaderStageFlags::COMPUTE)],
-        );
-        let level_3_dsl = create_dsl(
-            device,
-            3,
-            &[(bindings_reflection.clone(), vk::ShaderStageFlags::COMPUTE)],
-        );
+        )?;
 
         let bindings = bindings_reflection
             .iter()
@@ -87,7 +82,148 @@ impl ComputeShaderBuilder {
                 size: binding.block.size,
             })
             .collect::<Vec<_>>();
-        
-        todo!();
+
+        let (ubo_count, sampled_image_count) =
+            bindings
+                .iter()
+                .fold(
+                    (0, 0),
+                    |(ubo_count, sampled_image_count), binding| match binding_type_cast(
+                        binding.descriptor_type,
+                    )
+                    .unwrap()
+                    {
+                        vk::DescriptorType::UNIFORM_BUFFER => (ubo_count + 1, sampled_image_count),
+                        vk::DescriptorType::COMBINED_IMAGE_SAMPLER => {
+                            (ubo_count, sampled_image_count + 1)
+                        }
+                        _ => (ubo_count, sampled_image_count),
+                    },
+                );
+
+        let pool_sizes = [
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count: std::cmp::max(ubo_count, 1),
+            },
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: std::cmp::max(sampled_image_count, 1),
+            },
+        ];
+        let pool_info = vk::DescriptorPoolCreateInfo::builder()
+            .max_sets(1)
+            .pool_sizes(&pool_sizes);
+        let descriptor_pool = unsafe { renderer.device.create_descriptor_pool(&pool_info, None) }?;
+
+        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::builder()
+            .descriptor_pool(descriptor_pool)
+            .set_layouts(std::slice::from_ref(&dsl));
+        let descriptor_set = unsafe {
+            renderer
+                .device
+                .allocate_descriptor_sets(&descriptor_set_alloc_info)
+        }?[0];
+
+        let mut uniform_buffers = std::collections::HashMap::new();
+        let mut sampled_images = std::collections::HashMap::new();
+
+        for binding in &bindings {
+            if binding.set != 2 {
+                continue;
+            }
+
+            match binding_type_cast(binding.descriptor_type)? {
+                vk::DescriptorType::UNIFORM_BUFFER => {
+                    let buffer = AllocatedBuffer::builder(binding.size.into())
+                        .with_usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
+                        .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
+                        .build(&renderer.device, &mut renderer.allocator())?;
+                    let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
+                        .buffer(buffer.handle)
+                        .offset(0)
+                        .range(binding.size.into());
+                    let set_write = vk::WriteDescriptorSet::builder()
+                        .dst_set(descriptor_set)
+                        .dst_binding(binding.slot)
+                        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                        .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
+
+                    unsafe {
+                        renderer
+                            .device
+                            .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
+                    };
+                    uniform_buffers.insert(binding.slot, buffer);
+                }
+                vk::DescriptorType::COMBINED_IMAGE_SAMPLER => {
+                    let texture_ref = renderer.default_texture_ref.clone();
+                    let texture = texture_ref.lock();
+
+                    let descriptor_image_info = vk::DescriptorImageInfo::builder()
+                        .sampler(texture.sampler)
+                        .image_view(texture.image.view)
+                        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+
+                    let set_write = vk::WriteDescriptorSet::builder()
+                        .dst_set(descriptor_set)
+                        .dst_binding(binding.slot)
+                        .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                        .image_info(std::slice::from_ref(&descriptor_image_info));
+
+                    unsafe {
+                        renderer
+                            .device
+                            .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
+                    };
+
+                    drop(texture);
+                    sampled_images.insert(binding.slot, texture_ref);
+                }
+                _ => (),
+            }
+        }
+
+        let pc_ranges = if push_constants.is_empty() {
+            vec![]
+        } else {
+            vec![vk::PushConstantRange::builder()
+                .stage_flags(vk::ShaderStageFlags::COMPUTE)
+                .offset(0)
+                .size(push_constants[0].size)
+                .build()]
+        };
+
+        let dsl_list = [dsl];
+        let layout_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&dsl_list)
+            .push_constant_ranges(&pc_ranges);
+        let layout = unsafe { renderer.device.create_pipeline_layout(&layout_info, None) }?;
+
+        let shader_module_entry_point = std::ffi::CString::new("main").unwrap();
+        let shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::COMPUTE)
+            .module(shader_module)
+            .name(&shader_module_entry_point);
+
+        let pipeline = ComputePipelineBuilder {
+            stage: *shader_stage,
+            layout,
+            cache: None,
+        }
+        .build(device)?;
+
+        Ok(ThreadSafeRef::new(ComputeShader {
+            shader_module,
+            dsl,
+            bindings,
+            push_constants,
+            descriptor_pool,
+            uniform_buffers,
+            sampled_images,
+            descriptor_set,
+            layout,
+            pipeline,
+        }))
     }
 }

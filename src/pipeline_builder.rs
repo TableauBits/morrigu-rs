@@ -62,8 +62,8 @@ impl PipelineBuilder {
 }
 
 pub(crate) struct ComputePipelineBuilder {
-    stage: vk::PipelineShaderStageCreateInfo,
-    layout: vk::PipelineLayout,
+    pub(crate) stage: vk::PipelineShaderStageCreateInfo,
+    pub(crate) layout: vk::PipelineLayout,
     pub(crate) cache: Option<vk::PipelineCache>,
 }
 
