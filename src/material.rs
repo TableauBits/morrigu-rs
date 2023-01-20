@@ -8,7 +8,8 @@ use crate::{
     renderer::Renderer,
     shader::{binding_type_cast, Shader},
     texture::Texture,
-    utils::ThreadSafeRef, vector_type::{Mat4, Vec4},
+    utils::ThreadSafeRef,
+    vector_type::{Mat4, Vec4},
 };
 
 pub struct VertexInputDescription {
