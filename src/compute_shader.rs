@@ -11,9 +11,12 @@ use crate::{
 
 use ash::vk;
 use ash::Device;
+use bytemuck::bytes_of;
 use spirv_reflect::types::ReflectBlockVariable;
 
-pub struct ComputeShaderBuilder {}
+pub struct ComputeShaderBuilder {
+    pub entry_point: String,
+}
 
 pub struct ComputeShader {
     pub(crate) shader_module: vk::ShaderModule,
@@ -34,26 +37,29 @@ pub struct ComputeShader {
 
 impl ComputeShaderBuilder {
     pub fn build_from_path(
+        self,
         device: &Device,
         source_path: &Path,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<ComputeShader>, Error> {
         let source_spirv = fs::read(source_path)?;
 
-        Self::build_from_spirv_u8(device, &source_spirv, renderer)
+        self.build_from_spirv_u8(device, &source_spirv, renderer)
     }
 
     pub fn build_from_spirv_u8(
+        self,
         device: &Device,
         source_spirv: &[u8],
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<ComputeShader>, Error> {
         let source_u32 = ash::util::read_spv(&mut std::io::Cursor::new(source_spirv))?;
 
-        Self::build_from_spirv_u32(device, &source_u32, renderer)
+        self.build_from_spirv_u32(device, &source_u32, renderer)
     }
 
     pub fn build_from_spirv_u32(
+        self,
         device: &Device,
         source_spirv: &[u32],
         renderer: &mut Renderer,
@@ -200,7 +206,7 @@ impl ComputeShaderBuilder {
             .push_constant_ranges(&pc_ranges);
         let layout = unsafe { renderer.device.create_pipeline_layout(&layout_info, None) }?;
 
-        let shader_module_entry_point = std::ffi::CString::new("main").unwrap();
+        let shader_module_entry_point = std::ffi::CString::new(self.entry_point).unwrap();
         let shader_stage = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::COMPUTE)
             .module(shader_module)
@@ -225,5 +231,92 @@ impl ComputeShaderBuilder {
             layout,
             pipeline,
         }))
+    }
+}
+
+impl ComputeShader {
+    pub fn upload_uniform<T: bytemuck::Pod>(
+        &mut self,
+        binding_slot: u32,
+        data: T,
+    ) -> Result<(), Error> {
+        let binding_data = self
+            .uniform_buffers
+            .get_mut(&binding_slot)
+            .ok_or_else(|| format!("no slot {} to bind to", binding_slot))?;
+
+        let allocation = binding_data.allocation.as_mut().ok_or("use after free")?;
+
+        if allocation.size() < std::mem::size_of::<T>().try_into()? {
+            return Err(format!(
+                "invalid size {} (expected {}) (make sure T is #[repr(C)]",
+                std::mem::size_of::<T>(),
+                allocation.size(),
+            )
+            .into());
+        }
+
+        let raw_data = bytes_of(&data);
+        allocation
+            .mapped_slice_mut()
+            .ok_or("failed to map memory")?[..raw_data.len()]
+            .copy_from_slice(raw_data);
+
+        Ok(())
+    }
+
+    pub fn bind_texture(
+        &mut self,
+        binding_slot: u32,
+        texture_ref: ThreadSafeRef<Texture>,
+        renderer: &mut Renderer,
+    ) -> Result<(), Error> {
+        if !self.sampled_images.contains_key(&binding_slot) {
+            return Err("Invalid binding slot".into());
+        };
+
+        let texture = texture_ref.lock();
+
+        let descriptor_image_info = vk::DescriptorImageInfo::builder()
+            .sampler(texture.sampler)
+            .image_view(texture.image.view)
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+
+        let set_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(binding_slot)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&descriptor_image_info));
+
+        unsafe {
+            renderer
+                .device
+                .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
+        };
+
+        drop(texture);
+        self.sampled_images.insert(binding_slot, texture_ref);
+
+        Ok(())
+    }
+
+    pub fn destroy(&mut self, renderer: &mut Renderer) {
+        unsafe {
+            for uniform in self.uniform_buffers.values_mut() {
+                uniform.destroy(&renderer.device, &mut renderer.allocator());
+            }
+            renderer.device.destroy_pipeline(self.pipeline, None);
+            renderer.device.destroy_pipeline_layout(self.layout, None);
+            renderer
+                .device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
+
+            renderer
+                .device
+                .destroy_descriptor_set_layout(self.dsl, None);
+            renderer
+                .device
+                .destroy_shader_module(self.shader_module, None);
+        }
     }
 }
