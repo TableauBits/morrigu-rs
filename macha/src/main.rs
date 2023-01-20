@@ -20,6 +20,7 @@ use morrigu::{
         resource_wrapper::ResourceWrapper,
         transform::{Axis, Transform},
     },
+    compute_shader::ComputeShader,
     shader::Shader,
     systems::mesh_renderer,
     texture::{Texture, TextureFormat},
@@ -170,6 +171,11 @@ impl BuildableApplicationState<()> for MachaState {
                     SystemStage::parallel().with_system(gizmo_drawer::draw_gizmo),
                 );
             });
+
+        let compute_shader = ComputeShader::builder().build_from_spirv_u8(
+            include_bytes!("../assets/gen/shaders/test/test.comp"),
+            context.renderer,
+        ).expect("Failed to create compute shader");
 
         MachaState {
             camera,

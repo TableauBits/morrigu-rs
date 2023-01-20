@@ -444,6 +444,9 @@ impl<'a> RendererBuilder<'a> {
                     let supports_graphics = device_queue_info
                         .queue_flags
                         .contains(vk::QueueFlags::GRAPHICS);
+                    let supports_compute = device_queue_info
+                        .queue_flags
+                        .contains(vk::QueueFlags::COMPUTE);
                     let is_compatible_with_surface = unsafe {
                         surface_loader.get_physical_device_surface_support(
                             raw_physical_device,
@@ -453,7 +456,10 @@ impl<'a> RendererBuilder<'a> {
                     }
                     .expect("Failed to query surface compatibility");
 
-                    if supports_required_version && supports_graphics && is_compatible_with_surface
+                    if supports_required_version
+                        && supports_graphics
+                        && supports_compute
+                        && is_compatible_with_surface
                     {
                         Some((raw_physical_device, queue_index as u32))
                     } else {

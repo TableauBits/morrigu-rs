@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+use crate::allocated_types::AllocatedImage;
 use crate::error::Error;
 use crate::pipeline_builder::ComputePipelineBuilder;
 use crate::renderer::Renderer;
@@ -36,35 +37,38 @@ pub struct ComputeShader {
 }
 
 impl ComputeShaderBuilder {
+    pub fn new() -> Self {
+        Self {
+            entry_point: String::from("main"),
+        }
+    }
+
     pub fn build_from_path(
         self,
-        device: &Device,
         source_path: &Path,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<ComputeShader>, Error> {
         let source_spirv = fs::read(source_path)?;
 
-        self.build_from_spirv_u8(device, &source_spirv, renderer)
+        self.build_from_spirv_u8(&source_spirv, renderer)
     }
 
     pub fn build_from_spirv_u8(
         self,
-        device: &Device,
         source_spirv: &[u8],
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<ComputeShader>, Error> {
         let source_u32 = ash::util::read_spv(&mut std::io::Cursor::new(source_spirv))?;
 
-        self.build_from_spirv_u32(device, &source_u32, renderer)
+        self.build_from_spirv_u32(&source_u32, renderer)
     }
 
     pub fn build_from_spirv_u32(
         self,
-        device: &Device,
         source_spirv: &[u32],
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<ComputeShader>, Error> {
-        let shader_module = create_shader_module(device, source_spirv)?;
+        let shader_module = create_shader_module(&renderer.device, source_spirv)?;
 
         let reflection_module = spirv_reflect::ShaderModule::load_u32_data(source_spirv)?;
         let entry_point = reflection_module.enumerate_entry_points()?[0].clone();
@@ -74,7 +78,7 @@ impl ComputeShaderBuilder {
             reflection_module.enumerate_push_constant_blocks(Some(entry_point.name.as_str()))?;
 
         let dsl = create_dsl(
-            device,
+            &renderer.device,
             0,
             &[(bindings_reflection.clone(), vk::ShaderStageFlags::COMPUTE)],
         )?;
@@ -186,6 +190,18 @@ impl ComputeShaderBuilder {
                     drop(texture);
                     sampled_images.insert(binding.slot, texture_ref);
                 }
+
+                vk::DescriptorType::STORAGE_IMAGE => {
+                    let descriptor_image_info = vk::DescriptorImageInfo::builder()
+                        .image_view(storage_image.view)
+                        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+
+                    let set_write = vk::WriteDescriptorSet::builder()
+                        .dst_set(descriptor_set)
+                        .dst_binding(binding.slot)
+                        .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                        .image_info(std::slice::from_ref(&descriptor_image_info));
+                }
                 _ => (),
             }
         }
@@ -217,7 +233,7 @@ impl ComputeShaderBuilder {
             layout,
             cache: None,
         }
-        .build(device)?;
+        .build(&renderer.device)?;
 
         Ok(ThreadSafeRef::new(ComputeShader {
             shader_module,
@@ -235,6 +251,18 @@ impl ComputeShaderBuilder {
 }
 
 impl ComputeShader {
+    pub fn builder() -> ComputeShaderBuilder {
+        ComputeShaderBuilder::new()
+    }
+
+    pub fn run(&self, renderer: &mut Renderer, group_shape: (u32, u32, u32)) -> Result<(), Error> {
+        renderer.immediate_command(|cmd_buffer| unsafe {
+            renderer
+                .device
+                .cmd_dispatch(*cmd_buffer, group_shape.0, group_shape.1, group_shape.2)
+        })
+    }
+
     pub fn upload_uniform<T: bytemuck::Pod>(
         &mut self,
         binding_slot: u32,

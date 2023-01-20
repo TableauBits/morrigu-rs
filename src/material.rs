@@ -3,6 +3,7 @@ use bytemuck::bytes_of;
 
 use crate::{
     allocated_types::AllocatedBuffer,
+    descriptor_resources::DescriptorResources,
     error::Error,
     pipeline_builder::PipelineBuilder,
     renderer::Renderer,
@@ -32,8 +33,7 @@ where
     VertexType: Vertex,
 {
     descriptor_pool: vk::DescriptorPool,
-    uniform_buffers: std::collections::HashMap<u32, AllocatedBuffer>,
-    sampled_images: std::collections::HashMap<u32, ThreadSafeRef<Texture>>,
+    pub descriptor_resources: DescriptorResources,
 
     pub shader_ref: ThreadSafeRef<Shader>,
 
