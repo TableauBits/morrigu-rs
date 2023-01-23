@@ -1,5 +1,6 @@
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedImage},
+    error::Error,
     shader::BindingData,
     texture::Texture,
     utils::ThreadSafeRef,
@@ -7,18 +8,18 @@ use crate::{
 
 use std::collections::HashMap;
 
-use ash::vk;
-use spirv_reflect::types::ReflectDescriptorType;
+use ash::{vk, Device};
+use spirv_reflect::types::{ReflectDescriptorBinding, ReflectDescriptorType};
 
 pub(crate) fn binding_type_cast(
     descriptor_type: ReflectDescriptorType,
 ) -> Result<vk::DescriptorType, &'static str> {
     match descriptor_type {
         ReflectDescriptorType::UniformBuffer => Ok(vk::DescriptorType::UNIFORM_BUFFER),
+        ReflectDescriptorType::StorageImage => Ok(vk::DescriptorType::STORAGE_IMAGE),
         ReflectDescriptorType::CombinedImageSampler => {
             Ok(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
         }
-        ReflectDescriptorType::StorageImage => Ok(vk::DescriptorType::STORAGE_IMAGE),
         _ => Err("Unsupported binding type in shader"),
     }
 }
@@ -30,8 +31,9 @@ pub(crate) fn create_dsl(
 ) -> Result<vk::DescriptorSetLayout, Error> {
     let mut bindings_infos = vec![];
 
-    let mut ubo_map = std::collections::HashMap::new();
-    let mut sampler_map = std::collections::HashMap::new();
+    let mut ubo_map = HashMap::new();
+    let mut images_map = HashMap::new();
+    let mut sampler_map = HashMap::new();
 
     for (bindings, stage) in stage_bindings {
         for binding_reflection in bindings {
@@ -42,6 +44,7 @@ pub(crate) fn create_dsl(
             let binding_type = binding_type_cast(binding_reflection.descriptor_type)?;
             let map = match binding_type {
                 vk::DescriptorType::UNIFORM_BUFFER => Ok(&mut ubo_map),
+                vk::DescriptorType::STORAGE_IMAGE => Ok(&mut images_map),
                 vk::DescriptorType::COMBINED_IMAGE_SAMPLER => Ok(&mut sampler_map),
                 _ => Err("Unsupported binding type in shader"),
             }?;
@@ -79,10 +82,83 @@ pub(crate) fn create_dsl(
     Ok(unsafe { device.create_descriptor_set_layout(&dsl_create_info, None)? })
 }
 
-pub(crate) fn generate_descriptors_write_form_binding(
-    binding: &BindingData,
+pub(crate) fn generate_descriptors_write_from_bindings(
+    bindings: &[BindingData],
+    descriptor_set: &vk::DescriptorSet,
+    set_constraints: Option<&[u32]>,
     resources: &DescriptorResources,
-) {
+) -> Result<Vec<vk::WriteDescriptorSet>, Error> {
+    let mut writes = vec![];
+
+    for binding in bindings {
+        if let Some(set_constraints) = set_constraints {
+            if !set_constraints.contains(&binding.set) {
+                continue;
+            }
+        }
+
+        let new_write = match binding_type_cast(binding.descriptor_type)? {
+            vk::DescriptorType::UNIFORM_BUFFER => {
+                let buffer = resources.uniform_buffers.get(&binding.slot).ok_or(format!(
+                    "Shader resource {{ set: {}, slot: {} }} was not found in the provided resources",
+                    binding.set, binding.slot
+                ))?;
+
+                let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.handle)
+                    .offset(0)
+                    .range(binding.size.into());
+
+                Ok(vk::WriteDescriptorSet::builder()
+                    .dst_set(*descriptor_set)
+                    .dst_binding(binding.slot)
+                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                    .buffer_info(std::slice::from_ref(&descriptor_buffer_info))
+                    .build())
+            }
+            vk::DescriptorType::STORAGE_IMAGE => {
+                let image = resources.storage_images.get(&binding.slot).ok_or(format!(
+                    "Shader resource {{ set: {}, slot: {} }} was not found in the provided resources",
+                    binding.set, binding.slot
+                ))?;
+
+                let descriptor_image_info = vk::DescriptorImageInfo::builder()
+                    .image_view(image.view)
+                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+
+                Ok(vk::WriteDescriptorSet::builder()
+                    .dst_set(*descriptor_set)
+                    .dst_binding(binding.slot)
+                    .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                    .image_info(std::slice::from_ref(&descriptor_image_info))
+                    .build())
+            }
+            vk::DescriptorType::COMBINED_IMAGE_SAMPLER => {
+                let texture_ref = resources.sampled_images.get(&binding.slot).ok_or(format!(
+                    "Shader resource {{ set: {}, slot: {} }} was not found in the provided resources",
+                    binding.set, binding.slot
+                ))?;
+                let texture = texture_ref.lock();
+
+                let descriptor_image_info = vk::DescriptorImageInfo::builder()
+                    .sampler(texture.sampler)
+                    .image_view(texture.image.view)
+                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+
+                Ok(vk::WriteDescriptorSet::builder()
+                    .dst_set(*descriptor_set)
+                    .dst_binding(binding.slot)
+                    .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                    .image_info(std::slice::from_ref(&descriptor_image_info))
+                    .build())
+            }
+            _ => Err("Invalid descriptor type in shader"),
+        }?;
+
+        writes.push(new_write);
+    }
+
+    Ok(writes)
 }
 
 pub struct DescriptorResources {
