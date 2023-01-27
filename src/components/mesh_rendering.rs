@@ -1,7 +1,9 @@
 use ash::vk;
 use bytemuck::bytes_of;
+use nalgebra_glm as glm;
 
 use crate::{
+    allocated_types::AllocatedBuffer,
     descriptor_resources::{generate_descriptors_write_from_bindings, DescriptorResources},
     error::Error,
     material::{Material, Vertex},
@@ -23,6 +25,17 @@ where
     pub material_ref: ThreadSafeRef<Material<VertexType>>,
 
     pub(crate) descriptor_set: vk::DescriptorSet, // level 3
+}
+
+pub fn default_ubo_bindings(renderer: &mut Renderer) -> Result<(u32, AllocatedBuffer), Error> {
+    let size: u64 = std::mem::size_of::<glm::Mat4>().try_into()?;
+    Ok((0, AllocatedBuffer::builder(size).build(renderer)?))
+}
+pub fn default_descriptor_resources(renderer: &mut Renderer) -> Result<DescriptorResources, Error> {
+    Ok(DescriptorResources {
+        uniform_buffers: [default_ubo_bindings(renderer)?].into(),
+        ..Default::default()
+    })
 }
 
 impl<VertexType> MeshRendering<VertexType>

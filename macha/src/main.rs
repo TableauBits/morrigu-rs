@@ -11,16 +11,19 @@ use components::{
 };
 use ecs_buffer::ECSBuffer;
 use morrigu::{
+    allocated_types::AllocatedBuffer,
     application::{
         ApplicationBuilder, ApplicationState, BuildableApplicationState, EguiUpdateContext, Event,
         StateContext,
     },
     components::{
         camera::{Camera, PerspectiveData},
+        mesh_rendering,
         resource_wrapper::ResourceWrapper,
         transform::{Axis, Transform},
     },
     compute_shader::ComputeShader,
+    descriptor_resources::DescriptorResources,
     shader::Shader,
     systems::mesh_renderer,
     texture::{Texture, TextureFormat},
@@ -76,7 +79,7 @@ impl BuildableApplicationState<()> for MachaState {
         .expect("Failed to create shader");
 
         let material_ref = Material::builder()
-            .build(&shader_ref, context.renderer)
+            .build(&shader_ref, DescriptorResources::empty(), context.renderer)
             .expect("Failed to create material");
 
         let mesh_ref = Vertex::load_model_from_path_ply(
@@ -106,24 +109,32 @@ impl BuildableApplicationState<()> for MachaState {
             )
             .expect("Failed to load gradient texture");
 
-        let mesh_rendering_ref = MeshRendering::new(&mesh_ref, &material_ref, context.renderer)
-            .expect("Failed to create mesh rendering");
-        mesh_rendering_ref
-            .lock()
-            .bind_texture(1, &texture_ref, context.renderer)
-            .expect("Failed to bind base texture");
-        mesh_rendering_ref
-            .lock()
-            .bind_texture(2, &flowmap_ref, context.renderer)
-            .expect("Failed to bind flowmap texture");
-        mesh_rendering_ref
-            .lock()
-            .bind_texture(3, &gradient_ref, context.renderer)
-            .expect("Failed to bind gradient texture");
-        mesh_rendering_ref
-            .lock()
-            .upload_uniform(4, shader_options)
-            .expect("Failed to upload flow settings");
+        let shader_options_size: u64 = std::mem::size_of::<Vec2>().try_into().unwrap();
+        let mesh_rendering_ref = MeshRendering::new(
+            &mesh_ref,
+            &material_ref,
+            DescriptorResources {
+                uniform_buffers: [
+                    mesh_rendering::default_ubo_bindings(context.renderer).unwrap(),
+                    (
+                        4,
+                        AllocatedBuffer::builder(shader_options_size)
+                            .build(context.renderer)
+                            .unwrap(),
+                    ),
+                ]
+                .into(),
+                sampled_images: [
+                    (1, texture_ref.clone()),
+                    (2, flowmap_ref.clone()),
+                    (3, gradient_ref.clone()),
+                ]
+                .into(),
+                ..Default::default()
+            },
+            context.renderer,
+        )
+        .expect("Failed to create mesh rendering");
 
         let mut transform = Transform::default();
         transform.rotate(f32::to_radians(-90.0), Axis::X);
@@ -172,10 +183,36 @@ impl BuildableApplicationState<()> for MachaState {
                 );
             });
 
-        let compute_shader = ComputeShader::builder().build_from_spirv_u8(
-            include_bytes!("../assets/gen/shaders/test/test.comp"),
-            context.renderer,
-        ).expect("Failed to create compute shader");
+        let input_texture = texture_ref.lock();
+        let output_compute_texture = Texture::builder()
+            .build_from_data(
+                &std::iter::repeat(u8::MAX)
+                    .take(
+                        (input_texture.dimensions[0] * input_texture.dimensions[1] * 4)
+                            .try_into()
+                            .unwrap(),
+                    )
+                    .collect::<Vec<_>>(),
+                input_texture.dimensions[0],
+                input_texture.dimensions[1],
+                context.renderer,
+            )
+            .unwrap();
+        drop(input_texture);
+        let compute_shader = ComputeShader::builder()
+            .build_from_spirv_u8(
+                include_bytes!("../assets/gen/shaders/test/test.comp"),
+                DescriptorResources {
+                    storage_images: [
+                        (0, texture_ref.lock().image.handle),
+                        (1, output_compute_texture.lock().image.handle),
+                    ]
+                    .into(),
+                    ..Default::default()
+                },
+                context.renderer,
+            )
+            .expect("Failed to create compute shader");
 
         MachaState {
             camera,

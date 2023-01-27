@@ -42,7 +42,7 @@ where
     let mut vertex_staging_buffer = AllocatedBuffer::builder(vertex_data_size)
         .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
-        .build(&renderer.device, &mut renderer.allocator())?;
+        .build(renderer)?;
 
     // We cannot cast this vertex slice using bytemuck because we don't want to enforce that a vertex types doesn't have padding.
     // Padding issues are not a problem because of the way input bindings are setup (using offsets into a struct).
@@ -67,7 +67,7 @@ where
     let vertex_buffer = AllocatedBuffer::builder(vertex_data_size)
         .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER)
         .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
-        .build(&renderer.device, &mut renderer.allocator())?;
+        .build(renderer)?;
 
     renderer.immediate_command(|cmd_buffer| {
         let copy_info = vk::BufferCopy::builder().size(vertex_data_size);
@@ -95,7 +95,7 @@ pub fn upload_index_buffer(
     let mut index_staging_buffer = AllocatedBuffer::builder(index_data_size)
         .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
-        .build(&renderer.device, &mut renderer.allocator())?;
+        .build(renderer)?;
 
     let raw_indices = cast_slice(indices);
     index_staging_buffer
@@ -111,7 +111,7 @@ pub fn upload_index_buffer(
     let index_buffer = AllocatedBuffer::builder(index_data_size)
         .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)
         .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
-        .build(&renderer.device, &mut renderer.allocator())?;
+        .build(renderer)?;
 
     renderer.immediate_command(|cmd_buffer| {
         let copy_info = vk::BufferCopy::builder().size(index_data_size);

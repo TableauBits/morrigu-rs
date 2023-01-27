@@ -707,7 +707,7 @@ impl<'a> RendererBuilder<'a> {
             .expect("Failed to allocate level 0 descriptor")[0];
         let time_buffer_size: u64 = mem::size_of::<Vec4>().try_into().unwrap();
         let time_buffer = AllocatedBufferBuilder::uniform_buffer_default(time_buffer_size)
-            .build(device, allocator)
+            .build_internal(device, allocator)
             .expect("Failed to create time buffer");
         let time_buffer_info = vk::DescriptorBufferInfo {
             buffer: time_buffer.handle,

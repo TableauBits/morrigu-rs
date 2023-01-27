@@ -169,6 +169,9 @@ pub struct DescriptorResources {
 }
 
 impl DescriptorResources {
+    /// Returns a completely empty descriptor set resource structure. This cannot be used with
+    /// graphics mesh rendering component, as it requires at least a uniform at `location = 0` for
+    /// the model matrix.
     pub fn empty() -> Self {
         Self::default()
     }
