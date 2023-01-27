@@ -2,7 +2,6 @@ use ash::vk;
 use bytemuck::bytes_of;
 
 use crate::{
-    allocated_types::AllocatedBuffer,
     descriptor_resources::{generate_descriptors_write_from_bindings, DescriptorResources},
     error::Error,
     pipeline_builder::PipelineBuilder,
@@ -84,7 +83,7 @@ impl MaterialBuilder {
             .len()
             .try_into()
             .unwrap();
-        let stored_images_count: u32 = descriptor_resources
+        let storage_image_count: u32 = descriptor_resources
             .storage_images
             .len()
             .try_into()
@@ -99,6 +98,10 @@ impl MaterialBuilder {
             vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::UNIFORM_BUFFER,
                 descriptor_count: std::cmp::max(ubo_count, 1),
+            },
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_IMAGE,
+                descriptor_count: std::cmp::max(storage_image_count, 1),
             },
             vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
@@ -246,57 +249,10 @@ where
         MaterialBuilder::new()
     }
 
-    pub fn destroy(&mut self, renderer: &mut Renderer) {
-        unsafe {
-            for uniform in self.descriptor_resources.uniform_buffers.values_mut() {
-                uniform.destroy(&renderer.device, &mut renderer.allocator());
-            }
-            for storage_image in self.descriptor_resources.storage_images.values_mut() {
-                storage_image.destroy(&mut renderer);
-            }
-
-            renderer.device.destroy_pipeline(self.pipeline, None);
-            renderer.device.destroy_pipeline_layout(self.layout, None);
-            renderer
-                .device
-                .destroy_descriptor_pool(self.descriptor_pool, None);
-        }
-    }
-
     pub fn upload_uniform<T: bytemuck::Pod>(
         &mut self,
         binding_slot: u32,
         data: T,
-    ) -> Result<(), Error> {
-        let binding_data = self
-            .descriptor_resources
-            .uniform_buffers
-            .get_mut(&binding_slot)
-            .ok_or_else(|| format!("no slot {} to bind to", binding_slot))?;
-
-        let allocation = binding_data.allocation.as_mut().ok_or("use after free")?;
-
-        if allocation.size() < std::mem::size_of::<T>().try_into()? {
-            return Err(format!(
-                "invalid size {} (expected {}) (make sure T is #[repr(C)]",
-                std::mem::size_of::<T>(),
-                allocation.size(),
-            )
-            .into());
-        }
-
-        let raw_data = bytes_of(&data);
-        allocation
-            .mapped_slice_mut()
-            .ok_or("failed to map memory")?[..raw_data.len()]
-            .copy_from_slice(raw_data);
-
-        Ok(())
-    }
-
-    pub fn upload_storage_image(
-        &mut self,
-        binding_slot: u32,
     ) -> Result<(), Error> {
         let binding_data = self
             .descriptor_resources
@@ -329,7 +285,7 @@ where
         binding_slot: u32,
         texture_ref: ThreadSafeRef<Texture>,
         renderer: &mut Renderer,
-    ) -> Result<(), Error> {
+    ) -> Result<ThreadSafeRef<Texture>, Error> {
         if !self
             .descriptor_resources
             .sampled_images
@@ -358,8 +314,27 @@ where
         };
 
         drop(texture);
-        self.descriptor_resources.sampled_images.insert(binding_slot, texture_ref);
+        Ok(self
+            .descriptor_resources
+            .sampled_images
+            .insert(binding_slot, texture_ref)
+            .unwrap())
+    }
 
-        Ok(())
+    pub fn destroy(&mut self, renderer: &mut Renderer) {
+        unsafe {
+            for uniform in self.descriptor_resources.uniform_buffers.values_mut() {
+                uniform.destroy(&renderer.device, &mut renderer.allocator());
+            }
+            for storage_image in self.descriptor_resources.storage_images.values_mut() {
+                storage_image.destroy(renderer);
+            }
+
+            renderer.device.destroy_pipeline(self.pipeline, None);
+            renderer.device.destroy_pipeline_layout(self.layout, None);
+            renderer
+                .device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
+        }
     }
 }

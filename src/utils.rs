@@ -5,7 +5,7 @@ use bevy_ecs::{prelude::Component, system::Resource};
 
 use crate::error::Error;
 
-#[derive(Component, Resource)]
+#[derive(Debug, Component, Resource)]
 pub struct ThreadSafeRef<T>(Arc<Mutex<T>>);
 
 impl<T> ThreadSafeRef<T> {

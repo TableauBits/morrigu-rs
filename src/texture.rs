@@ -140,6 +140,7 @@ impl Default for TextureBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct Texture {
     pub image: AllocatedImage,
     pub sampler: vk::Sampler,

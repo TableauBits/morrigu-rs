@@ -3,7 +3,7 @@ use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 
 use crate::{error::Error, renderer::Renderer, utils::CommandUploader};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct AllocatedBuffer {
     pub handle: vk::Buffer,
     pub(crate) allocation: Option<Allocation>,
@@ -94,7 +94,7 @@ impl AllocatedBufferBuilder {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct AllocatedImage {
     pub view: vk::ImageView,
     pub allocation: Option<Allocation>,

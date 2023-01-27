@@ -2,12 +2,11 @@ use ash::vk;
 use bytemuck::bytes_of;
 
 use crate::{
-    allocated_types::AllocatedBuffer,
+    descriptor_resources::{generate_descriptors_write_from_bindings, DescriptorResources},
     error::Error,
     material::{Material, Vertex},
     mesh::Mesh,
     renderer::Renderer,
-    shader::binding_type_cast,
     texture::Texture,
     utils::ThreadSafeRef,
 };
@@ -18,8 +17,7 @@ where
     VertexType: Vertex,
 {
     descriptor_pool: vk::DescriptorPool,
-    uniform_buffers: std::collections::HashMap<u32, AllocatedBuffer>,
-    sampled_images: std::collections::HashMap<u32, ThreadSafeRef<Texture>>,
+    descriptor_resources: DescriptorResources,
 
     pub mesh_ref: ThreadSafeRef<Mesh<VertexType>>,
     pub material_ref: ThreadSafeRef<Material<VertexType>>,
@@ -34,6 +32,7 @@ where
     pub fn new(
         mesh_ref: &ThreadSafeRef<Mesh<VertexType>>,
         material_ref: &ThreadSafeRef<Material<VertexType>>,
+        descriptor_resources: DescriptorResources,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Self>, Error> {
         let mesh_ref = ThreadSafeRef::clone(mesh_ref);
@@ -42,31 +41,31 @@ where
         let material_ref = ThreadSafeRef::clone(material_ref);
         let material = material_ref.lock();
 
-        let mut ubo_count = 0;
-        let mut sampled_image_count = 0;
-
         let material_shader = material.shader_ref.lock();
-
-        for binding in material_shader
-            .vertex_bindings
-            .iter()
-            .chain(material_shader.fragment_bindings.iter())
-        {
-            if binding.set != 3 {
-                continue;
-            }
-
-            match binding_type_cast(binding.descriptor_type)? {
-                vk::DescriptorType::UNIFORM_BUFFER => ubo_count += 1,
-                vk::DescriptorType::COMBINED_IMAGE_SAMPLER => sampled_image_count += 1,
-                _ => (),
-            }
-        }
+        let ubo_count: u32 = descriptor_resources
+            .uniform_buffers
+            .len()
+            .try_into()
+            .unwrap();
+        let storage_image_count: u32 = descriptor_resources
+            .storage_images
+            .len()
+            .try_into()
+            .unwrap();
+        let sampled_image_count: u32 = descriptor_resources
+            .sampled_images
+            .len()
+            .try_into()
+            .unwrap();
 
         let pool_sizes = [
             vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::UNIFORM_BUFFER,
                 descriptor_count: std::cmp::max(ubo_count, 1),
+            },
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_IMAGE,
+                descriptor_count: std::cmp::max(storage_image_count, 1),
             },
             vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
@@ -87,68 +86,20 @@ where
                 .allocate_descriptor_sets(&descriptor_set_alloc_info)
         }?[0];
 
-        let mut uniform_buffers = std::collections::HashMap::new();
-        let mut sampled_images = std::collections::HashMap::new();
+        let mut merged_bindings = material_shader.vertex_bindings.clone();
+        merged_bindings.extend(&material_shader.fragment_bindings);
+        let descriptor_writes = generate_descriptors_write_from_bindings(
+            &merged_bindings,
+            &descriptor_set,
+            Some(&[2]),
+            &descriptor_resources,
+        )?;
 
-        for binding in material_shader
-            .vertex_bindings
-            .iter()
-            .chain(material_shader.fragment_bindings.iter())
-        {
-            if binding.set != 3 {
-                continue;
-            }
-
-            match binding_type_cast(binding.descriptor_type)? {
-                vk::DescriptorType::UNIFORM_BUFFER => {
-                    let buffer = AllocatedBuffer::builder(binding.size.into())
-                        .with_usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
-                        .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
-                        .build(&renderer.device, &mut renderer.allocator())?;
-                    let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
-                        .buffer(buffer.handle)
-                        .offset(0)
-                        .range(binding.size.into());
-                    let set_write = vk::WriteDescriptorSet::builder()
-                        .dst_set(descriptor_set)
-                        .dst_binding(binding.slot)
-                        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                        .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
-
-                    unsafe {
-                        renderer
-                            .device
-                            .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
-                    };
-                    uniform_buffers.insert(binding.slot, buffer);
-                }
-                vk::DescriptorType::COMBINED_IMAGE_SAMPLER => {
-                    let texture_ref = renderer.default_texture_ref.clone();
-                    let texture = texture_ref.lock();
-
-                    let descriptor_image_info = vk::DescriptorImageInfo::builder()
-                        .sampler(texture.sampler)
-                        .image_view(texture.image.view)
-                        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
-                    let set_write = vk::WriteDescriptorSet::builder()
-                        .dst_set(descriptor_set)
-                        .dst_binding(binding.slot)
-                        .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                        .image_info(std::slice::from_ref(&descriptor_image_info));
-
-                    unsafe {
-                        renderer
-                            .device
-                            .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
-                    };
-
-                    drop(texture);
-
-                    sampled_images.insert(binding.slot, texture_ref);
-                }
-                _ => (),
-            }
-        }
+        unsafe {
+            renderer
+                .device
+                .update_descriptor_sets(&descriptor_writes, &[])
+        };
 
         drop(material_shader);
         drop(material);
@@ -156,8 +107,7 @@ where
 
         Ok(ThreadSafeRef::new(Self {
             descriptor_pool,
-            uniform_buffers,
-            sampled_images,
+            descriptor_resources,
             mesh_ref,
             material_ref,
             descriptor_set,
@@ -170,9 +120,11 @@ where
         data: T,
     ) -> Result<(), Error> {
         let binding_data = self
+            .descriptor_resources
             .uniform_buffers
             .get_mut(&binding_slot)
             .ok_or_else(|| format!("no slot {} to bind to", binding_slot))?;
+
         let allocation = binding_data.allocation.as_mut().ok_or("use after free")?;
 
         if allocation.size() < std::mem::size_of::<T>().try_into()? {
@@ -199,7 +151,11 @@ where
         texture_ref: &ThreadSafeRef<Texture>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Texture>, Error> {
-        if !self.sampled_images.contains_key(&binding_slot) {
+        if !self
+            .descriptor_resources
+            .sampled_images
+            .contains_key(&binding_slot)
+        {
             return Err("Invalid binding slot".into());
         };
 
@@ -226,6 +182,7 @@ where
         drop(texture);
 
         Ok(self
+            .descriptor_resources
             .sampled_images
             .insert(binding_slot, texture_ref)
             .unwrap())
@@ -233,8 +190,11 @@ where
 
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         unsafe {
-            for uniform in self.uniform_buffers.values_mut() {
+            for uniform in self.descriptor_resources.uniform_buffers.values_mut() {
                 uniform.destroy(&renderer.device, &mut renderer.allocator());
+            }
+            for storage_image in self.descriptor_resources.storage_images.values_mut() {
+                storage_image.destroy(renderer);
             }
 
             renderer

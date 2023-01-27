@@ -161,8 +161,15 @@ pub(crate) fn generate_descriptors_write_from_bindings(
     Ok(writes)
 }
 
+#[derive(Debug, Default)]
 pub struct DescriptorResources {
     pub uniform_buffers: HashMap<u32, AllocatedBuffer>,
     pub storage_images: HashMap<u32, AllocatedImage>,
     pub sampled_images: HashMap<u32, ThreadSafeRef<Texture>>,
+}
+
+impl DescriptorResources {
+    pub fn empty() -> Self {
+        Self::default()
+    }
 }

@@ -1,7 +1,7 @@
-use crate::{error::Error, utils::ThreadSafeRef};
+use crate::{descriptor_resources::create_dsl, error::Error, utils::ThreadSafeRef};
 
 use ash::{vk, Device};
-use spirv_reflect::types::{ReflectBlockVariable, ReflectDescriptorBinding, ReflectDescriptorType};
+use spirv_reflect::types::{ReflectBlockVariable, ReflectDescriptorType};
 
 use std::{fs, path::Path};
 

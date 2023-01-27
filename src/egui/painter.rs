@@ -1,5 +1,6 @@
 use crate::{
     components::mesh_rendering::MeshRendering,
+    descriptor_resources::DescriptorResources,
     error::Error,
     material::{Material, MaterialBuilder, Vertex, VertexInputDescription},
     mesh::{upload_mesh_data, Mesh, UploadResult},
@@ -104,7 +105,8 @@ impl Painter {
             include_bytes!("shaders/gen/egui.frag"),
             &renderer.device,
         )?;
-        let material = MaterialBuilder::new().build(&shader, renderer)?;
+        let material =
+            MaterialBuilder::new().build(&shader, DescriptorResources::empty(), renderer)?;
 
         Ok(Self {
             max_texture_size,
@@ -205,8 +207,16 @@ impl Painter {
         let texture = texture.unwrap();
         let push_constants = Vec2::new(width_in_points, height_in_points);
 
-        let mesh_rendering_ref = MeshRendering::new(&mesh_ref, &self.material, renderer)
-            .expect("Failed to create mesh rendering for egui mesh");
+        let mesh_rendering_ref = MeshRendering::new(
+            &mesh_ref,
+            &self.material,
+            DescriptorResources {
+                sampled_images: [(1, texture.handle.clone())].into(),
+                ..Default::default()
+            },
+            renderer,
+        )
+        .expect("Failed to create mesh rendering for egui mesh");
         let mut mesh_rendering = mesh_rendering_ref.lock();
         mesh_rendering
             .bind_texture(1, &texture.handle, renderer)
