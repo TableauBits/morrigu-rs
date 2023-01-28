@@ -1,7 +1,7 @@
 use ash::vk;
-use bytemuck::bytes_of;
 
 use crate::{
+    allocated_types::{AllocatedBuffer, AllocatedImage},
     descriptor_resources::{generate_descriptors_write_from_bindings, DescriptorResources},
     error::Error,
     pipeline_builder::PipelineBuilder,
@@ -249,35 +249,69 @@ where
         MaterialBuilder::new()
     }
 
-    pub fn upload_uniform<T: bytemuck::Pod>(
+    pub fn bind_uniform<T: bytemuck::Pod>(
         &mut self,
         binding_slot: u32,
-        data: T,
-    ) -> Result<(), Error> {
-        let binding_data = self
-            .descriptor_resources
-            .uniform_buffers
-            .get_mut(&binding_slot)
-            .ok_or_else(|| format!("no slot {} to bind to", binding_slot))?;
+        buffer_ref: ThreadSafeRef<AllocatedBuffer>,
+        renderer: &mut Renderer,
+    ) -> Result<ThreadSafeRef<AllocatedBuffer>, Error> {
+        let Some(old_buffer) = self.descriptor_resources.uniform_buffers.insert(binding_slot, buffer_ref.clone()) else {
+            return Err("Invalid binding slot. Make sure you specify all descriptor resources when initializing this resource.".into());
+        };
 
-        let allocation = binding_data.allocation.as_mut().ok_or("use after free")?;
+        let buffer = buffer_ref.lock();
 
-        if allocation.size() < std::mem::size_of::<T>().try_into()? {
-            return Err(format!(
-                "invalid size {} (expected {}) (make sure T is #[repr(C)]",
-                std::mem::size_of::<T>(),
-                allocation.size(),
-            )
-            .into());
-        }
+        let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
+            .buffer(buffer.handle)
+            .offset(0)
+            .range(buffer.allocation.as_ref().unwrap().size());
 
-        let raw_data = bytes_of(&data);
-        allocation
-            .mapped_slice_mut()
-            .ok_or("failed to map memory")?[..raw_data.len()]
-            .copy_from_slice(raw_data);
+        let set_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(binding_slot)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(std::slice::from_ref(&descriptor_buffer_info))
+            .build();
 
-        Ok(())
+        unsafe {
+            renderer
+                .device
+                .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
+        };
+
+        Ok(old_buffer)
+    }
+
+    pub fn bind_storage_image<T: bytemuck::Pod>(
+        &mut self,
+        binding_slot: u32,
+        image_ref: ThreadSafeRef<AllocatedImage>,
+        renderer: &mut Renderer,
+    ) -> Result<ThreadSafeRef<AllocatedImage>, Error> {
+        let Some(old_image) = self.descriptor_resources.storage_images.insert(binding_slot, image_ref.clone()) else {
+            return Err("Invalid binding slot. Make sure you specify all descriptor resources when initializing this resource.".into());
+        };
+
+        let image = image_ref.lock();
+
+        let descriptor_image_info = vk::DescriptorImageInfo::builder()
+            .image_view(image.view)
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+
+        let set_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(binding_slot)
+            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+            .image_info(std::slice::from_ref(&descriptor_image_info))
+            .build();
+
+        unsafe {
+            renderer
+                .device
+                .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
+        };
+
+        Ok(old_image)
     }
 
     pub fn bind_texture(
@@ -286,12 +320,8 @@ where
         texture_ref: ThreadSafeRef<Texture>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Texture>, Error> {
-        if !self
-            .descriptor_resources
-            .sampled_images
-            .contains_key(&binding_slot)
-        {
-            return Err("Invalid binding slot".into());
+        let Some(old_texture) = self.descriptor_resources.sampled_images.insert(binding_slot, texture_ref.clone()) else {
+            return Err("Invalid binding slot. Make sure you specify all descriptor resources when initializing this resource.".into());
         };
 
         let texture = texture_ref.lock();
@@ -313,23 +343,11 @@ where
                 .update_descriptor_sets(std::slice::from_ref(&set_write), &[])
         };
 
-        drop(texture);
-        Ok(self
-            .descriptor_resources
-            .sampled_images
-            .insert(binding_slot, texture_ref)
-            .unwrap())
+        Ok(old_texture)
     }
 
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         unsafe {
-            for uniform in self.descriptor_resources.uniform_buffers.values_mut() {
-                uniform.destroy(&renderer.device, &mut renderer.allocator());
-            }
-            for storage_image in self.descriptor_resources.storage_images.values_mut() {
-                storage_image.destroy(renderer);
-            }
-
             renderer.device.destroy_pipeline(self.pipeline, None);
             renderer.device.destroy_pipeline_layout(self.layout, None);
             renderer

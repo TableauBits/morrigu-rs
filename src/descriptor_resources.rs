@@ -99,10 +99,11 @@ pub(crate) fn generate_descriptors_write_from_bindings(
 
         let new_write = match binding_type_cast(binding.descriptor_type)? {
             vk::DescriptorType::UNIFORM_BUFFER => {
-                let buffer = resources.uniform_buffers.get(&binding.slot).ok_or(format!(
+                let buffer_ref = resources.uniform_buffers.get(&binding.slot).ok_or(format!(
                     "Shader resource {{ set: {}, slot: {} }} was not found in the provided resources",
                     binding.set, binding.slot
                 ))?;
+                let buffer = buffer_ref.lock();
 
                 let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
                     .buffer(buffer.handle)
@@ -117,10 +118,11 @@ pub(crate) fn generate_descriptors_write_from_bindings(
                     .build())
             }
             vk::DescriptorType::STORAGE_IMAGE => {
-                let image = resources.storage_images.get(&binding.slot).ok_or(format!(
+                let image_ref = resources.storage_images.get(&binding.slot).ok_or(format!(
                     "Shader resource {{ set: {}, slot: {} }} was not found in the provided resources",
                     binding.set, binding.slot
                 ))?;
+                let image = image_ref.lock();
 
                 let descriptor_image_info = vk::DescriptorImageInfo::builder()
                     .image_view(image.view)
@@ -163,8 +165,8 @@ pub(crate) fn generate_descriptors_write_from_bindings(
 
 #[derive(Debug, Default)]
 pub struct DescriptorResources {
-    pub uniform_buffers: HashMap<u32, AllocatedBuffer>,
-    pub storage_images: HashMap<u32, AllocatedImage>,
+    pub uniform_buffers: HashMap<u32, ThreadSafeRef<AllocatedBuffer>>,
+    pub storage_images: HashMap<u32, ThreadSafeRef<AllocatedImage>>,
     pub sampled_images: HashMap<u32, ThreadSafeRef<Texture>>,
 }
 

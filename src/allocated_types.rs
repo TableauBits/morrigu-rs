@@ -1,4 +1,5 @@
 use ash::vk;
+use bytemuck::bytes_of;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
 
 use crate::{error::Error, renderer::Renderer, utils::CommandUploader};
@@ -13,6 +14,27 @@ impl AllocatedBuffer {
     /// This defaults to a uniform buffer usage
     pub fn builder(size: u64) -> AllocatedBufferBuilder {
         AllocatedBufferBuilder::default(size)
+    }
+
+    pub fn upload_data<T: bytemuck::Pod>(&mut self, data: T) -> Result<(), Error> {
+        let allocation = self.allocation.as_mut().ok_or("use after free")?;
+
+        if allocation.size() < std::mem::size_of::<T>().try_into()? {
+            return Err(format!(
+                "invalid size {} (expected {}) (make sure T is #[repr(C)]",
+                std::mem::size_of::<T>(),
+                allocation.size(),
+            )
+            .into());
+        }
+
+        let raw_data = bytes_of(&data);
+        allocation
+            .mapped_slice_mut()
+            .ok_or("failed to map memory")?[..raw_data.len()]
+            .copy_from_slice(raw_data);
+
+        Ok(())
     }
 
     pub fn destroy(&mut self, device: &ash::Device, allocator: &mut Allocator) {
@@ -65,6 +87,18 @@ impl AllocatedBufferBuilder {
 
     pub fn build(self, renderer: &mut Renderer) -> Result<AllocatedBuffer, Error> {
         self.build_internal(&renderer.device, &mut renderer.allocator())
+    }
+
+    pub fn build_with_data<T: bytemuck::Pod>(
+        self,
+        data: T,
+        renderer: &mut Renderer,
+    ) -> Result<AllocatedBuffer, Error> {
+        let buffer = self.build(renderer)?;
+
+        buffer.upload_data(data)?;
+
+        Ok(buffer)
     }
 
     pub(crate) fn build_internal(
