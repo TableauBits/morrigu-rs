@@ -125,7 +125,7 @@ impl TextureBuilder {
         let sampler = unsafe { device.create_sampler(&sampler_info, None) }?;
 
         Ok(ThreadSafeRef::new(Texture {
-            image,
+            image_ref: ThreadSafeRef::new(image),
             sampler,
             path: None,
             dimensions: [width, height],
@@ -142,7 +142,7 @@ impl Default for TextureBuilder {
 
 #[derive(Debug)]
 pub struct Texture {
-    pub image: AllocatedImage,
+    pub image_ref: ThreadSafeRef<AllocatedImage>,
     pub sampler: vk::Sampler,
 
     pub path: Option<String>,
@@ -165,6 +165,8 @@ impl Texture {
         .build_uninitialized(&renderer.device, &mut renderer.allocator())?;
 
         renderer.immediate_command(|cmd_buffer| {
+            let image = self.image_ref.lock();
+
             let range = vk::ImageSubresourceRange::builder()
                 .aspect_mask(vk::ImageAspectFlags::COLOR)
                 .base_mip_level(0)
@@ -176,7 +178,7 @@ impl Texture {
                 .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
                 .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                 .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                .image(self.image.handle)
+                .image(image.handle)
                 .subresource_range(*range);
             let transfer_dst_barrier = vk::ImageMemoryBarrier::builder()
                 .src_access_mask(vk::AccessFlags::NONE)
@@ -210,22 +212,24 @@ impl Texture {
                     depth: 1,
                 });
             unsafe {
+                let image = self.image_ref.lock();
                 renderer.device.cmd_copy_image(
                     *cmd_buffer,
-                    self.image.handle,
+                    image.handle,
                     vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                     new_image.handle,
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     std::slice::from_ref(&copy_region),
                 )
             };
+            let image = self.image_ref.lock();
 
             let shader_read_src_barrier = vk::ImageMemoryBarrier::builder()
                 .src_access_mask(vk::AccessFlags::TRANSFER_READ)
                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
                 .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                 .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                .image(self.image.handle)
+                .image(image.handle)
                 .subresource_range(*range);
             let shader_read_dst_barrier = vk::ImageMemoryBarrier::builder()
                 .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
@@ -256,7 +260,7 @@ impl Texture {
         let sampler = unsafe { renderer.device.create_sampler(&sampler_info, None) }?;
 
         Ok(Self {
-            image: new_image,
+            image_ref: ThreadSafeRef::new(new_image),
             sampler,
             path: self.path.clone(),
             dimensions: self.dimensions,
@@ -265,7 +269,7 @@ impl Texture {
     }
 
     pub fn upload_data(&mut self, data: &[u8], renderer: &mut Renderer) -> Result<(), Error> {
-        self.image.upload_data(
+        self.image_ref.lock().upload_data(
             data,
             &renderer.device,
             renderer.graphics_queue.handle,
@@ -285,6 +289,6 @@ impl Texture {
     ) {
         unsafe { device.destroy_sampler(self.sampler, None) };
 
-        self.image.destroy_internal(device, allocator);
+        self.image_ref.lock().destroy_internal(device, allocator);
     }
 }

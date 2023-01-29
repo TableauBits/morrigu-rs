@@ -282,6 +282,19 @@ where
         Ok(old_buffer)
     }
 
+    pub fn update_uniform<T: bytemuck::Pod>(
+        &mut self,
+        binding_slot: u32,
+        data: T,
+    ) -> Result<(), Error> {
+        self.descriptor_resources
+            .uniform_buffers
+            .get(&binding_slot)
+            .ok_or("Invalid binding slot")?
+            .lock()
+            .upload_data(data)
+    }
+
     pub fn bind_storage_image<T: bytemuck::Pod>(
         &mut self,
         binding_slot: u32,
@@ -328,7 +341,7 @@ where
 
         let descriptor_image_info = vk::DescriptorImageInfo::builder()
             .sampler(texture.sampler)
-            .image_view(texture.image.view)
+            .image_view(texture.image_ref.lock().view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
 
         let set_write = vk::WriteDescriptorSet::builder()

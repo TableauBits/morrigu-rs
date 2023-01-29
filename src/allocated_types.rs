@@ -94,7 +94,7 @@ impl AllocatedBufferBuilder {
         data: T,
         renderer: &mut Renderer,
     ) -> Result<AllocatedBuffer, Error> {
-        let buffer = self.build(renderer)?;
+        let mut buffer = self.build(renderer)?;
 
         buffer.upload_data(data)?;
 

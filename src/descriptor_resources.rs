@@ -144,7 +144,7 @@ pub(crate) fn generate_descriptors_write_from_bindings(
 
                 let descriptor_image_info = vk::DescriptorImageInfo::builder()
                     .sampler(texture.sampler)
-                    .image_view(texture.image.view)
+                    .image_view(texture.image_ref.lock().view)
                     .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
 
                 Ok(vk::WriteDescriptorSet::builder()

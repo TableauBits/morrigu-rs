@@ -118,9 +118,11 @@ impl BuildableApplicationState<()> for MachaState {
                     mesh_rendering::default_ubo_bindings(context.renderer).unwrap(),
                     (
                         4,
-                        AllocatedBuffer::builder(shader_options_size)
-                            .build(context.renderer)
-                            .unwrap(),
+                        ThreadSafeRef::new(
+                            AllocatedBuffer::builder(shader_options_size)
+                                .build(context.renderer)
+                                .unwrap(),
+                        ),
                     ),
                 ]
                 .into(),
@@ -183,6 +185,7 @@ impl BuildableApplicationState<()> for MachaState {
                 );
             });
 
+        /*
         let input_texture = texture_ref.lock();
         let output_compute_texture = Texture::builder()
             .build_from_data(
@@ -204,8 +207,8 @@ impl BuildableApplicationState<()> for MachaState {
                 include_bytes!("../assets/gen/shaders/test/test.comp"),
                 DescriptorResources {
                     storage_images: [
-                        (0, texture_ref.lock().image.handle),
-                        (1, output_compute_texture.lock().image.handle),
+                        (0, texture_ref.lock().image_ref.clone()),
+                        (1, output_compute_texture.lock().image_ref.clone()),
                     ]
                     .into(),
                     ..Default::default()
@@ -213,6 +216,7 @@ impl BuildableApplicationState<()> for MachaState {
                 context.renderer,
             )
             .expect("Failed to create compute shader");
+        */
 
         MachaState {
             camera,
@@ -283,7 +287,7 @@ impl ApplicationState for MachaState {
             if ui.button("Apply changes").clicked() {
                 self.mesh_rendering_ref
                     .lock()
-                    .upload_uniform(4, self.shader_options)
+                    .update_uniform(4, self.shader_options)
                     .expect("Failed to upload flow settings");
             }
         });

@@ -219,7 +219,7 @@ impl Painter {
         .expect("Failed to create mesh rendering for egui mesh");
         let mut mesh_rendering = mesh_rendering_ref.lock();
         mesh_rendering
-            .bind_texture(1, &texture.handle, renderer)
+            .bind_texture(1, texture.handle.clone(), renderer)
             .expect("Texture binding for Egui should succeed");
 
         let device = &renderer.device;
@@ -410,6 +410,9 @@ impl Painter {
                         depth: 1,
                     });
 
+                let texture_image = texture.image_ref.lock();
+                let original_texture_image = original_texture.image_ref.lock();
+
                 let range = vk::ImageSubresourceRange::builder()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
                     .base_mip_level(0)
@@ -421,14 +424,14 @@ impl Painter {
                     .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
                     .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                     .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                    .image(texture.image.handle)
+                    .image(texture_image.handle)
                     .subresource_range(*range);
                 let transfer_dst_barrier = vk::ImageMemoryBarrier::builder()
                     .src_access_mask(vk::AccessFlags::NONE)
                     .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                     .old_layout(vk::ImageLayout::UNDEFINED)
                     .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .image(original_texture.image.handle)
+                    .image(original_texture_image.handle)
                     .subresource_range(*range);
 
                 let shader_read_src_barrier = vk::ImageMemoryBarrier::builder()
@@ -436,14 +439,14 @@ impl Painter {
                     .dst_access_mask(vk::AccessFlags::SHADER_READ)
                     .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                     .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .image(texture.image.handle)
+                    .image(texture_image.handle)
                     .subresource_range(*range);
                 let shader_read_dst_barrier = vk::ImageMemoryBarrier::builder()
                     .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                     .dst_access_mask(vk::AccessFlags::SHADER_READ)
                     .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                     .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .image(original_texture.image.handle)
+                    .image(original_texture_image.handle)
                     .subresource_range(*range);
 
                 renderer
@@ -460,9 +463,9 @@ impl Painter {
                             );
                             renderer.device.cmd_copy_image(
                                 *cmd_buffer,
-                                texture.image.handle,
+                                texture_image.handle,
                                 vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                                original_texture.image.handle,
+                                original_texture_image.handle,
                                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                                 std::slice::from_ref(&copy_region),
                             );
@@ -480,6 +483,7 @@ impl Painter {
                     })
                     .expect("Failed to update Egui image");
 
+                drop(texture_image);
                 texture.destroy(renderer);
             }
             None => {
