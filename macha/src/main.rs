@@ -120,7 +120,7 @@ impl BuildableApplicationState<()> for MachaState {
                         4,
                         ThreadSafeRef::new(
                             AllocatedBuffer::builder(shader_options_size)
-                                .build(context.renderer)
+                                .build_with_data(shader_options, context.renderer)
                                 .unwrap(),
                         ),
                     ),
@@ -362,6 +362,24 @@ impl ApplicationState for MachaState {
         {
             texture.lock().destroy(context.renderer);
         }
+
+        self.mesh_rendering_ref
+            .lock()
+            .descriptor_resources
+            .uniform_buffers
+            .get(&0)
+            .unwrap()
+            .lock()
+            .destroy(&context.renderer.device, &mut context.renderer.allocator());
+
+        self.mesh_rendering_ref
+            .lock()
+            .descriptor_resources
+            .uniform_buffers
+            .get(&4)
+            .unwrap()
+            .lock()
+            .destroy(&context.renderer.device, &mut context.renderer.allocator());
 
         self.gradient_ref.lock().destroy(context.renderer);
         self.flowmap_ref.lock().destroy(context.renderer);

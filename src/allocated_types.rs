@@ -293,8 +293,7 @@ impl<'a> AllocatedImageBuilder<'a> {
             .usage(
                 vk::ImageUsageFlags::TRANSFER_SRC
                     | vk::ImageUsageFlags::TRANSFER_DST
-                    | vk::ImageUsageFlags::SAMPLED
-                    | vk::ImageUsageFlags::STORAGE,
+                    | vk::ImageUsageFlags::SAMPLED,
             )
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
@@ -313,8 +312,35 @@ impl<'a> AllocatedImageBuilder<'a> {
         self
     }
 
-    pub fn storage_image_default(self, format: vk::Format) -> Self {
-        self.texture_default(format)
+    pub fn storage_image_default(mut self, format: vk::Format) -> Self {
+        self.image_create_info_builder = self
+            .image_create_info_builder
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(format)
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(
+                vk::ImageUsageFlags::TRANSFER_SRC
+                    | vk::ImageUsageFlags::TRANSFER_DST
+                    | vk::ImageUsageFlags::STORAGE,
+            )
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        self.image_view_create_info_builder = self
+            .image_view_create_info_builder
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(format)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            });
+
+        self
     }
 
     pub fn build(

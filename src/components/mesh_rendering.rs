@@ -3,7 +3,7 @@ use nalgebra_glm as glm;
 
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedImage},
-    descriptor_resources::{generate_descriptors_write_from_bindings, DescriptorResources},
+    descriptor_resources::{update_descriptors_set_from_bindings, DescriptorResources},
     error::Error,
     material::{Material, Vertex},
     mesh::Mesh,
@@ -105,18 +105,13 @@ where
 
         let mut merged_bindings = material_shader.vertex_bindings.clone();
         merged_bindings.extend(&material_shader.fragment_bindings);
-        let descriptor_writes = generate_descriptors_write_from_bindings(
+        update_descriptors_set_from_bindings(
             &merged_bindings,
             &descriptor_set,
-            Some(&[2]),
+            Some(&[3]),
             &descriptor_resources,
+            renderer,
         )?;
-
-        unsafe {
-            renderer
-                .device
-                .update_descriptor_sets(&descriptor_writes, &[])
-        };
 
         drop(material_shader);
         drop(material);
@@ -167,9 +162,14 @@ where
     pub fn update_uniform<T: bytemuck::Pod>(
         &mut self,
         binding_slot: u32,
-        data: T
+        data: T,
     ) -> Result<(), Error> {
-        self.descriptor_resources.uniform_buffers.get(&binding_slot).ok_or("Invalid binding slot")?.lock().upload_data(data)
+        self.descriptor_resources
+            .uniform_buffers
+            .get(&binding_slot)
+            .ok_or("Invalid binding slot")?
+            .lock()
+            .upload_data(data)
     }
 
     pub fn bind_storage_image<T: bytemuck::Pod>(

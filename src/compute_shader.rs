@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::allocated_types::{AllocatedBuffer, AllocatedImage};
 use crate::descriptor_resources::{
-    create_dsl, generate_descriptors_write_from_bindings, DescriptorResources,
+    create_dsl, update_descriptors_set_from_bindings, DescriptorResources,
 };
 use crate::error::Error;
 use crate::pipeline_builder::ComputePipelineBuilder;
@@ -139,18 +139,13 @@ impl ComputeShaderBuilder {
                 .allocate_descriptor_sets(&descriptor_set_alloc_info)
         }?[0];
 
-        let descriptor_writes = generate_descriptors_write_from_bindings(
+        update_descriptors_set_from_bindings(
             &bindings,
             &descriptor_set,
             Some(&[2]),
             &descriptor_resources,
+            renderer,
         )?;
-
-        unsafe {
-            renderer
-                .device
-                .update_descriptor_sets(&descriptor_writes, &[])
-        };
 
         let pc_ranges = if push_constants.is_empty() {
             vec![]

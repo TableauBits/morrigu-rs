@@ -1,6 +1,7 @@
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedImage},
     error::Error,
+    renderer::Renderer,
     shader::BindingData,
     texture::Texture,
     utils::ThreadSafeRef,
@@ -82,14 +83,13 @@ pub(crate) fn create_dsl(
     Ok(unsafe { device.create_descriptor_set_layout(&dsl_create_info, None)? })
 }
 
-pub(crate) fn generate_descriptors_write_from_bindings(
+pub(crate) fn update_descriptors_set_from_bindings(
     bindings: &[BindingData],
     descriptor_set: &vk::DescriptorSet,
     set_constraints: Option<&[u32]>,
     resources: &DescriptorResources,
-) -> Result<Vec<vk::WriteDescriptorSet>, Error> {
-    let mut writes = vec![];
-
+    renderer: &mut Renderer,
+) -> Result<(), Error> {
     for binding in bindings {
         if let Some(set_constraints) = set_constraints {
             if !set_constraints.contains(&binding.set) {
@@ -97,7 +97,7 @@ pub(crate) fn generate_descriptors_write_from_bindings(
             }
         }
 
-        let new_write = match binding_type_cast(binding.descriptor_type)? {
+        match binding_type_cast(binding.descriptor_type)? {
             vk::DescriptorType::UNIFORM_BUFFER => {
                 let buffer_ref = resources.uniform_buffers.get(&binding.slot).ok_or(format!(
                     "Shader resource {{ set: {}, slot: {} }} was not found in the provided resources",
@@ -108,14 +108,15 @@ pub(crate) fn generate_descriptors_write_from_bindings(
                 let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
                     .buffer(buffer.handle)
                     .offset(0)
-                    .range(binding.size.into());
+                    .range(buffer.allocation.as_ref().unwrap().size());
 
-                Ok(vk::WriteDescriptorSet::builder()
+                let set_write = vk::WriteDescriptorSet::builder()
                     .dst_set(*descriptor_set)
                     .dst_binding(binding.slot)
                     .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                    .buffer_info(std::slice::from_ref(&descriptor_buffer_info))
-                    .build())
+                    .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
+
+                unsafe { renderer.device.update_descriptor_sets(&[*set_write], &[]) };
             }
             vk::DescriptorType::STORAGE_IMAGE => {
                 let image_ref = resources.storage_images.get(&binding.slot).ok_or(format!(
@@ -128,12 +129,13 @@ pub(crate) fn generate_descriptors_write_from_bindings(
                     .image_view(image.view)
                     .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
 
-                Ok(vk::WriteDescriptorSet::builder()
+                let set_write = vk::WriteDescriptorSet::builder()
                     .dst_set(*descriptor_set)
                     .dst_binding(binding.slot)
                     .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                    .image_info(std::slice::from_ref(&descriptor_image_info))
-                    .build())
+                    .image_info(std::slice::from_ref(&descriptor_image_info));
+
+                unsafe { renderer.device.update_descriptor_sets(&[*set_write], &[]) };
             }
             vk::DescriptorType::COMBINED_IMAGE_SAMPLER => {
                 let texture_ref = resources.sampled_images.get(&binding.slot).ok_or(format!(
@@ -147,20 +149,19 @@ pub(crate) fn generate_descriptors_write_from_bindings(
                     .image_view(texture.image_ref.lock().view)
                     .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
 
-                Ok(vk::WriteDescriptorSet::builder()
+                let set_write = vk::WriteDescriptorSet::builder()
                     .dst_set(*descriptor_set)
                     .dst_binding(binding.slot)
                     .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                    .image_info(std::slice::from_ref(&descriptor_image_info))
-                    .build())
-            }
-            _ => Err("Invalid descriptor type in shader"),
-        }?;
+                    .image_info(std::slice::from_ref(&descriptor_image_info));
 
-        writes.push(new_write);
+                unsafe { renderer.device.update_descriptor_sets(&[*set_write], &[]) };
+            }
+            _ => Err("Invalid descriptor type in shader")?,
+        };
     }
 
-    Ok(writes)
+    Ok(())
 }
 
 #[derive(Debug, Default)]

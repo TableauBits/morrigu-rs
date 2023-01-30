@@ -2,7 +2,7 @@ use ash::vk;
 
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedImage},
-    descriptor_resources::{generate_descriptors_write_from_bindings, DescriptorResources},
+    descriptor_resources::{update_descriptors_set_from_bindings, DescriptorResources},
     error::Error,
     pipeline_builder::PipelineBuilder,
     renderer::Renderer,
@@ -124,18 +124,13 @@ impl MaterialBuilder {
 
         let mut merged_bindings = shader.vertex_bindings.clone();
         merged_bindings.extend(&shader.fragment_bindings);
-        let descriptor_writes = generate_descriptors_write_from_bindings(
+        update_descriptors_set_from_bindings(
             &merged_bindings,
             &descriptor_set,
             Some(&[2]),
             &descriptor_resources,
+            renderer,
         )?;
-
-        unsafe {
-            renderer
-                .device
-                .update_descriptor_sets(&descriptor_writes, &[])
-        };
 
         let mut pc_shader_stages = vk::ShaderStageFlags::empty();
         let mut size = None;
