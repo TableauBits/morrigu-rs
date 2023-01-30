@@ -35,8 +35,7 @@ impl EguiIntegration {
                 window_id: _,
                 event,
             } => {
-                !self
-                    .egui_platform_state
+                self.egui_platform_state
                     .on_event(&self.context, event)
                     .consumed
             }
