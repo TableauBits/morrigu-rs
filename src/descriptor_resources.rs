@@ -13,7 +13,7 @@ use spirv_reflect::types::{ReflectDescriptorBinding, ReflectDescriptorType};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-#[error("Unsupported descriptor type detected in shader: {0:?}")]
+#[error("Unsupported descriptor type detected in shader: {0:?}.")]
 pub struct UnsupportedDescriptorTypeError(ReflectDescriptorType);
 
 pub(crate) fn binding_type_cast(
@@ -31,10 +31,10 @@ pub(crate) fn binding_type_cast(
 
 #[derive(Error, Debug)]
 pub enum DSLCreationError {
-    #[error("Unsupported binding type detected in shader: {0:?}")]
+    #[error("Unsupported binding type detected in shader: {0:?}.")]
     UnsupportedDescriptorType(#[from] UnsupportedDescriptorTypeError),
 
-    #[error("Vulkan creating of descriptor set layout failed with VkResult: {0}")]
+    #[error("Vulkan creating of descriptor set layout failed with VkResult: {0}.")]
     VulkanError(#[from] vk::Result),
 }
 
@@ -100,10 +100,10 @@ pub(crate) fn create_dsl(
 
 #[derive(Error, Debug)]
 pub enum DescriptorSetUpdateError {
-    #[error("Unsupported binding type detected in shader: {0:?}")]
+    #[error("Unsupported binding type detected in shader: {0:?}.")]
     UnsupportedDescriptorType(#[from] UnsupportedDescriptorTypeError),
 
-    #[error("Required shader resource at binding {set} and location {slot} was not provided")]
+    #[error("Required shader resource at binding {set} and location {slot} was not provided.")]
     ResourceNotProvided { set: u32, slot: u32 },
 }
 
@@ -187,9 +187,7 @@ pub(crate) fn update_descriptors_set_from_bindings(
 
                 unsafe { renderer.device.update_descriptor_sets(&[*set_write], &[]) };
             }
-            _ => Err(UnsupportedDescriptorTypeError(
-                binding.descriptor_type,
-            ))?,
+            _ => Err(UnsupportedDescriptorTypeError(binding.descriptor_type))?,
         };
     }
 
