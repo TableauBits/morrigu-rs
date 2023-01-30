@@ -99,6 +99,7 @@ struct SwapchainInfo {
     depth_image: AllocatedImage,
     preferred_present_mode: vk::PresentModeKHR,
     loader: Swapchain,
+    extent: vk::Extent2D,
 }
 
 #[allow(dead_code)]
@@ -313,6 +314,7 @@ fn create_swapchain(
         },
         preferred_present_mode,
         loader: swapchain_loader,
+        extent: surface_extent,
     }
 }
 
@@ -1131,15 +1133,15 @@ impl Renderer {
         );
 
         //    - and finally the framebuffers
+        self.framebuffer_width = std::cmp::min(self.window_width, self.swapchain.extent.width);
+        self.framebuffer_height = std::cmp::min(self.window_height, self.swapchain.extent.height);
         self.swapchain_framebuffers = create_framebuffers(
-            self.window_width,
-            self.window_height,
+            self.framebuffer_width,
+            self.framebuffer_height,
             self.primary_render_pass,
             &self.swapchain,
             &self.device,
         );
-        self.framebuffer_width = self.window_width;
-        self.framebuffer_height = self.window_height;
     }
 
     pub(crate) fn immediate_command<F>(&self, function: F) -> Result<(), Error>
