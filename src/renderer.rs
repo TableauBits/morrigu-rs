@@ -274,6 +274,9 @@ fn create_swapchain(
             requirements: memory_requirements,
             location: gpu_allocator::MemoryLocation::GpuOnly,
             linear: false,
+            allocation_scheme: gpu_allocator::vulkan::AllocationScheme::DedicatedImage(
+                depth_image_handle,
+            ),
         })
         .expect("Failed to allocate depth image");
     unsafe {

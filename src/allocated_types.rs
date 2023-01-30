@@ -1,6 +1,6 @@
 use ash::vk;
 use bytemuck::bytes_of;
-use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator};
+use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme, Allocator};
 
 use crate::{error::Error, renderer::Renderer, utils::CommandUploader};
 
@@ -126,6 +126,7 @@ impl AllocatedBufferBuilder {
             requirements: memory_req,
             location: self.memory_location,
             linear: true,
+            allocation_scheme: AllocationScheme::DedicatedBuffer(handle),
         })?;
 
         unsafe { device.bind_buffer_memory(handle, allocation.memory(), allocation.offset()) }?;
@@ -366,6 +367,7 @@ impl<'a> AllocatedImageBuilder<'a> {
             requirements: memory_requirements,
             location: gpu_allocator::MemoryLocation::GpuOnly,
             linear: false,
+            allocation_scheme: AllocationScheme::DedicatedImage(handle),
         })?;
         unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }?;
 
@@ -403,6 +405,7 @@ impl<'a> AllocatedImageBuilder<'a> {
             requirements: memory_requirements,
             location: gpu_allocator::MemoryLocation::GpuOnly,
             linear: false,
+            allocation_scheme: AllocationScheme::DedicatedImage(handle),
         })?;
         unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }?;
 
