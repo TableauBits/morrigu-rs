@@ -108,7 +108,7 @@ pub(crate) fn update_descriptors_set_from_bindings(
                 let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
                     .buffer(buffer.handle)
                     .offset(0)
-                    .range(buffer.allocation.as_ref().unwrap().size());
+                    .range(buffer.size());
 
                 let set_write = vk::WriteDescriptorSet::builder()
                     .dst_set(*descriptor_set)

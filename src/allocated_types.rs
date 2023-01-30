@@ -8,12 +8,17 @@ use crate::{error::Error, renderer::Renderer, utils::CommandUploader};
 pub struct AllocatedBuffer {
     pub handle: vk::Buffer,
     pub(crate) allocation: Option<Allocation>,
+    size: u64,
 }
 
 impl AllocatedBuffer {
     /// This defaults to a uniform buffer usage
     pub fn builder(size: u64) -> AllocatedBufferBuilder {
         AllocatedBufferBuilder::default(size)
+    }
+
+    pub fn size(&self) -> u64 {
+        self.size
     }
 
     pub fn upload_data<T: bytemuck::Pod>(&mut self, data: T) -> Result<(), Error> {
@@ -128,6 +133,7 @@ impl AllocatedBufferBuilder {
         Ok(AllocatedBuffer {
             handle,
             allocation: Some(allocation),
+            size: self.size,
         })
     }
 }
