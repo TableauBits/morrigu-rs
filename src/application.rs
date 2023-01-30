@@ -133,8 +133,9 @@ impl<'a> ApplicationBuilder<'a> {
         let event_loop = EventLoop::new();
 
         let window = WindowBuilder::new()
-            .with_inner_size(PhysicalSize::new(self.width, self.height))
             .with_title(self.window_name)
+            .with_inner_size(PhysicalSize::new(self.width, self.height))
+            .with_resizable(true)
             .build(&event_loop)
             .expect("Failed to create window");
 
@@ -193,7 +194,6 @@ impl<'a> ApplicationBuilder<'a> {
         context.event_loop.run_return(|event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
 
-            // We handle events ouselves, this simply stores input for easy access
             let events_cleared = context.window_input_state.update(&event);
 
             #[cfg(feature = "egui")]
@@ -201,18 +201,18 @@ impl<'a> ApplicationBuilder<'a> {
                 return;
             }
 
-            if context.window_input_state.quit() {
-                control_flow.set_exit();
-            }
-
-            if let Some(PhysicalSize { width, height }) =
-                context.window_input_state.window_resized()
-            {
-                context.renderer_ref.lock().on_resize(width, height);
-                context.ecs_manager.on_resize(width, height);
-            }
-
             if events_cleared {
+                if context.window_input_state.quit() {
+                    control_flow.set_exit();
+                }
+
+                if let Some(PhysicalSize { width, height }) =
+                    context.window_input_state.window_resized()
+                {
+                    context.renderer_ref.lock().on_resize(width, height);
+                    context.ecs_manager.on_resize(width, height);
+                }
+
                 let delta = prev_time.elapsed();
                 prev_time = Instant::now();
 
@@ -266,7 +266,7 @@ impl<'a> ApplicationBuilder<'a> {
                         context.egui.paint(&mut renderer)
                     }
 
-                    let renderer = context.renderer_ref.lock();
+                    let mut renderer = context.renderer_ref.lock();
                     renderer.end_frame();
                 }
             }

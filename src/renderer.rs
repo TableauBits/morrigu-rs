@@ -122,6 +122,7 @@ pub(crate) struct DescriptorInfo {
 pub struct Renderer {
     pub clear_color: [f32; 4],
 
+    needs_resize: bool,
     window_width: u32,
     window_height: u32,
     pub framebuffer_width: u32,
@@ -911,6 +912,7 @@ impl<'a> RendererBuilder<'a> {
         ThreadSafeRef::new(Renderer {
             clear_color: [0.0_f32, 0.0_f32, 0.0_f32, 1.0_f32],
 
+            needs_resize: false,
             window_width: self.width,
             window_height: self.height,
             framebuffer_width: self.width,
@@ -960,8 +962,6 @@ impl Renderer {
                 .wait_for_fences(&[self.sync_objects.render_fence], true, u64::MAX)
         }
         .expect("Failed to wait for the render fence");
-        unsafe { self.device.reset_fences(&[self.sync_objects.render_fence]) }
-            .expect("Failed to reset the render fence");
 
         let next_image_index_maybe = unsafe {
             self.swapchain.loader.acquire_next_image(
@@ -971,24 +971,21 @@ impl Renderer {
                 vk::Fence::null(),
             )
         };
+
         match next_image_index_maybe {
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Ok((_, true)) => {
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                 self.recreate_swapchain();
-
-                let fence_reset = vk::SubmitInfo::default();
-                unsafe {
-                    self.device.queue_submit(
-                        self.graphics_queue.handle,
-                        &[fence_reset],
-                        self.sync_objects.render_fence,
-                    )
-                }
-                .expect("Failed to reset fence");
-
                 false
             }
             Err(err) => panic!("Failed to acquire next swapchain image: {:?}", err),
-            Ok((next_image_index, false)) => {
+            Ok((next_image_index, is_suboptimal)) => {
+                if is_suboptimal {
+                    log::debug!("Suboptimal frame image acquired (probably due to resize)");
+                }
+
+                unsafe { self.device.reset_fences(&[self.sync_objects.render_fence]) }
+                    .expect("Failed to reset the render fence");
+
                 self.next_image_index = next_image_index;
                 let next_image_index: usize = next_image_index
                     .try_into()
@@ -1043,7 +1040,7 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn end_frame(&self) {
+    pub(crate) fn end_frame(&mut self) {
         unsafe { self.device.cmd_end_render_pass(self.primary_command_buffer) };
         unsafe { self.device.end_command_buffer(self.primary_command_buffer) }
             .expect("Failed to record command buffer");
@@ -1073,12 +1070,21 @@ impl Renderer {
         };
 
         match result {
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Ok(_) => (),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Ok(true) => {
+                self.recreate_swapchain();
+            }
+            Ok(false) => {
+                if self.needs_resize {
+                    self.needs_resize = false;
+                    self.recreate_swapchain();
+                }
+            }
             Err(err) => panic!("Failed to present new image, {:?}", err),
         };
     }
 
     pub(crate) fn on_resize(&mut self, width: u32, height: u32) {
+        self.needs_resize = true;
         self.window_width = width;
         self.window_height = height;
     }
