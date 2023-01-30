@@ -2,7 +2,7 @@ use ash::vk;
 use bytemuck::bytes_of;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme, Allocator};
 
-use crate::{error::Error, renderer::Renderer, utils::CommandUploader};
+use crate::{renderer::Renderer, utils::CommandUploader};
 
 #[derive(Debug, Default)]
 pub struct AllocatedBuffer {
