@@ -1,7 +1,6 @@
 use ash::vk;
 
 use crate::{
-    error::Error,
     material::{Vertex, VertexInputDescription},
     mesh::{upload_index_buffer, upload_mesh_data, upload_vertex_buffer, Mesh},
     renderer::Renderer,

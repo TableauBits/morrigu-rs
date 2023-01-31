@@ -1,5 +1,5 @@
 use crate::{
-    allocated_types::{AllocatedBuffer, AllocatedImage},
+    allocated_types::{AllocatedBuffer, AllocatedImage, BufferDataUploadError},
     renderer::Renderer,
     shader::BindingData,
     texture::Texture,

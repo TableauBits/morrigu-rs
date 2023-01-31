@@ -2,7 +2,7 @@ use ash::vk;
 use thiserror::Error;
 
 use crate::{
-    allocated_types::{AllocatedBuffer, AllocatedImage, BufferDataUploadError},
+    allocated_types::{AllocatedBuffer, AllocatedImage},
     descriptor_resources::{
         update_descriptors_set_from_bindings, DescriptorResources, DescriptorSetUpdateError,
         ResourceBindingError, UniformUpdateError,
