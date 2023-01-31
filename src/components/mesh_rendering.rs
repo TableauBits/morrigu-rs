@@ -1,10 +1,13 @@
 use ash::vk;
 use nalgebra_glm as glm;
+use thiserror::Error;
 
 use crate::{
-    allocated_types::{AllocatedBuffer, AllocatedImage},
-    descriptor_resources::{update_descriptors_set_from_bindings, DescriptorResources},
-    error::Error,
+    allocated_types::{AllocatedBuffer, AllocatedImage, BufferBuildError},
+    descriptor_resources::{
+        update_descriptors_set_from_bindings, DescriptorResources, DescriptorSetUpdateError,
+        ResourceBindingError, UniformUpdateError,
+    },
     material::{Material, Vertex},
     mesh::Mesh,
     renderer::Renderer,
@@ -28,18 +31,32 @@ where
 
 pub fn default_ubo_bindings(
     renderer: &mut Renderer,
-) -> Result<(u32, ThreadSafeRef<AllocatedBuffer>), Error> {
-    let size: u64 = std::mem::size_of::<glm::Mat4>().try_into()?;
+) -> Result<(u32, ThreadSafeRef<AllocatedBuffer>), BufferBuildError> {
+    let size: u64 = std::mem::size_of::<glm::Mat4>().try_into().unwrap();
     Ok((
         0,
         ThreadSafeRef::new(AllocatedBuffer::builder(size).build(renderer)?),
     ))
 }
-pub fn default_descriptor_resources(renderer: &mut Renderer) -> Result<DescriptorResources, Error> {
+pub fn default_descriptor_resources(
+    renderer: &mut Renderer,
+) -> Result<DescriptorResources, BufferBuildError> {
     Ok(DescriptorResources {
         uniform_buffers: [default_ubo_bindings(renderer)?].into(),
         ..Default::default()
     })
+}
+
+#[derive(Error, Debug)]
+pub enum MeshRenderingBuildError {
+    #[error("Material's vulkan descriptor pool creation failed with status: {0}.")]
+    VulkanDescriptorPoolCreationFailed(vk::Result),
+
+    #[error("Material's vulkan descriptor set allocation failed with status: {0}.")]
+    VulkanDescriptorSetAllocationFailed(vk::Result),
+
+    #[error("Material's descriptor set update failed with status: {0}.")]
+    DescriptorSetUpdateFailed(#[from] DescriptorSetUpdateError),
 }
 
 impl<VertexType> MeshRendering<VertexType>
@@ -51,7 +68,7 @@ where
         material_ref: &ThreadSafeRef<Material<VertexType>>,
         descriptor_resources: DescriptorResources,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<Self>, Error> {
+    ) -> Result<ThreadSafeRef<Self>, MeshRenderingBuildError> {
         let mesh_ref = ThreadSafeRef::clone(mesh_ref);
         let mesh = mesh_ref.lock();
 
@@ -92,7 +109,10 @@ where
         let pool_info = vk::DescriptorPoolCreateInfo::builder()
             .max_sets(1)
             .pool_sizes(&pool_sizes);
-        let descriptor_pool = unsafe { renderer.device.create_descriptor_pool(&pool_info, None) }?;
+        let descriptor_pool = unsafe { renderer.device.create_descriptor_pool(&pool_info, None) }
+            .map_err(|result| {
+            MeshRenderingBuildError::VulkanDescriptorPoolCreationFailed(result)
+        })?;
 
         let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(descriptor_pool)
@@ -101,7 +121,8 @@ where
             renderer
                 .device
                 .allocate_descriptor_sets(&descriptor_set_alloc_info)
-        }?[0];
+        }
+        .map_err(|result| MeshRenderingBuildError::VulkanDescriptorSetAllocationFailed(result))?[0];
 
         let mut merged_bindings = material_shader.vertex_bindings.clone();
         merged_bindings.extend(&material_shader.fragment_bindings);
@@ -131,9 +152,9 @@ where
         binding_slot: u32,
         buffer_ref: ThreadSafeRef<AllocatedBuffer>,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<AllocatedBuffer>, Error> {
+    ) -> Result<ThreadSafeRef<AllocatedBuffer>, ResourceBindingError> {
         let Some(old_buffer) = self.descriptor_resources.uniform_buffers.insert(binding_slot, buffer_ref.clone()) else {
-            return Err("Invalid binding slot. Make sure you specify all descriptor resources when initializing this resource.".into());
+            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 3 });
         };
 
         let buffer = buffer_ref.lock();
@@ -163,13 +184,17 @@ where
         &mut self,
         binding_slot: u32,
         data: T,
-    ) -> Result<(), Error> {
+    ) -> Result<(), UniformUpdateError> {
         self.descriptor_resources
             .uniform_buffers
             .get(&binding_slot)
-            .ok_or("Invalid binding slot")?
+            .ok_or(UniformUpdateError::InvalidBindingSlot {
+                slot: binding_slot,
+                set: 3,
+            })?
             .lock()
             .upload_data(data)
+            .map_err(|err| err.into())
     }
 
     pub fn bind_storage_image<T: bytemuck::Pod>(
@@ -177,9 +202,9 @@ where
         binding_slot: u32,
         image_ref: ThreadSafeRef<AllocatedImage>,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<AllocatedImage>, Error> {
+    ) -> Result<ThreadSafeRef<AllocatedImage>, ResourceBindingError> {
         let Some(old_image) = self.descriptor_resources.storage_images.insert(binding_slot, image_ref.clone()) else {
-            return Err("Invalid binding slot. Make sure you specify all descriptor resources when initializing this resource.".into());
+            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 3 });
         };
 
         let image = image_ref.lock();
@@ -209,9 +234,9 @@ where
         binding_slot: u32,
         texture_ref: ThreadSafeRef<Texture>,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<Texture>, Error> {
+    ) -> Result<ThreadSafeRef<Texture>, ResourceBindingError> {
         let Some(old_texture) = self.descriptor_resources.sampled_images.insert(binding_slot, texture_ref.clone()) else {
-            return Err("Invalid binding slot. Make sure you specify all descriptor resources when initializing this resource.".into());
+            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 3 });
         };
 
         let texture = texture_ref.lock();

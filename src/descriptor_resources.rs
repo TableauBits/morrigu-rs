@@ -209,3 +209,18 @@ impl DescriptorResources {
         Self::default()
     }
 }
+
+#[derive(Error, Debug)]
+pub enum ResourceBindingError {
+    #[error("The binding of slot {slot} does not exist in descriptor set {set}. Please make sure all slots were filled when initializing descriptor resources.")]
+    InvalidBindingSlot { slot: u32, set: u32 },
+}
+
+#[derive(Error, Debug)]
+pub enum UniformUpdateError {
+    #[error("The binding of slot {slot} does not exist in descriptor set {set}. Please make sure all slots were filled when initializing descriptor resources.")]
+    InvalidBindingSlot { slot: u32, set: u32 },
+
+    #[error("Update of the uniform failed with this error: {0}.")]
+    UniformUploadFailed(#[from] BufferDataUploadError),
+}

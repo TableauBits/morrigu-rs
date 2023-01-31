@@ -1,7 +1,7 @@
 mod painter;
 pub use painter::Painter;
 
-use crate::{error::Error, renderer::Renderer};
+use crate::renderer::Renderer;
 
 pub struct EguiIntegration {
     pub context: egui::Context,

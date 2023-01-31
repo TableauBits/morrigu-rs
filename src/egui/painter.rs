@@ -1,11 +1,10 @@
 use crate::{
     components::mesh_rendering::MeshRendering,
     descriptor_resources::DescriptorResources,
-    error::Error,
-    material::{Material, MaterialBuilder, Vertex, VertexInputDescription},
+    material::{Material, MaterialBuilder, Vertex, VertexInputDescription, MaterialBuildError},
     mesh::{upload_mesh_data, Mesh, UploadResult},
     renderer::Renderer,
-    shader::Shader,
+    shader::{Shader, ShaderBuildError},
     texture::{Texture, TextureFormat},
     utils::ThreadSafeRef,
     vector_type::{Vec2, Vec4},
@@ -14,6 +13,7 @@ use crate::{
 use ash::vk;
 use bytemuck::{bytes_of, Pod, Zeroable};
 use egui::Rect;
+use thiserror::Error;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -92,14 +92,30 @@ pub struct Painter {
     user_texture_id: u64,
 }
 
+#[derive(Error, Debug)]
+pub enum PainterCreationError {
+    #[error("Conversion of size max image dimensions from u32 to usize failed (check that {0} <= usize::MAX).")]
+    SizeConversionFailed(u32),
+
+    #[error("Creation of egui shader failed with error: {0}.")]
+    ShaderCreationFailed(#[from] ShaderBuildError),
+
+    #[error("Creation of egui material failed with error: {0}.")]
+    MaterialCreationFailed(#[from] MaterialBuildError),
+}
+
 impl Painter {
-    pub fn new(renderer: &mut Renderer) -> Result<Self, Error> {
+    pub fn new(renderer: &mut Renderer) -> Result<Self, PainterCreationError> {
         let max_texture_size = renderer
             .device_properties
             .limits
             .max_image_dimension2_d
             .try_into()
-            .expect("Architecture should support u32 -> usize conversion");
+            .map_err(|_| {
+                PainterCreationError::SizeConversionFailed(
+                    renderer.device_properties.limits.max_image_dimension2_d,
+                )
+            })?;
         let shader = Shader::from_spirv_u8(
             include_bytes!("shaders/gen/egui.vert"),
             include_bytes!("shaders/gen/egui.frag"),
