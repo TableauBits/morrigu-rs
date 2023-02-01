@@ -1,12 +1,12 @@
 use crate::{
-    allocated_types::AllocatedImage,
-    error::Error,
+    allocated_types::{AllocatedImage, ImageBuildError, ImageDataUploadError},
     renderer::Renderer,
-    utils::{CommandUploader, ThreadSafeRef},
+    utils::{CommandUploader, ImmediateCommandError, ThreadSafeRef},
 };
 
 use ash::vk;
 use image::{self, EncodableLayout};
+use thiserror::Error;
 
 #[non_exhaustive]
 #[allow(non_camel_case_types)]
@@ -28,6 +28,18 @@ pub struct TextureBuilder {
     pub format: vk::Format,
 }
 
+#[derive(Error, Debug)]
+pub enum TextureBuildError {
+    #[error("Base image loading failed with error: {0}.")]
+    ImageLoadError(#[from] image::error::ImageError),
+
+    #[error("Creation of texture's underlying image failed with error: {0}.")]
+    ImageCreationFailed(#[from] ImageBuildError),
+
+    #[error("Vulkan creation of texture sampler failed with result: {0}.")]
+    VulkanSamplerCreationFailed(vk::Result),
+}
+
 impl TextureBuilder {
     pub fn new() -> Self {
         Self {
@@ -45,7 +57,7 @@ impl TextureBuilder {
         self,
         path: &std::path::Path,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<Texture>, Error> {
+    ) -> Result<ThreadSafeRef<Texture>, TextureBuildError> {
         let image = image::open(path)?.fliph().into_rgba8();
         let dimensions = image.dimensions();
 
@@ -61,7 +73,7 @@ impl TextureBuilder {
         width: u32,
         height: u32,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<Texture>, Error> {
+    ) -> Result<ThreadSafeRef<Texture>, TextureBuildError> {
         self.build_from_data_internal(
             data,
             width,
@@ -82,7 +94,7 @@ impl TextureBuilder {
         graphics_queue: vk::Queue,
         allocator: &mut gpu_allocator::vulkan::Allocator,
         command_uploader: &mut CommandUploader,
-    ) -> Result<ThreadSafeRef<Texture>, Error> {
+    ) -> Result<ThreadSafeRef<Texture>, TextureBuildError> {
         self.build_from_data_internal(
             &[
                 255, 255, 255, 255, 255, 0, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255,
@@ -107,7 +119,7 @@ impl TextureBuilder {
         graphics_queue: vk::Queue,
         allocator: &mut gpu_allocator::vulkan::Allocator,
         command_uploader: &mut CommandUploader,
-    ) -> Result<ThreadSafeRef<Texture>, Error> {
+    ) -> Result<ThreadSafeRef<Texture>, TextureBuildError> {
         let image = AllocatedImage::builder(vk::Extent3D {
             width,
             height,
@@ -122,7 +134,8 @@ impl TextureBuilder {
             .address_mode_u(vk::SamplerAddressMode::REPEAT)
             .address_mode_v(vk::SamplerAddressMode::REPEAT)
             .address_mode_w(vk::SamplerAddressMode::REPEAT);
-        let sampler = unsafe { device.create_sampler(&sampler_info, None) }?;
+        let sampler = unsafe { device.create_sampler(&sampler_info, None) }
+            .map_err(TextureBuildError::VulkanSamplerCreationFailed)?;
 
         Ok(ThreadSafeRef::new(Texture {
             image_ref: ThreadSafeRef::new(image),
@@ -150,12 +163,24 @@ pub struct Texture {
     format: vk::Format,
 }
 
+#[derive(Error, Debug)]
+pub enum TextureCloneError {
+    #[error("Creation of clone texture's underlying image failed with error: {0}.")]
+    ImageCreationFailed(#[from] ImageBuildError),
+
+    #[error("Submission of copy command failed with error: {0}.")]
+    CloneCommandFailed(#[from] ImmediateCommandError),
+
+    #[error("Vulkan creation of cloned texture sampler failed with result: {0}.")]
+    VulkanSamplerCreationFailed(vk::Result),
+}
+
 impl Texture {
     pub fn builder() -> TextureBuilder {
         TextureBuilder::default()
     }
 
-    pub fn clone(&self, renderer: &mut Renderer) -> Result<Self, Error> {
+    pub fn clone(&self, renderer: &mut Renderer) -> Result<Self, TextureCloneError> {
         let new_image = AllocatedImage::builder(vk::Extent3D {
             width: self.dimensions[0],
             height: self.dimensions[1],
@@ -257,7 +282,8 @@ impl Texture {
             .address_mode_u(vk::SamplerAddressMode::REPEAT)
             .address_mode_v(vk::SamplerAddressMode::REPEAT)
             .address_mode_w(vk::SamplerAddressMode::REPEAT);
-        let sampler = unsafe { renderer.device.create_sampler(&sampler_info, None) }?;
+        let sampler = unsafe { renderer.device.create_sampler(&sampler_info, None) }
+            .map_err(TextureCloneError::VulkanSamplerCreationFailed)?;
 
         Ok(Self {
             image_ref: ThreadSafeRef::new(new_image),
@@ -268,7 +294,11 @@ impl Texture {
         })
     }
 
-    pub fn upload_data(&mut self, data: &[u8], renderer: &mut Renderer) -> Result<(), Error> {
+    pub fn upload_data(
+        &mut self,
+        data: &[u8],
+        renderer: &mut Renderer,
+    ) -> Result<(), ImageDataUploadError> {
         self.image_ref.lock().upload_data(
             data,
             &renderer.device,

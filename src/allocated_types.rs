@@ -17,7 +17,7 @@ pub struct AllocatedBuffer {
 
 #[derive(Error, Debug)]
 pub enum BufferDataUploadError {
-    #[error("Failed to convert size of data from usize to u64 (check that {0} <= u64::MAX).")]
+    #[error("Conversion of data size from usize to u64 failed (check that {0} <= u64::MAX).")]
     SizeConversionFailed(usize),
 
     #[error(
@@ -166,7 +166,7 @@ impl AllocatedBufferBuilder {
         };
 
         let handle = unsafe { device.create_buffer(&buffer_info, None) }
-            .map_err(|result| BufferBuildError::VulkanCreationFailed(result))?;
+            .map_err(BufferBuildError::VulkanCreationFailed)?;
 
         let memory_req = unsafe { device.get_buffer_memory_requirements(handle) };
         let allocation = allocator.allocate(&AllocationCreateDesc {
@@ -178,7 +178,7 @@ impl AllocatedBufferBuilder {
         })?;
 
         unsafe { device.bind_buffer_memory(handle, allocation.memory(), allocation.offset()) }
-            .map_err(|result| BufferBuildError::VulkanAllocationBindingFailed(result));
+            .map_err(BufferBuildError::VulkanAllocationBindingFailed)?;
 
         Ok(AllocatedBuffer {
             handle,
@@ -452,7 +452,7 @@ impl<'a> AllocatedImageBuilder<'a> {
         command_uploader: &CommandUploader,
     ) -> Result<AllocatedImage, ImageBuildError> {
         let handle = unsafe { device.create_image(&self.image_create_info_builder, None) }
-            .map_err(|result| ImageBuildError::VulkanCreationFailed(result))?;
+            .map_err(ImageBuildError::VulkanCreationFailed)?;
 
         let memory_requirements = unsafe { device.get_image_memory_requirements(handle) };
         let allocation = allocator.allocate(&AllocationCreateDesc {
@@ -463,11 +463,11 @@ impl<'a> AllocatedImageBuilder<'a> {
             allocation_scheme: AllocationScheme::DedicatedImage(handle),
         })?;
         unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }
-            .map_err(|result| ImageBuildError::VulkanAllocationBindingFailed(result))?;
+            .map_err(ImageBuildError::VulkanAllocationBindingFailed)?;
 
         self.image_view_create_info_builder = self.image_view_create_info_builder.image(handle);
         let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }
-            .map_err(|result| ImageBuildError::VulkanViewCreationFailed(result))?;
+            .map_err(ImageBuildError::VulkanViewCreationFailed)?;
 
         let mut image = AllocatedImage {
             view,
@@ -492,7 +492,7 @@ impl<'a> AllocatedImageBuilder<'a> {
         allocator: &mut Allocator,
     ) -> Result<AllocatedImage, ImageBuildError> {
         let handle = unsafe { device.create_image(&self.image_create_info_builder, None) }
-            .map_err(|result| ImageBuildError::VulkanViewCreationFailed(result))?;
+            .map_err(ImageBuildError::VulkanViewCreationFailed)?;
 
         let memory_requirements = unsafe { device.get_image_memory_requirements(handle) };
         let allocation = allocator.allocate(&AllocationCreateDesc {
@@ -503,11 +503,11 @@ impl<'a> AllocatedImageBuilder<'a> {
             allocation_scheme: AllocationScheme::DedicatedImage(handle),
         })?;
         unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }
-            .map_err(|result| ImageBuildError::VulkanAllocationBindingFailed(result))?;
+            .map_err(ImageBuildError::VulkanAllocationBindingFailed)?;
 
         self.image_view_create_info_builder = self.image_view_create_info_builder.image(handle);
         let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }
-            .map_err(|result| ImageBuildError::VulkanViewCreationFailed(result))?;
+            .map_err(ImageBuildError::VulkanViewCreationFailed)?;
 
         Ok(AllocatedImage {
             view,

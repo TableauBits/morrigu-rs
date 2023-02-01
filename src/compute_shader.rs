@@ -3,17 +3,19 @@ use std::path::Path;
 
 use crate::allocated_types::{AllocatedBuffer, AllocatedImage};
 use crate::descriptor_resources::{
-    create_dsl, update_descriptors_set_from_bindings, DescriptorResources,
+    create_dsl, update_descriptors_set_from_bindings, DSLCreationError, DescriptorResources,
+    DescriptorSetUpdateError, ResourceBindingError,
 };
-use crate::error::Error;
-use crate::pipeline_builder::ComputePipelineBuilder;
+use crate::pipeline_builder::{ComputePipelineBuilder, PipelineBuildError};
 use crate::renderer::Renderer;
 use crate::shader::create_shader_module;
+use crate::utils::ImmediateCommandError;
 use crate::{shader::BindingData, texture::Texture, utils::ThreadSafeRef};
 
 use ash::vk;
 
 use spirv_reflect::types::ReflectBlockVariable;
+use thiserror::Error;
 
 pub struct ComputeShaderBuilder {
     pub entry_point: String,
@@ -35,6 +37,47 @@ pub struct ComputeShader {
     pipeline: vk::Pipeline,
 }
 
+#[derive(Error, Debug)]
+pub enum ComputeShaderBuildError {
+    #[error("Failed to read file at provided path \"{provided_path}\" with error: {error}.")]
+    InvalidPath {
+        provided_path: String,
+        error: std::io::Error,
+    },
+
+    #[error("SPRIV decoding failed with error: {0}.")]
+    SPIRVDecodingFailed(std::io::Error),
+
+    #[error("Vulkan creation of shader module failed with result: {0}.")]
+    ShaderModuleCreationFailed(vk::Result),
+
+    #[error("SPIRV reflection creation failed with error message: {0}.")]
+    ReflectionLoadingFailed(&'static str),
+
+    #[error("Descriptor set layout creation failed with error: {0}.")]
+    DSLCreationFailed(#[from] DSLCreationError),
+
+    #[error("Material's vulkan descriptor pool creation failed with status: {0}.")]
+    VulkanDescriptorPoolCreationFailed(vk::Result),
+
+    #[error("Material's vulkan descriptor set allocation failed with status: {0}.")]
+    VulkanDescriptorSetAllocationFailed(vk::Result),
+
+    #[error("Material's descriptor set update failed with status: {0}.")]
+    DescriptorSetUpdateFailed(#[from] DescriptorSetUpdateError),
+
+    #[error(
+        "No push constants were detected in the shader, but they are needed for the program data."
+    )]
+    InvalidPushConstantSize,
+
+    #[error("Material's vulkan pipeline layout creation failed with status: {0}.")]
+    VulkanPipelineLayoutCreationFailed(vk::Result),
+
+    #[error("Material's creation failed with error: {0}.")]
+    PipelineCreationFailed(#[from] PipelineBuildError),
+}
+
 impl ComputeShaderBuilder {
     pub fn new() -> Self {
         Self {
@@ -47,8 +90,15 @@ impl ComputeShaderBuilder {
         source_path: &Path,
         descriptor_resources: DescriptorResources,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<ComputeShader>, Error> {
-        let source_spirv = fs::read(source_path)?;
+    ) -> Result<ThreadSafeRef<ComputeShader>, ComputeShaderBuildError> {
+        let source_spirv =
+            fs::read(source_path).map_err(|error| ComputeShaderBuildError::InvalidPath {
+                provided_path: source_path
+                    .to_str()
+                    .expect("Failed to parse provided path.")
+                    .to_owned(),
+                error,
+            })?;
 
         self.build_from_spirv_u8(&source_spirv, descriptor_resources, renderer)
     }
@@ -58,8 +108,9 @@ impl ComputeShaderBuilder {
         source_spirv: &[u8],
         descriptor_resources: DescriptorResources,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<ComputeShader>, Error> {
-        let source_u32 = ash::util::read_spv(&mut std::io::Cursor::new(source_spirv))?;
+    ) -> Result<ThreadSafeRef<ComputeShader>, ComputeShaderBuildError> {
+        let source_u32 = ash::util::read_spv(&mut std::io::Cursor::new(source_spirv))
+            .map_err(ComputeShaderBuildError::SPIRVDecodingFailed)?;
 
         self.build_from_spirv_u32(&source_u32, descriptor_resources, renderer)
     }
@@ -69,15 +120,22 @@ impl ComputeShaderBuilder {
         source_spirv: &[u32],
         descriptor_resources: DescriptorResources,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<ComputeShader>, Error> {
-        let shader_module = create_shader_module(&renderer.device, source_spirv)?;
+    ) -> Result<ThreadSafeRef<ComputeShader>, ComputeShaderBuildError> {
+        let shader_module = create_shader_module(&renderer.device, source_spirv)
+            .map_err(ComputeShaderBuildError::ShaderModuleCreationFailed)?;
 
-        let reflection_module = spirv_reflect::ShaderModule::load_u32_data(source_spirv)?;
-        let entry_point = reflection_module.enumerate_entry_points()?[0].clone();
-        let bindings_reflection =
-            reflection_module.enumerate_descriptor_bindings(Some(entry_point.name.as_str()))?;
-        let push_constants =
-            reflection_module.enumerate_push_constant_blocks(Some(entry_point.name.as_str()))?;
+        let reflection_module = spirv_reflect::ShaderModule::load_u32_data(source_spirv)
+            .map_err(ComputeShaderBuildError::ReflectionLoadingFailed)?;
+        let entry_point = reflection_module
+            .enumerate_entry_points()
+            .map_err(ComputeShaderBuildError::ReflectionLoadingFailed)?[0]
+            .clone();
+        let bindings_reflection = reflection_module
+            .enumerate_descriptor_bindings(Some(entry_point.name.as_str()))
+            .map_err(ComputeShaderBuildError::ReflectionLoadingFailed)?;
+        let push_constants = reflection_module
+            .enumerate_push_constant_blocks(Some(entry_point.name.as_str()))
+            .map_err(ComputeShaderBuildError::ReflectionLoadingFailed)?;
 
         let dsl = create_dsl(
             &renderer.device,
@@ -128,7 +186,10 @@ impl ComputeShaderBuilder {
         let pool_info = vk::DescriptorPoolCreateInfo::builder()
             .max_sets(1)
             .pool_sizes(&pool_sizes);
-        let descriptor_pool = unsafe { renderer.device.create_descriptor_pool(&pool_info, None) }?;
+        let descriptor_pool = unsafe { renderer.device.create_descriptor_pool(&pool_info, None) }
+            .map_err(|result| {
+            ComputeShaderBuildError::VulkanDescriptorPoolCreationFailed(result)
+        })?;
 
         let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(descriptor_pool)
@@ -137,7 +198,8 @@ impl ComputeShaderBuilder {
             renderer
                 .device
                 .allocate_descriptor_sets(&descriptor_set_alloc_info)
-        }?[0];
+        }
+        .map_err(ComputeShaderBuildError::VulkanDescriptorSetAllocationFailed)?[0];
 
         update_descriptors_set_from_bindings(
             &bindings,
@@ -161,7 +223,10 @@ impl ComputeShaderBuilder {
         let layout_info = vk::PipelineLayoutCreateInfo::builder()
             .set_layouts(&dsl_list)
             .push_constant_ranges(&pc_ranges);
-        let layout = unsafe { renderer.device.create_pipeline_layout(&layout_info, None) }?;
+        let layout = unsafe { renderer.device.create_pipeline_layout(&layout_info, None) }
+            .map_err(|result| {
+                ComputeShaderBuildError::VulkanPipelineLayoutCreationFailed(result)
+            })?;
 
         let shader_module_entry_point = std::ffi::CString::new(self.entry_point).unwrap();
         let shader_stage = vk::PipelineShaderStageCreateInfo::builder()
@@ -201,7 +266,11 @@ impl ComputeShader {
         ComputeShaderBuilder::new()
     }
 
-    pub fn run(&self, renderer: &mut Renderer, group_shape: (u32, u32, u32)) -> Result<(), Error> {
+    pub fn run(
+        &self,
+        renderer: &mut Renderer,
+        group_shape: (u32, u32, u32),
+    ) -> Result<(), ImmediateCommandError> {
         renderer.immediate_command(|cmd_buffer| unsafe {
             renderer
                 .device
@@ -214,9 +283,9 @@ impl ComputeShader {
         binding_slot: u32,
         buffer_ref: ThreadSafeRef<AllocatedBuffer>,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<AllocatedBuffer>, Error> {
+    ) -> Result<ThreadSafeRef<AllocatedBuffer>, ResourceBindingError> {
         let Some(old_buffer) = self.descriptor_resources.uniform_buffers.insert(binding_slot, buffer_ref.clone()) else {
-            return Err("Invalid binding slot. Make sure you specify all descriptor resources when initializing this resource.".into());
+            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 2 });
         };
 
         let buffer = buffer_ref.lock();
@@ -247,9 +316,9 @@ impl ComputeShader {
         binding_slot: u32,
         image_ref: ThreadSafeRef<AllocatedImage>,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<AllocatedImage>, Error> {
+    ) -> Result<ThreadSafeRef<AllocatedImage>, ResourceBindingError> {
         let Some(old_image) = self.descriptor_resources.storage_images.insert(binding_slot, image_ref.clone()) else {
-            return Err("Invalid binding slot. Make sure you specify all descriptor resources when initializing this resource.".into());
+            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 2 });
         };
 
         let image = image_ref.lock();
@@ -279,9 +348,9 @@ impl ComputeShader {
         binding_slot: u32,
         texture_ref: ThreadSafeRef<Texture>,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<Texture>, Error> {
+    ) -> Result<ThreadSafeRef<Texture>, ResourceBindingError> {
         let Some(old_texture) = self.descriptor_resources.sampled_images.insert(binding_slot, texture_ref.clone()) else {
-            return Err("Invalid binding slot. Make sure you specify all descriptor resources when initializing this resource.".into());
+            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 2 });
         };
 
         let texture = texture_ref.lock();

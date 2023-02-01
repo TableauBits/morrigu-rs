@@ -122,7 +122,7 @@ where
                 .device
                 .allocate_descriptor_sets(&descriptor_set_alloc_info)
         }
-        .map_err(|result| MeshRenderingBuildError::VulkanDescriptorSetAllocationFailed(result))?[0];
+        .map_err(MeshRenderingBuildError::VulkanDescriptorSetAllocationFailed)?[0];
 
         let mut merged_bindings = material_shader.vertex_bindings.clone();
         merged_bindings.extend(&material_shader.fragment_bindings);

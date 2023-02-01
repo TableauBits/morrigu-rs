@@ -7,7 +7,7 @@ use crate::{
         update_descriptors_set_from_bindings, DescriptorResources, DescriptorSetUpdateError,
         ResourceBindingError, UniformUpdateError,
     },
-    pipeline_builder::PipelineBuilder,
+    pipeline_builder::{PipelineBuildError, PipelineBuilder},
     renderer::Renderer,
     shader::Shader,
     texture::Texture,
@@ -69,6 +69,9 @@ pub enum MaterialBuildError {
 
     #[error("Material's vulkan pipeline layout creation failed with status: {0}.")]
     VulkanPipelineLayoutCreationFailed(vk::Result),
+
+    #[error("Material's creation failed with error: {0}.")]
+    PipelineCreationFailed(#[from] PipelineBuildError),
 }
 
 impl MaterialBuilder {
@@ -134,9 +137,8 @@ impl MaterialBuilder {
         let pool_info = vk::DescriptorPoolCreateInfo::builder()
             .max_sets(1)
             .pool_sizes(&pool_sizes);
-        let descriptor_pool =
-            unsafe { renderer.device.create_descriptor_pool(&pool_info, None) }
-                .map_err(|result| MaterialBuildError::VulkanDescriptorPoolCreationFailed(result))?;
+        let descriptor_pool = unsafe { renderer.device.create_descriptor_pool(&pool_info, None) }
+            .map_err(MaterialBuildError::VulkanDescriptorPoolCreationFailed)?;
 
         let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(descriptor_pool)
@@ -146,7 +148,7 @@ impl MaterialBuilder {
                 .device
                 .allocate_descriptor_sets(&descriptor_set_alloc_info)
         }
-        .map_err(|result| MaterialBuildError::VulkanDescriptorSetAllocationFailed(result))?[0];
+        .map_err(MaterialBuildError::VulkanDescriptorSetAllocationFailed)?[0];
 
         let mut merged_bindings = shader.vertex_bindings.clone();
         merged_bindings.extend(&shader.fragment_bindings);
@@ -187,7 +189,7 @@ impl MaterialBuilder {
             .set_layouts(&layouts)
             .push_constant_ranges(&pc_ranges);
         let layout = unsafe { renderer.device.create_pipeline_layout(&layout_info, None) }
-            .map_err(|result| MaterialBuildError::VulkanPipelineLayoutCreationFailed(result))?;
+            .map_err(MaterialBuildError::VulkanPipelineLayoutCreationFailed)?;
 
         let vertex_info = VertexType::vertex_input_description();
         let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()

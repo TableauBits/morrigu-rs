@@ -1,6 +1,5 @@
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage},
-    error::Error,
     texture::Texture,
     utils::{CommandUploader, ImmediateCommandError, ThreadSafeRef},
     vector_type::Vec4,

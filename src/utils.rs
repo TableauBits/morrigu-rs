@@ -87,7 +87,7 @@ impl CommandUploader {
 
         let fence_info = vk::FenceCreateInfo::default();
         let fence = unsafe { device.create_fence(&fence_info, None) }
-            .map_err(|result| CommandUploaderCreationError::VulkanFenceCreationFailed(result))?;
+            .map_err(CommandUploaderCreationError::VulkanFenceCreationFailed)?;
 
         let cmd_buffer_info = vk::CommandBufferAllocateInfo::builder()
             .command_pool(command_pool)
@@ -126,24 +126,24 @@ impl CommandUploader {
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
         unsafe { device.begin_command_buffer(self.command_buffer, &begin_info) }
-            .map_err(|result| ImmediateCommandError::VulkanCommandBufferBeginFailed(result))?;
+            .map_err(ImmediateCommandError::VulkanCommandBufferBeginFailed)?;
         function(&self.command_buffer);
         unsafe { device.end_command_buffer(self.command_buffer) }
-            .map_err(|result| ImmediateCommandError::VulkanCommandBufferEndFailed(result))?;
+            .map_err(ImmediateCommandError::VulkanCommandBufferEndFailed)?;
 
         let submit_info =
             vk::SubmitInfo::builder().command_buffers(std::slice::from_ref(&self.command_buffer));
         unsafe { device.queue_submit(graphics_queue, &[*submit_info], self.fence) }
-            .map_err(|result| ImmediateCommandError::VulkanCommandBufferSubmissionFailed(result))?;
+            .map_err(ImmediateCommandError::VulkanCommandBufferSubmissionFailed)?;
 
         unsafe { device.wait_for_fences(std::slice::from_ref(&self.fence), true, u64::MAX) }
-            .map_err(|result| ImmediateCommandError::VulkanCommandBufferFenceWaitFailed(result))?;
+            .map_err(ImmediateCommandError::VulkanCommandBufferFenceWaitFailed)?;
         unsafe { device.reset_fences(std::slice::from_ref(&self.fence)) }
-            .map_err(|result| ImmediateCommandError::VulkanCommandBufferFenceResetFailed(result))?;
+            .map_err(ImmediateCommandError::VulkanCommandBufferFenceResetFailed)?;
         unsafe {
             device.reset_command_buffer(self.command_buffer, CommandBufferResetFlags::default())
         }
-        .map_err(|result| ImmediateCommandError::VulkanCommandBufferResetFailed(result))?;
+        .map_err(ImmediateCommandError::VulkanCommandBufferResetFailed)?;
 
         Ok(())
     }

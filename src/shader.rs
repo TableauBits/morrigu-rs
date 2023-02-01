@@ -68,7 +68,7 @@ pub enum ShaderBuildError {
     },
 
     #[error("Descriptor set layout creation failed with error: {0}.")]
-    DSLCreationFailed(DSLCreationError),
+    DSLCreationFailed(#[from] DSLCreationError),
 }
 
 impl Shader {
@@ -206,7 +206,7 @@ impl Shader {
                 ),
             ],
         )
-        .map_err(|error| ShaderBuildError::DSLCreationFailed(error))?;
+        .map_err(ShaderBuildError::DSLCreationFailed)?;
         let level_3_dsl = create_dsl(
             device,
             3,
@@ -220,8 +220,7 @@ impl Shader {
                     vk::ShaderStageFlags::FRAGMENT,
                 ),
             ],
-        )
-        .map_err(|error| ShaderBuildError::DSLCreationFailed(error))?;
+        )?;
 
         let vertex_bindings = vertex_bindings_reflection
             .iter()

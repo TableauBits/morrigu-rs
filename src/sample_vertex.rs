@@ -1,8 +1,9 @@
 use ash::vk;
+use thiserror::Error;
 
 use crate::{
     material::{Vertex, VertexInputDescription},
-    mesh::{upload_index_buffer, upload_mesh_data, upload_vertex_buffer, Mesh},
+    mesh::{upload_index_buffer, upload_mesh_data, upload_vertex_buffer, Mesh, MeshDataUploadError, UploadError},
     renderer::Renderer,
     utils::ThreadSafeRef, vector_type::{Vec3, Vec2},
 };
@@ -112,11 +113,26 @@ impl ply::PropertyAccess for Face {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum SampleModelLoadingError {
+    #[error("Loading of the OBJ file failed with error: {0}.")]
+    OBJLoadError(#[from] tobj::LoadError),
+
+    #[error("Uploading of the mesh data failed with error: {0}.")]
+    MeshDatauploadFailed(#[from] MeshDataUploadError),
+
+    #[error("Reading of model file failed with error: {0}.")]
+    FileReadingError(#[from] std::io::Error),
+
+    #[error("Uploading of the mesh data failed with error: {0}.")]
+    BufferUploadFailed(#[from] UploadError),
+}
+
 impl TexturedVertex {
     pub fn load_model_from_path_obj(
         path: &std::path::Path,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<Mesh<Self>>, Error> {
+    ) -> Result<ThreadSafeRef<Mesh<Self>>, SampleModelLoadingError> {
         let (load_result, _) = tobj::load_obj(
             path,
             &tobj::LoadOptions {
@@ -168,7 +184,7 @@ impl TexturedVertex {
     pub fn load_model_from_path_ply(
         path: &std::path::Path,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<Mesh<Self>>, Error> {
+    ) -> Result<ThreadSafeRef<Mesh<Self>>, SampleModelLoadingError> {
         let file = std::fs::File::open(path)?;
         let mut file = std::io::BufReader::new(file);
 
