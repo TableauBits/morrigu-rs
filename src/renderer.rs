@@ -1,8 +1,7 @@
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage},
-    error::Error,
     texture::Texture,
-    utils::{CommandUploader, ThreadSafeRef},
+    utils::{CommandUploader, ImmediateCommandError, ThreadSafeRef},
     vector_type::Vec4,
 };
 
@@ -1147,7 +1146,7 @@ impl Renderer {
         );
     }
 
-    pub(crate) fn immediate_command<F>(&self, function: F) -> Result<(), Error>
+    pub(crate) fn immediate_command<F>(&self, function: F) -> Result<(), ImmediateCommandError>
     where
         F: FnOnce(&vk::CommandBuffer),
     {

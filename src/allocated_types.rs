@@ -1,14 +1,35 @@
 use ash::vk;
 use bytemuck::bytes_of;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme, Allocator};
+use thiserror::Error;
 
-use crate::{error::Error, renderer::Renderer, utils::CommandUploader};
+use crate::{
+    renderer::Renderer,
+    utils::{CommandUploader, ImmediateCommandError},
+};
 
 #[derive(Debug, Default)]
 pub struct AllocatedBuffer {
     pub handle: vk::Buffer,
     pub(crate) allocation: Option<Allocation>,
     size: u64,
+}
+
+#[derive(Error, Debug)]
+pub enum BufferDataUploadError {
+    #[error("Conversion of data size from usize to u64 failed (check that {0} <= u64::MAX).")]
+    SizeConversionFailed(usize),
+
+    #[error(
+        "Unable to find this buffer's allocation. This is most likely due to a use after free."
+    )]
+    UseAfterFree,
+
+    #[error("Invalid data size. The data's size ({data_size}) does not match the buffer's allocation size ({buffer_size}). Please check that T is #[repr(C)].")]
+    SizeMismatch { data_size: usize, buffer_size: u64 },
+
+    #[error("Failed to map the memory of this buffer.")]
+    MemoryMappingFailed,
 }
 
 impl AllocatedBuffer {
@@ -21,22 +42,27 @@ impl AllocatedBuffer {
         self.size
     }
 
-    pub fn upload_data<T: bytemuck::Pod>(&mut self, data: T) -> Result<(), Error> {
-        let allocation = self.allocation.as_mut().ok_or("use after free")?;
+    pub fn upload_data<T: bytemuck::Pod>(&mut self, data: T) -> Result<(), BufferDataUploadError> {
+        let allocation = self
+            .allocation
+            .as_mut()
+            .ok_or(BufferDataUploadError::UseAfterFree)?;
 
-        if allocation.size() < std::mem::size_of::<T>().try_into()? {
-            return Err(format!(
-                "invalid size {} (expected {}) (make sure T is #[repr(C)]",
-                std::mem::size_of::<T>(),
-                allocation.size(),
-            )
-            .into());
+        if allocation.size()
+            < std::mem::size_of::<T>().try_into().map_err(|_| {
+                BufferDataUploadError::SizeConversionFailed(std::mem::size_of::<T>())
+            })?
+        {
+            return Err(BufferDataUploadError::SizeMismatch {
+                data_size: std::mem::size_of::<T>(),
+                buffer_size: allocation.size(),
+            });
         }
 
         let raw_data = bytes_of(&data);
         allocation
             .mapped_slice_mut()
-            .ok_or("failed to map memory")?[..raw_data.len()]
+            .ok_or(BufferDataUploadError::MemoryMappingFailed)?[..raw_data.len()]
             .copy_from_slice(raw_data);
 
         Ok(())
@@ -50,6 +76,27 @@ impl AllocatedBuffer {
             unsafe { device.destroy_buffer(self.handle, None) };
         }
     }
+}
+
+#[derive(Error, Debug)]
+pub enum BufferBuildError {
+    #[error("Vulkan creation of the buffer failed with the result: {0}.")]
+    VulkanCreationFailed(vk::Result),
+
+    #[error("allocation of the buffer's memory failed with the error: {0}.")]
+    AllocationFailed(#[from] gpu_allocator::AllocationError),
+
+    #[error("Vulkan binding of the buffer's allocation failed with the result: {0}.")]
+    VulkanAllocationBindingFailed(vk::Result),
+}
+
+#[derive(Error, Debug)]
+pub enum BufferBuildWithDataError {
+    #[error("Building the buffer failed with: {0}.")]
+    BuildFailed(#[from] BufferBuildError),
+
+    #[error("uploading data to the buffer failed with: {0}.")]
+    DataUploadFailed(#[from] BufferDataUploadError),
 }
 
 pub struct AllocatedBufferBuilder {
@@ -90,7 +137,7 @@ impl AllocatedBufferBuilder {
         self
     }
 
-    pub fn build(self, renderer: &mut Renderer) -> Result<AllocatedBuffer, Error> {
+    pub fn build(self, renderer: &mut Renderer) -> Result<AllocatedBuffer, BufferBuildError> {
         self.build_internal(&renderer.device, &mut renderer.allocator())
     }
 
@@ -98,7 +145,7 @@ impl AllocatedBufferBuilder {
         self,
         data: T,
         renderer: &mut Renderer,
-    ) -> Result<AllocatedBuffer, Error> {
+    ) -> Result<AllocatedBuffer, BufferBuildWithDataError> {
         let mut buffer = self.build(renderer)?;
 
         buffer.upload_data(data)?;
@@ -110,7 +157,7 @@ impl AllocatedBufferBuilder {
         self,
         device: &ash::Device,
         allocator: &mut Allocator,
-    ) -> Result<AllocatedBuffer, Error> {
+    ) -> Result<AllocatedBuffer, BufferBuildError> {
         let buffer_info = vk::BufferCreateInfo {
             size: self.size,
             usage: self.usage,
@@ -118,7 +165,8 @@ impl AllocatedBufferBuilder {
             ..Default::default()
         };
 
-        let handle = unsafe { device.create_buffer(&buffer_info, None) }?;
+        let handle = unsafe { device.create_buffer(&buffer_info, None) }
+            .map_err(BufferBuildError::VulkanCreationFailed)?;
 
         let memory_req = unsafe { device.get_buffer_memory_requirements(handle) };
         let allocation = allocator.allocate(&AllocationCreateDesc {
@@ -129,7 +177,8 @@ impl AllocatedBufferBuilder {
             allocation_scheme: AllocationScheme::DedicatedBuffer(handle),
         })?;
 
-        unsafe { device.bind_buffer_memory(handle, allocation.memory(), allocation.offset()) }?;
+        unsafe { device.bind_buffer_memory(handle, allocation.memory(), allocation.offset()) }
+            .map_err(BufferBuildError::VulkanAllocationBindingFailed)?;
 
         Ok(AllocatedBuffer {
             handle,
@@ -150,6 +199,26 @@ pub struct AllocatedImage {
     pub extent: vk::Extent3D,
 }
 
+#[derive(Error, Debug)]
+pub enum ImageDataUploadError {
+    #[error("Failed to convert size of data from usize to u64 (check that {0} <= u64::MAX).")]
+    SizeConversionFailed(usize),
+
+    #[error("Staging buffer creation failed with error: {0}.")]
+    StagingBufferCreationFailed(BufferBuildError),
+
+    #[error(
+        "Unable to find the staging buffer's allocation. This is most likely due to a use after free."
+    )]
+    UseAfterFree,
+
+    #[error("Failed to map the memory of this buffer.")]
+    MemoryMappingFailed,
+
+    #[error("The image data copy from the staging buffer failed with the error: {0}.")]
+    ImageTransferCommandFailed(#[from] ImmediateCommandError),
+}
+
 impl AllocatedImage {
     pub fn upload_data(
         &mut self,
@@ -158,20 +227,26 @@ impl AllocatedImage {
         graphics_queue: vk::Queue,
         allocator: &mut Allocator,
         command_uploader: &CommandUploader,
-    ) -> Result<(), Error> {
-        let mut staging_buffer = AllocatedBufferBuilder::staging_buffer_default(u64::try_from(
-            data.len() * std::mem::size_of::<u8>(), // Multiplication is redundant, but just in case :3 (technically a byte is not necessarily 8 bits)
-        )?)
-        .build_internal(device, allocator)?;
+    ) -> Result<(), ImageDataUploadError> {
+        let mut staging_buffer = AllocatedBufferBuilder::staging_buffer_default(
+            u64::try_from(
+                data.len() * std::mem::size_of::<u8>(), // Multiplication is redundant, but just in case :3 (technically a byte is not necessarily 8 bits)
+            )
+            .map_err(|_| {
+                ImageDataUploadError::SizeConversionFailed(data.len() * std::mem::size_of::<u8>())
+            })?,
+        )
+        .build_internal(device, allocator)
+        .map_err(|buffer_build_error| {
+            ImageDataUploadError::StagingBufferCreationFailed(buffer_build_error)
+        })?;
 
         let slice = staging_buffer
             .allocation
             .as_mut()
-            .ok_or("use after free")?
+            .ok_or(ImageDataUploadError::UseAfterFree)?
             .mapped_slice_mut()
-            .ok_or_else(|| {
-                gpu_allocator::AllocationError::FailedToMap("Failed to map memory".to_owned())
-            })?;
+            .ok_or(ImageDataUploadError::MemoryMappingFailed)?;
         // copy_from_slice panics if slices are of diffrent lengths, so we have to set a limit
         // just in case the allocation decides to allocate more
         slice[..data.len()].copy_from_slice(data);
@@ -277,6 +352,24 @@ pub struct AllocatedImageBuilder<'a> {
     pub image_view_create_info_builder: vk::ImageViewCreateInfoBuilder<'a>,
 }
 
+#[derive(Error, Debug)]
+pub enum ImageBuildError {
+    #[error("Vulkan creation of the image failed with the result: {0}.")]
+    VulkanCreationFailed(vk::Result),
+
+    #[error("allocation of the allocation's memory failed with the error: {0}.")]
+    AllocationFailed(#[from] gpu_allocator::AllocationError),
+
+    #[error("Vulkan binding of the image's allocation failed with the result: {0}.")]
+    VulkanAllocationBindingFailed(vk::Result),
+
+    #[error("Vulkan creation of the image's view failed with the result: {0}.")]
+    VulkanViewCreationFailed(vk::Result),
+
+    #[error("Upload of the image data failed with the result: {0}.")]
+    DataUploadFailed(#[from] ImageDataUploadError),
+}
+
 impl<'a> AllocatedImageBuilder<'a> {
     pub fn new(extent: vk::Extent3D) -> Self {
         let image_create_info_builder = vk::ImageCreateInfo::builder().extent(extent);
@@ -357,9 +450,9 @@ impl<'a> AllocatedImageBuilder<'a> {
         graphics_queue: vk::Queue,
         allocator: &mut Allocator,
         command_uploader: &CommandUploader,
-    ) -> Result<AllocatedImage, Error> {
+    ) -> Result<AllocatedImage, ImageBuildError> {
         let handle = unsafe { device.create_image(&self.image_create_info_builder, None) }
-            .expect("Failed to create image");
+            .map_err(ImageBuildError::VulkanCreationFailed)?;
 
         let memory_requirements = unsafe { device.get_image_memory_requirements(handle) };
         let allocation = allocator.allocate(&AllocationCreateDesc {
@@ -369,10 +462,12 @@ impl<'a> AllocatedImageBuilder<'a> {
             linear: false,
             allocation_scheme: AllocationScheme::DedicatedImage(handle),
         })?;
-        unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }?;
+        unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }
+            .map_err(ImageBuildError::VulkanAllocationBindingFailed)?;
 
         self.image_view_create_info_builder = self.image_view_create_info_builder.image(handle);
-        let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }?;
+        let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }
+            .map_err(ImageBuildError::VulkanViewCreationFailed)?;
 
         let mut image = AllocatedImage {
             view,
@@ -395,9 +490,9 @@ impl<'a> AllocatedImageBuilder<'a> {
         mut self,
         device: &ash::Device,
         allocator: &mut Allocator,
-    ) -> Result<AllocatedImage, Error> {
+    ) -> Result<AllocatedImage, ImageBuildError> {
         let handle = unsafe { device.create_image(&self.image_create_info_builder, None) }
-            .expect("Failed to create image");
+            .map_err(ImageBuildError::VulkanViewCreationFailed)?;
 
         let memory_requirements = unsafe { device.get_image_memory_requirements(handle) };
         let allocation = allocator.allocate(&AllocationCreateDesc {
@@ -407,10 +502,12 @@ impl<'a> AllocatedImageBuilder<'a> {
             linear: false,
             allocation_scheme: AllocationScheme::DedicatedImage(handle),
         })?;
-        unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }?;
+        unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }
+            .map_err(ImageBuildError::VulkanAllocationBindingFailed)?;
 
         self.image_view_create_info_builder = self.image_view_create_info_builder.image(handle);
-        let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }?;
+        let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }
+            .map_err(ImageBuildError::VulkanViewCreationFailed)?;
 
         Ok(AllocatedImage {
             view,

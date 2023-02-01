@@ -1,7 +1,9 @@
 mod painter;
 pub use painter::Painter;
 
-use crate::{error::Error, renderer::Renderer};
+use crate::renderer::Renderer;
+
+use self::painter::PainterCreationError;
 
 pub struct EguiIntegration {
     pub context: egui::Context,
@@ -16,7 +18,7 @@ impl EguiIntegration {
     pub fn new(
         event_loop: &winit::event_loop::EventLoopWindowTarget<()>,
         renderer: &mut Renderer,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, PainterCreationError> {
         let painter = Painter::new(renderer)?;
         let egui_platform_state = egui_winit::State::new(event_loop);
 

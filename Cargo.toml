@@ -16,6 +16,8 @@ shaderc = "0.8"
 [dependencies]
 log = "0.4"
 
+thiserror = "1.0"
+
 winit = "0.27"
 winit_input_helper = "0.13"
 raw-window-handle = "0.5.0"

@@ -1,6 +1,5 @@
 use ash::vk;
-
-use crate::error::Error;
+use thiserror::Error;
 
 pub(crate) struct PipelineBuilder {
     pub(crate) shader_stages: Vec<vk::PipelineShaderStageCreateInfo>,
@@ -14,12 +13,18 @@ pub(crate) struct PipelineBuilder {
     pub(crate) cache: Option<vk::PipelineCache>,
 }
 
+#[derive(Error, Debug)]
+pub enum PipelineBuildError {
+    #[error("Vulkan pipeline creation failed with result: {0}.")]
+    VulkanPipelineCreationFailed(#[from] vk::Result),
+}
+
 impl PipelineBuilder {
     pub(crate) fn build(
         self,
         device: &ash::Device,
         render_pass: vk::RenderPass,
-    ) -> Result<vk::Pipeline, Error> {
+    ) -> Result<vk::Pipeline, PipelineBuildError> {
         let viewport_state_info = vk::PipelineViewportStateCreateInfo::builder()
             .viewport_count(1)
             .scissor_count(1);
@@ -68,7 +73,7 @@ pub(crate) struct ComputePipelineBuilder {
 }
 
 impl ComputePipelineBuilder {
-    pub(crate) fn build(self, device: &ash::Device) -> Result<vk::Pipeline, Error> {
+    pub(crate) fn build(self, device: &ash::Device) -> Result<vk::Pipeline, PipelineBuildError> {
         let pipeline_info = vk::ComputePipelineCreateInfo::builder()
             .stage(self.stage)
             .layout(self.layout);
