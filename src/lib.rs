@@ -10,6 +10,7 @@ pub mod shader;
 pub mod texture;
 pub mod utils;
 pub mod vector_type;
+pub mod pipeline_barrier;
 
 pub mod components;
 pub mod ecs_manager;

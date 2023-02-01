@@ -350,6 +350,7 @@ impl AllocatedImage {
 pub struct AllocatedImageBuilder<'a> {
     pub image_create_info_builder: vk::ImageCreateInfoBuilder<'a>,
     pub image_view_create_info_builder: vk::ImageViewCreateInfoBuilder<'a>,
+    pub data: Option<Vec<u8>>,
 }
 
 #[derive(Error, Debug)]
@@ -378,7 +379,14 @@ impl<'a> AllocatedImageBuilder<'a> {
         AllocatedImageBuilder {
             image_create_info_builder,
             image_view_create_info_builder,
+            data: None,
         }
+    }
+
+    pub fn with_data(mut self, data: Vec<u8>) -> Self {
+        self.data = Some(data);
+
+        self
     }
 
     pub fn texture_default(mut self, format: vk::Format) -> Self {
@@ -443,9 +451,17 @@ impl<'a> AllocatedImageBuilder<'a> {
         self
     }
 
-    pub fn build(
+    pub fn build(self, renderer: &mut Renderer) -> Result<AllocatedImage, ImageBuildError> {
+        self.build_internal(
+            &renderer.device,
+            renderer.graphics_queue.handle,
+            &mut renderer.allocator(),
+            &renderer.command_uploader,
+        )
+    }
+
+    pub(crate) fn build_internal(
         mut self,
-        data: &[u8],
         device: &ash::Device,
         graphics_queue: vk::Queue,
         allocator: &mut Allocator,
@@ -478,7 +494,19 @@ impl<'a> AllocatedImageBuilder<'a> {
             extent: self.image_create_info_builder.extent,
         };
 
-        image.upload_data(data, device, graphics_queue, allocator, command_uploader)?;
+        let data = match self.data {
+            Some(data) => data,
+            None => std::iter::repeat(u8::MAX)
+                .take(
+                    (self.image_create_info_builder.extent.width
+                        * self.image_create_info_builder.extent.height
+                        * 4)
+                    .try_into()
+                    .unwrap(),
+                )
+                .collect(),
+        };
+        image.upload_data(&data, device, graphics_queue, allocator, command_uploader)?;
 
         Ok(image)
     }

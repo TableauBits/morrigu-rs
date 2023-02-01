@@ -126,7 +126,8 @@ impl TextureBuilder {
             depth: 1,
         })
         .texture_default(self.format)
-        .build(data, device, graphics_queue, allocator, command_uploader)?;
+        .with_data(data.to_vec())
+        .build_internal(device, graphics_queue, allocator, command_uploader)?;
 
         let sampler_info = vk::SamplerCreateInfo::builder()
             .mag_filter(vk::Filter::NEAREST)

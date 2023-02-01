@@ -6,6 +6,7 @@ use crate::descriptor_resources::{
     create_dsl, update_descriptors_set_from_bindings, DSLCreationError, DescriptorResources,
     DescriptorSetUpdateError, ResourceBindingError,
 };
+use crate::pipeline_barrier::PipelineBarrier;
 use crate::pipeline_builder::{ComputePipelineBuilder, PipelineBuildError};
 use crate::renderer::Renderer;
 use crate::shader::create_shader_module;
@@ -268,13 +269,39 @@ impl ComputeShader {
 
     pub fn run(
         &self,
-        renderer: &mut Renderer,
         group_shape: (u32, u32, u32),
+        pipeline_barrier: PipelineBarrier,
+        renderer: &mut Renderer,
     ) -> Result<(), ImmediateCommandError> {
         renderer.immediate_command(|cmd_buffer| unsafe {
+            renderer.device.cmd_bind_pipeline(
+                *cmd_buffer,
+                vk::PipelineBindPoint::COMPUTE,
+                self.pipeline,
+            );
+
+            renderer.device.cmd_bind_descriptor_sets(
+                *cmd_buffer,
+                vk::PipelineBindPoint::COMPUTE,
+                self.layout,
+                0,
+                &[self.descriptor_set],
+                &[],
+            );
+
             renderer
                 .device
-                .cmd_dispatch(*cmd_buffer, group_shape.0, group_shape.1, group_shape.2)
+                .cmd_dispatch(*cmd_buffer, group_shape.0, group_shape.1, group_shape.2);
+
+            renderer.device.cmd_pipeline_barrier(
+                *cmd_buffer,
+                pipeline_barrier.src_stage_mask,
+                pipeline_barrier.dst_stage_mask,
+                pipeline_barrier.dependency_flags,
+                &pipeline_barrier.memory_barriers,
+                &pipeline_barrier.buffer_memory_barriers,
+                &pipeline_barrier.image_memory_barriers,
+            )
         })
     }
 

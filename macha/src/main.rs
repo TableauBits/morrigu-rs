@@ -3,6 +3,7 @@ mod components;
 mod ecs_buffer;
 mod systems;
 
+use ash::vk as vk;
 use bevy_ecs::{prelude::Entity, schedule::SystemStage};
 use camera::MachaEditorCamera;
 use components::{
@@ -11,7 +12,7 @@ use components::{
 };
 use ecs_buffer::ECSBuffer;
 use morrigu::{
-    allocated_types::AllocatedBuffer,
+    allocated_types::{AllocatedBuffer, AllocatedImage},
     application::{
         ApplicationBuilder, ApplicationState, BuildableApplicationState, EguiUpdateContext, Event,
         StateContext,
@@ -24,6 +25,7 @@ use morrigu::{
     },
     compute_shader::ComputeShader,
     descriptor_resources::DescriptorResources,
+    pipeline_barrier::PipelineBarrier,
     shader::Shader,
     systems::mesh_renderer,
     texture::{Texture, TextureFormat},
@@ -128,8 +130,8 @@ impl BuildableApplicationState<()> for MachaState {
                 .into(),
                 sampled_images: [
                     (1, texture_ref.clone()),
-                    (2, flowmap_ref.clone()),
-                    (3, gradient_ref.clone()),
+                    (2, flowmap_ref),
+                    (3, gradient_ref),
                 ]
                 .into(),
                 ..Default::default()
@@ -151,7 +153,7 @@ impl BuildableApplicationState<()> for MachaState {
 
         context.ecs_manager.world.spawn((
             transform,
-            mesh_rendering_ref.clone(),
+            mesh_rendering_ref,
             MachaEntityOptions {
                 name: "planet".to_owned(),
             },
@@ -185,22 +187,13 @@ impl BuildableApplicationState<()> for MachaState {
                 );
             });
 
-        /*
         let input_texture = texture_ref.lock();
-        let output_compute_texture = Texture::builder()
-            .build_from_data(
-                &std::iter::repeat(u8::MAX)
-                    .take(
-                        (input_texture.dimensions[0] * input_texture.dimensions[1] * 4)
-                            .try_into()
-                            .unwrap(),
-                    )
-                    .collect::<Vec<_>>(),
-                input_texture.dimensions[0],
-                input_texture.dimensions[1],
-                context.renderer,
-            )
-            .unwrap();
+        let output_image_ref = ThreadSafeRef::new(AllocatedImage::builder(vk::Extent2D {
+                width: input_texture.dimensions[0],
+                height: input_texture.dimensions[1],
+        }.into())
+            .build(context.renderer)
+            .unwrap());
         drop(input_texture);
         let compute_shader = ComputeShader::builder()
             .build_from_spirv_u8(
@@ -208,7 +201,7 @@ impl BuildableApplicationState<()> for MachaState {
                 DescriptorResources {
                     storage_images: [
                         (0, texture_ref.lock().image_ref.clone()),
-                        (1, output_compute_texture.lock().image_ref.clone()),
+                        (1, output_image_ref),
                     ]
                     .into(),
                     ..Default::default()
@@ -216,7 +209,14 @@ impl BuildableApplicationState<()> for MachaState {
                 context.renderer,
             )
             .expect("Failed to create compute shader");
-        */
+        let pipeline_barrier = PipelineBarrier {
+            src_stage_mask: vk::PipelineStageFlags::COMPUTE_SHADER,
+            dst_stage_mask: vk::PipelineStageFlags::FRAGMENT_SHADER,
+            dependency_flags: todo!(),
+            memory_barriers: todo!(),
+            buffer_memory_barriers: todo!(),
+            image_memory_barriers: todo!(),
+        };
 
         MachaState {
             camera,
