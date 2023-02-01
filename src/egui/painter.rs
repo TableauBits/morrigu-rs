@@ -92,6 +92,7 @@ pub struct Painter {
     user_texture_id: u64,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Error, Debug)]
 pub enum PainterCreationError {
     #[error("Conversion of size max image dimensions from u32 to usize failed (check that {0} <= usize::MAX).")]
