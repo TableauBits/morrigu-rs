@@ -13,7 +13,11 @@ pc_CameraData;
 layout(set = 3, binding = 0) uniform ModelData { mat4 modelMatrix; }
 u_ModelData;
 
+layout(location = 0) out vec2 fs_UVPassThrough;
+
 void main() {
   mat4 transform = pc_CameraData.viewProjection * u_ModelData.modelMatrix;
   gl_Position = transform * vec4(v_Position, 1);
+  fs_UVPassThrough = v_UV;
 }
+

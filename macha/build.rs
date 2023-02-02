@@ -1,33 +1,58 @@
 use std::{
     fs::DirEntry,
-    io::{self, Write},
+    io::Write,
+    path::{Path, PathBuf},
 };
 
-fn recursive_compile(dir: &str) {
-    for entry in std::fs::read_dir(dir).expect("Failed to read shader source folder") {
+fn build_shaders(source_path: PathBuf) {
+    let mut output_path = source_path.clone();
+    output_path.push("gen");
+
+    if output_path.exists() {
+        if let Err(error) = std::fs::remove_dir_all(output_path.clone()) {
+            println!("cargo:warning=Failed to clean shader output folder {error}");
+        }
+        std::fs::create_dir_all(output_path.clone())
+            .expect("Failed to create shader output folder");
+    }
+
+    for entry in std::fs::read_dir(source_path).expect("Failed to read shader source folder") {
+        let entry = entry.expect("Failed to iterate over files");
+
+        if entry.path().ends_with("gen") {
+            continue;
+        }
+
+        recursive_compile(&entry.path(), &output_path);
+    }
+}
+
+fn recursive_compile(source_path: &Path, output_path: &Path) {
+    for entry in std::fs::read_dir(source_path).expect("Failed to read shader source folder") {
         let entry = entry.expect("Failed to iterate over files");
 
         if entry.file_type().unwrap().is_dir() {
-            recursive_compile(entry.path().to_str().unwrap());
+            recursive_compile(&entry.path(), output_path);
         } else {
-            compile_shader(Ok(entry));
+            compile_shader(entry, output_path);
         }
     }
 }
 
-fn compile_shader(entry: Result<DirEntry, io::Error>) {
-    let entry = entry.expect("Failed to iterate over files");
-
+fn compile_shader(entry: DirEntry, output_path: &Path) {
     if !entry.file_type().unwrap().is_file() {
         return;
     }
 
+    let mut path_prefix = PathBuf::from(output_path);
+    path_prefix.pop();
+
     let input_file_path = entry.path();
     let input_file_name = input_file_path.file_name().expect("Invalid file name");
-    let output_file_path = std::path::Path::new("assets/gen").join(
+    let output_file_path = PathBuf::from(output_path).join(
         input_file_path
-            .strip_prefix("assets/src")
-            .expect("Invalid file structure")
+            .strip_prefix(path_prefix)
+            .unwrap()
             .with_file_name(
                 input_file_name
                     .to_str()
@@ -78,13 +103,9 @@ fn compile_shader(entry: Result<DirEntry, io::Error>) {
 }
 
 fn main() {
-    println!("cargo:rerun-if-changed=assets/src/shaders/");
-    println!("cargo:rerun-if-changed=assets/gen/shaders/");
+    println!("cargo:rerun-if-changed=src/shaders/src");
+    println!("cargo:rerun-if-changed=src/shaders/gen");
     println!("Running build script");
 
-    if let Err(error) = std::fs::remove_dir_all("assets/gen/shaders") {
-        println!("cargo:warning=Failed to clean shader output folder {error}");
-    }
-    std::fs::create_dir_all("assets/gen/shaders").expect("Failed to create shader output folder");
-    recursive_compile("assets/src/shaders");
+    build_shaders(PathBuf::from("src/editor/shaders"));
 }

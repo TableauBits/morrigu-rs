@@ -7,7 +7,9 @@ use morrigu::{
 };
 use winit_input_helper::WinitInputHelper;
 
-use crate::components::{macha_options::MachaGlobalOptions, selected_entity::SelectedEntity};
+use crate::editor::components::{
+    macha_options::MachaGlobalOptions, selected_entity::SelectedEntity,
+};
 
 pub fn draw_gizmo(
     mut query: Query<(&mut Transform, &mut SelectedEntity)>,

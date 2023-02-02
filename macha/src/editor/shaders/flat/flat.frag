@@ -8,3 +8,4 @@ layout(location = 0) out vec4 f_Color;
 void main() {
   f_Color = vec4(u_ColorData.color, 1);
 }
+

@@ -42,3 +42,4 @@ void main()
 
 	imageStore(resultImage, ivec2(gl_GlobalInvocationID.xy), res);
 }
+

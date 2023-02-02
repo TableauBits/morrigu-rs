@@ -4,6 +4,7 @@ Cargo.lock
 *.log
 *.vim
 
+**/shaders/gen/**
+
 src/egui/shaders/gen/**
 macha/assets/gen/**
-macha/imgui.ini
