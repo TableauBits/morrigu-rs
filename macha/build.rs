@@ -23,7 +23,11 @@ fn build_shaders(source_path: PathBuf) {
             continue;
         }
 
-        recursive_compile(&entry.path(), &output_path);
+        if entry.file_type().unwrap().is_dir() {
+            recursive_compile(&entry.path(), &output_path);
+        } else {
+            compile_shader(entry, &output_path);
+        }
     }
 }
 
@@ -108,4 +112,5 @@ fn main() {
     println!("Running build script");
 
     build_shaders(PathBuf::from("src/editor/shaders"));
+    build_shaders(PathBuf::from("src/compute_shader_test/shaders"));
 }
