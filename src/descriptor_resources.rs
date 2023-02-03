@@ -89,6 +89,9 @@ pub(crate) fn create_dsl(
     for (_, binding_info) in ubo_map {
         bindings_infos.push(binding_info);
     }
+    for (_, binding_info) in images_map {
+        bindings_infos.push(binding_info);
+    }
     for (_, binding_info) in sampler_map {
         bindings_infos.push(binding_info);
     }

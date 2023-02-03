@@ -26,6 +26,7 @@ impl From<TextureFormat> for vk::Format {
 
 pub struct TextureBuilder {
     pub format: vk::Format,
+    pub usage: vk::ImageUsageFlags,
 }
 
 #[derive(Error, Debug)]
@@ -44,6 +45,7 @@ impl TextureBuilder {
     pub fn new() -> Self {
         Self {
             format: vk::Format::R8G8B8A8_SRGB,
+            usage: vk::ImageUsageFlags::empty(),
         }
     }
 
@@ -51,6 +53,24 @@ impl TextureBuilder {
         self.format = format.into();
 
         self
+    }
+
+    pub fn with_usage(mut self, usage: vk::ImageUsageFlags) -> Self {
+        self.usage = usage;
+
+        self
+    }
+
+    pub fn build(
+        self,
+        renderer: &mut Renderer,
+    ) -> Result<ThreadSafeRef<Texture>, TextureBuildError> {
+        self.build_default_internal(
+            &renderer.device,
+            renderer.graphics_queue.handle,
+            &mut renderer.allocator.as_mut().unwrap().lock(),
+            &mut renderer.command_uploader,
+        )
     }
 
     pub fn build_from_path(
@@ -126,6 +146,7 @@ impl TextureBuilder {
             depth: 1,
         })
         .texture_default(self.format)
+        .with_usage(self.usage)
         .with_data(data.to_vec())
         .build_internal(device, graphics_queue, allocator, command_uploader)?;
 

@@ -350,6 +350,9 @@ impl AllocatedImage {
 pub struct AllocatedImageBuilder<'a> {
     pub image_create_info_builder: vk::ImageCreateInfoBuilder<'a>,
     pub image_view_create_info_builder: vk::ImageViewCreateInfoBuilder<'a>,
+
+    pub usage: vk::ImageUsageFlags,
+
     pub data: Option<Vec<u8>>,
 }
 
@@ -379,8 +382,15 @@ impl<'a> AllocatedImageBuilder<'a> {
         AllocatedImageBuilder {
             image_create_info_builder,
             image_view_create_info_builder,
+            usage: vk::ImageUsageFlags::empty(),
             data: None,
         }
+    }
+
+    pub fn with_usage(mut self, usage: vk::ImageUsageFlags) -> Self {
+        self.usage = usage;
+
+        self
     }
 
     pub fn with_data(mut self, data: Vec<u8>) -> Self {
@@ -398,11 +408,7 @@ impl<'a> AllocatedImageBuilder<'a> {
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(
-                vk::ImageUsageFlags::TRANSFER_SRC
-                    | vk::ImageUsageFlags::TRANSFER_DST
-                    | vk::ImageUsageFlags::SAMPLED,
-            )
+            .usage(self.usage | vk::ImageUsageFlags::SAMPLED)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         self.image_view_create_info_builder = self
@@ -429,11 +435,7 @@ impl<'a> AllocatedImageBuilder<'a> {
             .array_layers(1)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(
-                vk::ImageUsageFlags::TRANSFER_SRC
-                    | vk::ImageUsageFlags::TRANSFER_DST
-                    | vk::ImageUsageFlags::STORAGE,
-            )
+            .usage(self.usage | vk::ImageUsageFlags::STORAGE)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         self.image_view_create_info_builder = self
@@ -467,6 +469,11 @@ impl<'a> AllocatedImageBuilder<'a> {
         allocator: &mut Allocator,
         command_uploader: &CommandUploader,
     ) -> Result<AllocatedImage, ImageBuildError> {
+        if self.data.is_some() {
+            self.usage |= vk::ImageUsageFlags::TRANSFER_DST;
+        }
+        self.image_create_info_builder.usage |= self.usage;
+
         let handle = unsafe { device.create_image(&self.image_create_info_builder, None) }
             .map_err(ImageBuildError::VulkanCreationFailed)?;
 

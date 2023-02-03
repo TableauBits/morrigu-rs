@@ -205,7 +205,7 @@ impl ComputeShaderBuilder {
         update_descriptors_set_from_bindings(
             &bindings,
             &descriptor_set,
-            Some(&[2]),
+            None,
             &descriptor_resources,
             renderer,
         )?;

@@ -1,8 +1,8 @@
-use editor::MachaState;
-use morrigu::application::ApplicationBuilder;
-
-mod editor;
 mod compute_shader_test;
+mod editor;
+
+use compute_shader_test::CSTState;
+use morrigu::application::ApplicationBuilder;
 
 fn init_logging() {
     #[cfg(debug_assertions)]
@@ -30,5 +30,5 @@ fn main() {
         .with_dimensions(1280, 720)
         .with_application_name("Macha")
         .with_application_version(0, 1, 0)
-        .build_and_run_inplace::<MachaState, ()>(());
+        .build_and_run_inplace::<CSTState, ()>(());
 }
