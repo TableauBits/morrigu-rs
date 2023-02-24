@@ -28,7 +28,8 @@ pub struct CSTState {
     output_texture: ThreadSafeRef<Texture>,
 
     material_ref: ThreadSafeRef<Material>,
-    mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
+    input_mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
+    output_mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
 }
 
 impl BuildableApplicationState<()> for CSTState {
@@ -75,7 +76,20 @@ impl BuildableApplicationState<()> for CSTState {
         )
         .expect("Failed to create mesh");
 
-        let mesh_rendering_ref = MeshRendering::new(
+        let input_mesh_rendering_ref = MeshRendering::new(
+            &mesh_ref,
+            &material_ref,
+            DescriptorResources {
+                uniform_buffers: [mesh_rendering::default_ubo_bindings(context.renderer).unwrap()]
+                    .into(),
+                sampled_images: [(1, input_texture.clone())].into(),
+                ..Default::default()
+            },
+            context.renderer,
+        )
+        .expect("Failed to create mesh rendering");
+
+        let output_mesh_rendering_ref = MeshRendering::new(
             &mesh_ref,
             &material_ref,
             DescriptorResources {
@@ -88,19 +102,25 @@ impl BuildableApplicationState<()> for CSTState {
         )
         .expect("Failed to create mesh rendering");
 
+        context.ecs_manager.world.insert_resource(camera);
+
         let mut transform = Transform::default();
         transform.rotate(
             f32::to_radians(-90.0),
             morrigu::components::transform::Axis::X,
         );
-        transform.set_position(&Vec3::new(0.0, 0.0, -1.0));
-        transform.rescale(&Vec3::new(0.5, 0.5, 0.5));
-
-        context.ecs_manager.world.insert_resource(camera);
+        transform.set_position(&Vec3::new(-0.5, 0.0, -1.0));
+        transform.rescale(&Vec3::new(0.3, 0.3, 0.3));
         context
             .ecs_manager
             .world
-            .spawn((transform, mesh_rendering_ref.clone()));
+            .spawn((transform, input_mesh_rendering_ref.clone()));
+
+        transform.set_position(&Vec3::new(0.5, 0.0, -1.0));
+        context
+            .ecs_manager
+            .world
+            .spawn((transform, output_mesh_rendering_ref.clone()));
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
             schedule.add_stage(
@@ -113,7 +133,8 @@ impl BuildableApplicationState<()> for CSTState {
             input_texture,
             output_texture,
             material_ref,
-            mesh_rendering_ref,
+            output_mesh_rendering_ref,
+            input_mesh_rendering_ref,
         }
     }
 }
@@ -122,7 +143,7 @@ impl ApplicationState for CSTState {
     fn on_attach(&mut self, context: &mut morrigu::application::StateContext) {
         let compute_shader = ComputeShader::builder()
             .build_from_spirv_u8(
-                include_bytes!("shaders/gen/sharpen.comp"),
+                include_bytes!("shaders/gen/blur.comp"),
                 DescriptorResources {
                     storage_images: [
                         (0, self.input_texture.lock().image_ref.clone()),
@@ -147,20 +168,36 @@ impl ApplicationState for CSTState {
                     dependency_flags: vk::DependencyFlags::empty(),
                     memory_barriers: vec![],
                     buffer_memory_barriers: vec![],
-                    image_memory_barriers: vec![vk::ImageMemoryBarrier::builder()
-                        .old_layout(vk::ImageLayout::GENERAL)
-                        .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                        .image(self.output_texture.lock().image_ref.lock().handle)
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-                        .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                        .build()],
+                    image_memory_barriers: vec![
+                        vk::ImageMemoryBarrier::builder()
+                            .old_layout(vk::ImageLayout::GENERAL)
+                            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                            .image(self.input_texture.lock().image_ref.lock().handle)
+                            .subresource_range(vk::ImageSubresourceRange {
+                                aspect_mask: vk::ImageAspectFlags::COLOR,
+                                base_mip_level: 0,
+                                level_count: 1,
+                                base_array_layer: 0,
+                                layer_count: 1,
+                            })
+                            .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+                            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                            .build(),
+                        vk::ImageMemoryBarrier::builder()
+                            .old_layout(vk::ImageLayout::GENERAL)
+                            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                            .image(self.output_texture.lock().image_ref.lock().handle)
+                            .subresource_range(vk::ImageSubresourceRange {
+                                aspect_mask: vk::ImageAspectFlags::COLOR,
+                                base_mip_level: 0,
+                                level_count: 1,
+                                base_array_layer: 0,
+                                layer_count: 1,
+                            })
+                            .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+                            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                            .build(),
+                    ],
                 },
                 context.renderer,
             )
