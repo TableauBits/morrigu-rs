@@ -42,6 +42,7 @@ impl BuildableApplicationState<()> for CSTState {
 
         let input_texture = Texture::builder()
             .with_format(TextureFormat::RGBA8_UNORM)
+            .with_layout(vk::ImageLayout::GENERAL)
             .with_usage(vk::ImageUsageFlags::STORAGE)
             .build_from_path(
                 Path::new("assets/textures/jupiter_base.png"),
@@ -50,6 +51,7 @@ impl BuildableApplicationState<()> for CSTState {
             .expect("Failed to load texture");
         let output_texture = Texture::builder()
             .with_format(TextureFormat::RGBA8_UNORM)
+            .with_layout(vk::ImageLayout::GENERAL)
             .with_usage(vk::ImageUsageFlags::STORAGE)
             .build(context.renderer)
             .expect("Failed to load texture");
@@ -123,7 +125,7 @@ impl ApplicationState for CSTState {
             .expect("Failed to build compute shader");
 
         let [width, height] = self.input_texture.lock().dimensions;
-        let layout = self.output_texture.lock().image_ref.lock().layout;
+        let layout = vk::ImageLayout::GENERAL;
 
         compute_shader
             .lock()

@@ -4,8 +4,7 @@ use thiserror::Error;
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedImage},
     descriptor_resources::{
-        update_descriptors_set_from_bindings, DescriptorResources, DescriptorSetUpdateError,
-        ResourceBindingError, UniformUpdateError,
+        DescriptorResources, DescriptorSetUpdateError, ResourceBindingError, UniformUpdateError,
     },
     pipeline_builder::{PipelineBuildError, PipelineBuilder},
     renderer::Renderer,
@@ -44,6 +43,15 @@ where
     pub(crate) pipeline: vk::Pipeline,
 
     vertex_type_safety: std::marker::PhantomData<VertexType>,
+}
+
+impl<VertexType> PartialEq for Material<VertexType>
+where
+    VertexType: Vertex,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.pipeline == other.pipeline
+    }
 }
 
 pub struct MaterialBuilder {
@@ -152,11 +160,10 @@ impl MaterialBuilder {
 
         let mut merged_bindings = shader.vertex_bindings.clone();
         merged_bindings.extend(&shader.fragment_bindings);
-        update_descriptors_set_from_bindings(
+        descriptor_resources.update_descriptors_set_from_bindings(
             &merged_bindings,
             &descriptor_set,
             Some(&[2]),
-            &descriptor_resources,
             renderer,
         )?;
 
@@ -337,7 +344,7 @@ where
 
         let descriptor_image_info = vk::DescriptorImageInfo::builder()
             .image_view(image.view)
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+            .image_layout(vk::ImageLayout::GENERAL);
 
         let set_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)

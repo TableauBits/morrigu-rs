@@ -3,8 +3,8 @@ use std::path::Path;
 
 use crate::allocated_types::{AllocatedBuffer, AllocatedImage};
 use crate::descriptor_resources::{
-    create_dsl, update_descriptors_set_from_bindings, DSLCreationError, DescriptorResources,
-    DescriptorSetUpdateError, ResourceBindingError,
+    create_dsl, DSLCreationError, DescriptorResources, DescriptorSetUpdateError,
+    ResourceBindingError,
 };
 use crate::pipeline_barrier::PipelineBarrier;
 use crate::pipeline_builder::{ComputePipelineBuilder, PipelineBuildError};
@@ -202,11 +202,10 @@ impl ComputeShaderBuilder {
         }
         .map_err(ComputeShaderBuildError::VulkanDescriptorSetAllocationFailed)?[0];
 
-        update_descriptors_set_from_bindings(
+        descriptor_resources.update_descriptors_set_from_bindings(
             &bindings,
             &descriptor_set,
             None,
-            &descriptor_resources,
             renderer,
         )?;
 
@@ -352,7 +351,7 @@ impl ComputeShader {
 
         let descriptor_image_info = vk::DescriptorImageInfo::builder()
             .image_view(image.view)
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+            .image_layout(vk::ImageLayout::GENERAL);
 
         let set_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)

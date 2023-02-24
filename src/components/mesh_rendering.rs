@@ -5,8 +5,7 @@ use thiserror::Error;
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedImage, BufferBuildError},
     descriptor_resources::{
-        update_descriptors_set_from_bindings, DescriptorResources, DescriptorSetUpdateError,
-        ResourceBindingError, UniformUpdateError,
+        DescriptorResources, DescriptorSetUpdateError, ResourceBindingError, UniformUpdateError,
     },
     material::{Material, Vertex},
     mesh::Mesh,
@@ -126,11 +125,10 @@ where
 
         let mut merged_bindings = material_shader.vertex_bindings.clone();
         merged_bindings.extend(&material_shader.fragment_bindings);
-        update_descriptors_set_from_bindings(
+        descriptor_resources.update_descriptors_set_from_bindings(
             &merged_bindings,
             &descriptor_set,
             Some(&[3]),
-            &descriptor_resources,
             renderer,
         )?;
 
@@ -211,7 +209,7 @@ where
 
         let descriptor_image_info = vk::DescriptorImageInfo::builder()
             .image_view(image.view)
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+            .image_layout(vk::ImageLayout::GENERAL);
 
         let set_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)

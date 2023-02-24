@@ -5,7 +5,7 @@ use crate::{
         camera::Camera, mesh_rendering::MeshRendering, resource_wrapper::ResourceWrapper,
         transform::Transform,
     },
-    material::Vertex,
+    material::{Material, Vertex},
     renderer::Renderer,
     utils::ThreadSafeRef,
     vector_type::{Mat4, Vec4},
@@ -55,23 +55,27 @@ pub fn render_meshes<VertexType>(
         .expect("Memory should be mappable")[..raw_time_data.len()]
         .copy_from_slice(raw_time_data);
 
-    let mut last_material_pipeline = None;
-    let device = &renderer.device;
-    let cmd_buffer = &renderer.primary_command_buffer;
+    let mut last_material: Option<ThreadSafeRef<Material<VertexType>>> = None;
+    let mut last_material_pipeline: Option<vk::Pipeline> = None;
+    let device = renderer.device.clone();
+    let cmd_buffer = renderer.primary_command_buffer.clone();
     for (transform, mesh_rendering_ref) in query.iter() {
         let mut mesh_rendering = mesh_rendering_ref.lock();
-        if mesh_rendering.update_uniform(0, *transform.matrix()).is_err() {
+        if mesh_rendering
+            .update_uniform(0, *transform.matrix())
+            .is_err()
+        {
             log::warn!("Failed to upload model data to slot 0");
         }
 
         let material = mesh_rendering.material_ref.lock();
         let mesh = mesh_rendering.mesh_ref.lock();
 
-        if last_material_pipeline.is_none() {
+        if last_material.is_none() {
             // first draw, need to bind the descriptor set (common for all materials)
             unsafe {
                 device.cmd_bind_descriptor_sets(
-                    *cmd_buffer,
+                    cmd_buffer,
                     vk::PipelineBindPoint::GRAPHICS,
                     material.layout,
                     0,
@@ -84,6 +88,11 @@ pub fn render_meshes<VertexType>(
             };
         }
         if last_material_pipeline != Some(material.pipeline) {
+            material
+                .descriptor_resources
+                .prepare_image_layouts_for_render(&mut renderer)
+                .expect("Failed to prepare images for draw");
+
             // This one small trick allows us to keep vertex data sane
             // (Actual engineers hate him)
             // This is also why we had to bump to requesting 1.1.0 lmao
@@ -111,14 +120,14 @@ pub fn render_meshes<VertexType>(
                 });
             unsafe {
                 device.cmd_bind_pipeline(
-                    *cmd_buffer,
+                    cmd_buffer,
                     vk::PipelineBindPoint::GRAPHICS,
                     material.pipeline,
                 );
-                device.cmd_set_viewport(*cmd_buffer, 0, std::slice::from_ref(&viewport));
-                device.cmd_set_scissor(*cmd_buffer, 0, std::slice::from_ref(&scissor));
+                device.cmd_set_viewport(cmd_buffer, 0, std::slice::from_ref(&viewport));
+                device.cmd_set_scissor(cmd_buffer, 0, std::slice::from_ref(&scissor));
                 device.cmd_bind_descriptor_sets(
-                    *cmd_buffer,
+                    cmd_buffer,
                     vk::PipelineBindPoint::GRAPHICS,
                     material.layout,
                     2,
@@ -128,6 +137,14 @@ pub fn render_meshes<VertexType>(
             };
 
             last_material_pipeline = Some(material.pipeline);
+            if let Some(last_material) = last_material {
+                last_material
+                    .lock()
+                    .descriptor_resources
+                    .restore_image_layouts(&mut renderer)
+                    .expect("Failed to restore image layouts");
+            }
+            last_material = Some(mesh_rendering.material_ref.clone());
         }
 
         let camera_data = CameraData {
@@ -137,7 +154,7 @@ pub fn render_meshes<VertexType>(
 
         unsafe {
             device.cmd_push_constants(
-                *cmd_buffer,
+                cmd_buffer,
                 material.layout,
                 vk::ShaderStageFlags::VERTEX,
                 0,
@@ -145,7 +162,7 @@ pub fn render_meshes<VertexType>(
             );
 
             device.cmd_bind_descriptor_sets(
-                *cmd_buffer,
+                cmd_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
                 material.layout,
                 3,
@@ -154,7 +171,7 @@ pub fn render_meshes<VertexType>(
             );
 
             device.cmd_bind_vertex_buffers(
-                *cmd_buffer,
+                cmd_buffer,
                 0,
                 std::slice::from_ref(&mesh.vertex_buffer.handle),
                 &[0],
@@ -162,13 +179,13 @@ pub fn render_meshes<VertexType>(
             match mesh.index_buffer.as_ref() {
                 Some(index_buffer) => {
                     device.cmd_bind_index_buffer(
-                        *cmd_buffer,
+                        cmd_buffer,
                         index_buffer.handle,
                         0,
                         vk::IndexType::UINT32,
                     );
                     device.cmd_draw_indexed(
-                        *cmd_buffer,
+                        cmd_buffer,
                         mesh.indices
                             .as_ref()
                             .unwrap()
@@ -183,7 +200,7 @@ pub fn render_meshes<VertexType>(
                 }
                 None => {
                     device.cmd_draw(
-                        *cmd_buffer,
+                        cmd_buffer,
                         mesh.vertices
                             .len()
                             .try_into()
