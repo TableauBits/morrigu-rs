@@ -202,21 +202,49 @@ impl ApplicationState for CSTState {
                 context.renderer,
             )
             .expect("Failed to run compute shader");
+
+        compute_shader.lock().destroy(context.renderer);
     }
 
-    fn on_update(
-        &mut self,
-        _dt: std::time::Duration,
-        _context: &mut morrigu::application::StateContext,
-    ) {
-    }
+    fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
+        self.output_mesh_rendering_ref
+            .lock()
+            .descriptor_resources
+            .uniform_buffers[&0]
+            .lock()
+            .destroy(&context.renderer.device, &mut context.renderer.allocator());
+        self.output_mesh_rendering_ref
+            .lock()
+            .destroy(context.renderer);
+        self.input_mesh_rendering_ref
+            .lock()
+            .descriptor_resources
+            .uniform_buffers[&0]
+            .lock()
+            .destroy(&context.renderer.device, &mut context.renderer.allocator());
+        self.input_mesh_rendering_ref
+            .lock()
+            .destroy(context.renderer);
 
-    fn on_update_egui(
-        &mut self,
-        _dt: std::time::Duration,
-        _context: &mut morrigu::application::EguiUpdateContext,
-    ) {
-    }
+        self.output_mesh_rendering_ref
+            .lock()
+            .mesh_ref
+            .lock()
+            .destroy(context.renderer);
+        self.output_mesh_rendering_ref
+            .lock()
+            .material_ref
+            .lock()
+            .destroy(context.renderer);
+        self.output_mesh_rendering_ref
+            .lock()
+            .material_ref
+            .lock()
+            .shader_ref
+            .lock()
+            .destroy(&context.renderer.device);
 
-    fn on_drop(&mut self, _context: &mut morrigu::application::StateContext) {}
+        self.output_texture.lock().destroy(context.renderer);
+        self.input_texture.lock().destroy(context.renderer);
+    }
 }
