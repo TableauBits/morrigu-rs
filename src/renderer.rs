@@ -1146,7 +1146,7 @@ impl Renderer {
         );
     }
 
-    pub(crate) fn immediate_command<F>(&self, function: F) -> Result<(), ImmediateCommandError>
+    pub fn immediate_command<F>(&self, function: F) -> Result<(), ImmediateCommandError>
     where
         F: FnOnce(&vk::CommandBuffer),
     {

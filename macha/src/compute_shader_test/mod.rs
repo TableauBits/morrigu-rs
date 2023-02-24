@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use ash::vk;
+use bevy_ecs::schedule::SystemStage;
 use morrigu::{
     application::{ApplicationState, BuildableApplicationState},
     components::{
@@ -12,9 +13,10 @@ use morrigu::{
     descriptor_resources::DescriptorResources,
     pipeline_barrier::PipelineBarrier,
     shader::Shader,
+    systems::mesh_renderer,
     texture::{Texture, TextureFormat},
     utils::ThreadSafeRef,
-    vector_type::Vec2,
+    vector_type::{Vec2, Vec3},
 };
 
 type Vertex = morrigu::sample_vertex::TexturedVertex;
@@ -53,7 +55,7 @@ impl BuildableApplicationState<()> for CSTState {
             .with_format(TextureFormat::RGBA8_UNORM)
             .with_layout(vk::ImageLayout::GENERAL)
             .with_usage(vk::ImageUsageFlags::STORAGE)
-            .build(context.renderer)
+            .build(input_texture.lock().dimensions, context.renderer)
             .expect("Failed to load texture");
 
         let shader_ref = Shader::from_spirv_u8(
@@ -91,12 +93,21 @@ impl BuildableApplicationState<()> for CSTState {
             f32::to_radians(-90.0),
             morrigu::components::transform::Axis::X,
         );
+        transform.set_position(&Vec3::new(0.0, 0.0, -1.0));
+        transform.rescale(&Vec3::new(0.5, 0.5, 0.5));
 
         context.ecs_manager.world.insert_resource(camera);
         context
             .ecs_manager
             .world
             .spawn((transform, mesh_rendering_ref.clone()));
+
+        context.ecs_manager.redefine_systems_schedule(|schedule| {
+            schedule.add_stage(
+                "render meshes",
+                SystemStage::parallel().with_system(mesh_renderer::render_meshes::<Vertex>),
+            );
+        });
 
         Self {
             input_texture,
@@ -125,7 +136,6 @@ impl ApplicationState for CSTState {
             .expect("Failed to build compute shader");
 
         let [width, height] = self.input_texture.lock().dimensions;
-        let layout = vk::ImageLayout::GENERAL;
 
         compute_shader
             .lock()
@@ -138,8 +148,8 @@ impl ApplicationState for CSTState {
                     memory_barriers: vec![],
                     buffer_memory_barriers: vec![],
                     image_memory_barriers: vec![vk::ImageMemoryBarrier::builder()
-                        .old_layout(layout)
-                        .new_layout(layout)
+                        .old_layout(vk::ImageLayout::GENERAL)
+                        .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                         .image(self.output_texture.lock().image_ref.lock().handle)
                         .subresource_range(vk::ImageSubresourceRange {
                             aspect_mask: vk::ImageAspectFlags::COLOR,

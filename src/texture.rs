@@ -71,9 +71,21 @@ impl TextureBuilder {
 
     pub fn build(
         self,
+        dimensions: [u32; 2],
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Texture>, TextureBuildError> {
-        self.build_default_internal(
+        let pattern = vec![255, 255, 255, 255, 255, 0, 255, 255];
+        let data = pattern
+            .iter()
+            .cycle()
+            .take((4 * dimensions[0] * dimensions[1]).try_into().unwrap())
+            .copied()
+            .collect::<Vec<_>>();
+
+        self.build_from_data_internal(
+            &data,
+            dimensions[0],
+            dimensions[1],
             &renderer.device,
             renderer.graphics_queue.handle,
             &mut renderer.allocator.as_mut().unwrap().lock(),

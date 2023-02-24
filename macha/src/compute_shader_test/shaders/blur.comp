@@ -1,0 +1,22 @@
+#version 450
+
+layout (local_size_x = 16, local_size_y = 16) in;
+layout (set = 0, binding = 0, rgba8) uniform readonly image2D inputImage;
+layout (set = 0, binding = 1, rgba8) uniform image2D resultImage;
+
+void main()
+{	
+	// Fetch neighbouring texels
+    vec3 average = vec3(0.0, 0.0, 0.0);
+	for (int i=-3; i<4; ++i) 
+	{   
+		for(int j=-3; j<4; ++j) 
+		{    
+			average += (imageLoad(inputImage, ivec2(gl_GlobalInvocationID.x + i, gl_GlobalInvocationID.y + j)).rgb) / 32.0;
+		}
+	}
+
+
+    imageStore(resultImage, ivec2(gl_GlobalInvocationID.xy), vec4(average, 1.0));
+}
+
