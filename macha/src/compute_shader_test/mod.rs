@@ -3,7 +3,7 @@ use std::path::Path;
 use ash::vk;
 use bevy_ecs::schedule::SystemStage;
 use morrigu::{
-    application::{ApplicationState, BuildableApplicationState},
+    application::{ApplicationState, BuildableApplicationState, EguiUpdateContext},
     components::{
         camera::{Camera, PerspectiveData},
         mesh_rendering,
@@ -206,6 +206,20 @@ impl ApplicationState for CSTState {
         compute_shader.lock().destroy(context.renderer);
     }
 
+    fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        egui::Window::new("Debug info").show(context.egui_context, |ui| {
+            let color = match dt.as_millis() {
+                0..=25 => [51, 204, 51],
+                26..=50 => [255, 153, 0],
+                _ => [204, 51, 51],
+            };
+            ui.colored_label(
+                egui::Color32::from_rgb(color[0], color[1], color[2]),
+                format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()),
+            );
+        });
+    }
+
     fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
         self.output_mesh_rendering_ref
             .lock()
@@ -231,14 +245,8 @@ impl ApplicationState for CSTState {
             .mesh_ref
             .lock()
             .destroy(context.renderer);
-        self.output_mesh_rendering_ref
-            .lock()
-            .material_ref
-            .lock()
-            .destroy(context.renderer);
-        self.output_mesh_rendering_ref
-            .lock()
-            .material_ref
+        self.material_ref.lock().destroy(context.renderer);
+        self.material_ref
             .lock()
             .shader_ref
             .lock()
