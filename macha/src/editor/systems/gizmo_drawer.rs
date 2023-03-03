@@ -49,12 +49,8 @@ pub fn draw_gizmo(
                         .snapping(is_snapping_enabled);
 
                     if let Some(response) = gizmo.interact(ui) {
-                        let vec = response.transform.to_vec();
-                        let vec = vec
-                            .iter()
-                            .flat_map(|slice| slice.to_vec())
-                            .collect::<Vec<_>>();
-                        transform.set_matrix(&Mat4::from_column_slice(&vec));
+                        let mut foreign_transform = response.transform_cols_array_2d().into_iter().flatten();
+                        transform.set_matrix(&Mat4::from_iterator(&mut foreign_transform));
                     }
                 });
             });

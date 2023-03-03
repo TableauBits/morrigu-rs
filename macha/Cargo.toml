@@ -9,10 +9,10 @@ shaderc = "0.8.0"
 [dependencies]
 log = "0.4"
 ash = "0.37"
-flexi_logger = "0.24.2"
+flexi_logger = "0.25.2"
 morrigu = { path = "../", features = ["egui"] }
 bevy_ecs = "0.9.1"
-egui = "0.20.1"
-egui-gizmo = { git = "https://github.com/matthiascy/egui-gizmo", rev = "516dc8453bb6423d8cf050af172e854611a8a1d9" }
-winit = "0.27"
-winit_input_helper = "0.13"
+egui = "0.21.0"
+egui-gizmo = "0.10.0"
+winit = "0.28"
+winit_input_helper = "0.14"

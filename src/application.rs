@@ -202,7 +202,9 @@ impl<'a> ApplicationBuilder<'a> {
             }
 
             if events_cleared {
-                if context.window_input_state.quit() {
+                if context.window_input_state.close_requested()
+                    || context.window_input_state.destroyed()
+                {
                     control_flow.set_exit();
                 }
 
