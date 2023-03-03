@@ -1,7 +1,7 @@
 use crate::{
     components::mesh_rendering::MeshRendering,
     descriptor_resources::DescriptorResources,
-    material::{Material, MaterialBuilder, Vertex, VertexInputDescription, MaterialBuildError},
+    material::{Material, MaterialBuildError, MaterialBuilder, Vertex, VertexInputDescription},
     mesh::{upload_mesh_data, Mesh, UploadData},
     renderer::Renderer,
     shader::{Shader, ShaderBuildError},

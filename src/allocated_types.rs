@@ -223,6 +223,7 @@ impl AllocatedImage {
     pub fn upload_data(
         &mut self,
         data: &[u8],
+        new_layout: Option<vk::ImageLayout>,
         device: &ash::Device,
         graphics_queue: vk::Queue,
         allocator: &mut Allocator,
@@ -272,7 +273,7 @@ impl AllocatedImage {
                     unsafe {
                         device.cmd_pipeline_barrier(
                             *cmd_buffer,
-                            vk::PipelineStageFlags::TOP_OF_PIPE,
+                            vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                             vk::PipelineStageFlags::TRANSFER,
                             vk::DependencyFlags::empty(),
                             &[],
@@ -302,16 +303,16 @@ impl AllocatedImage {
 
                 let shader_read_barrier = vk::ImageMemoryBarrier::builder()
                     .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-                    .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                    .dst_access_mask(vk::AccessFlags::NONE)
                     .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .new_layout(new_layout.unwrap_or(self.layout))
                     .image(self.handle)
                     .subresource_range(*range);
                 unsafe {
                     device.cmd_pipeline_barrier(
                         *cmd_buffer,
                         vk::PipelineStageFlags::TRANSFER,
-                        vk::PipelineStageFlags::FRAGMENT_SHADER,
+                        vk::PipelineStageFlags::TOP_OF_PIPE,
                         vk::DependencyFlags::empty(),
                         &[],
                         &[],
@@ -321,7 +322,9 @@ impl AllocatedImage {
             },
         )?;
 
-        self.layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
+        if let Some(new_layout) = new_layout {
+            self.layout = new_layout;
+        }
 
         staging_buffer.destroy(device, allocator);
 
@@ -351,6 +354,7 @@ pub struct AllocatedImageBuilder<'a> {
     pub image_create_info_builder: vk::ImageCreateInfoBuilder<'a>,
     pub image_view_create_info_builder: vk::ImageViewCreateInfoBuilder<'a>,
 
+    pub layout: vk::ImageLayout,
     pub usage: vk::ImageUsageFlags,
 
     pub data: Option<Vec<u8>>,
@@ -382,6 +386,7 @@ impl<'a> AllocatedImageBuilder<'a> {
         AllocatedImageBuilder {
             image_create_info_builder,
             image_view_create_info_builder,
+            layout: vk::ImageLayout::GENERAL,
             usage: vk::ImageUsageFlags::empty(),
             data: None,
         }
@@ -399,7 +404,15 @@ impl<'a> AllocatedImageBuilder<'a> {
         self
     }
 
+    pub fn with_layout(mut self, layout: vk::ImageLayout) -> Self {
+        self.layout = layout;
+
+        self
+    }
+
     pub fn texture_default(mut self, format: vk::Format) -> Self {
+        self.layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
+
         self.image_create_info_builder = self
             .image_create_info_builder
             .image_type(vk::ImageType::TYPE_2D)
@@ -513,7 +526,14 @@ impl<'a> AllocatedImageBuilder<'a> {
                 )
                 .collect(),
         };
-        image.upload_data(&data, device, graphics_queue, allocator, command_uploader)?;
+        image.upload_data(
+            &data,
+            Some(self.layout),
+            device,
+            graphics_queue,
+            allocator,
+            command_uploader,
+        )?;
 
         Ok(image)
     }

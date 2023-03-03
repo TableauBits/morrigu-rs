@@ -2,6 +2,7 @@ mod compute_shader_test;
 mod editor;
 
 use compute_shader_test::CSTState;
+// use editor::MachaState;
 use morrigu::application::ApplicationBuilder;
 
 fn init_logging() {

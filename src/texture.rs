@@ -26,6 +26,7 @@ impl From<TextureFormat> for vk::Format {
 
 pub struct TextureBuilder {
     pub format: vk::Format,
+    pub layout: vk::ImageLayout,
     pub usage: vk::ImageUsageFlags,
 }
 
@@ -45,12 +46,19 @@ impl TextureBuilder {
     pub fn new() -> Self {
         Self {
             format: vk::Format::R8G8B8A8_SRGB,
+            layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             usage: vk::ImageUsageFlags::empty(),
         }
     }
 
     pub fn with_format(mut self, format: TextureFormat) -> Self {
         self.format = format.into();
+
+        self
+    }
+
+    pub fn with_layout(mut self, layout: vk::ImageLayout) -> Self {
+        self.layout = layout;
 
         self
     }
@@ -63,9 +71,21 @@ impl TextureBuilder {
 
     pub fn build(
         self,
+        dimensions: [u32; 2],
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Texture>, TextureBuildError> {
-        self.build_default_internal(
+        let pattern = vec![255, 255, 255, 255, 255, 0, 255, 255];
+        let data = pattern
+            .iter()
+            .cycle()
+            .take((4 * dimensions[0] * dimensions[1]).try_into().unwrap())
+            .copied()
+            .collect::<Vec<_>>();
+
+        self.build_from_data_internal(
+            &data,
+            dimensions[0],
+            dimensions[1],
             &renderer.device,
             renderer.graphics_queue.handle,
             &mut renderer.allocator.as_mut().unwrap().lock(),
@@ -146,6 +166,7 @@ impl TextureBuilder {
             depth: 1,
         })
         .texture_default(self.format)
+        .with_layout(self.layout)
         .with_usage(self.usage)
         .with_data(data.to_vec())
         .build_internal(device, graphics_queue, allocator, command_uploader)?;
@@ -323,6 +344,7 @@ impl Texture {
     ) -> Result<(), ImageDataUploadError> {
         self.image_ref.lock().upload_data(
             data,
+            None,
             &renderer.device,
             renderer.graphics_queue.handle,
             &mut renderer.allocator(),

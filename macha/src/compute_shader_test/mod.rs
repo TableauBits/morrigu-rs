@@ -1,8 +1,9 @@
 use std::path::Path;
 
 use ash::vk;
+use bevy_ecs::schedule::SystemStage;
 use morrigu::{
-    application::{ApplicationState, BuildableApplicationState},
+    application::{ApplicationState, BuildableApplicationState, EguiUpdateContext},
     components::{
         camera::{Camera, PerspectiveData},
         mesh_rendering,
@@ -12,9 +13,10 @@ use morrigu::{
     descriptor_resources::DescriptorResources,
     pipeline_barrier::PipelineBarrier,
     shader::Shader,
+    systems::mesh_renderer,
     texture::{Texture, TextureFormat},
     utils::ThreadSafeRef,
-    vector_type::Vec2,
+    vector_type::{Vec2, Vec3},
 };
 
 type Vertex = morrigu::sample_vertex::TexturedVertex;
@@ -26,7 +28,8 @@ pub struct CSTState {
     output_texture: ThreadSafeRef<Texture>,
 
     material_ref: ThreadSafeRef<Material>,
-    mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
+    input_mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
+    output_mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
 }
 
 impl BuildableApplicationState<()> for CSTState {
@@ -42,6 +45,7 @@ impl BuildableApplicationState<()> for CSTState {
 
         let input_texture = Texture::builder()
             .with_format(TextureFormat::RGBA8_UNORM)
+            .with_layout(vk::ImageLayout::GENERAL)
             .with_usage(vk::ImageUsageFlags::STORAGE)
             .build_from_path(
                 Path::new("assets/textures/jupiter_base.png"),
@@ -50,8 +54,9 @@ impl BuildableApplicationState<()> for CSTState {
             .expect("Failed to load texture");
         let output_texture = Texture::builder()
             .with_format(TextureFormat::RGBA8_UNORM)
+            .with_layout(vk::ImageLayout::GENERAL)
             .with_usage(vk::ImageUsageFlags::STORAGE)
-            .build(context.renderer)
+            .build(input_texture.lock().dimensions, context.renderer)
             .expect("Failed to load texture");
 
         let shader_ref = Shader::from_spirv_u8(
@@ -71,7 +76,20 @@ impl BuildableApplicationState<()> for CSTState {
         )
         .expect("Failed to create mesh");
 
-        let mesh_rendering_ref = MeshRendering::new(
+        let input_mesh_rendering_ref = MeshRendering::new(
+            &mesh_ref,
+            &material_ref,
+            DescriptorResources {
+                uniform_buffers: [mesh_rendering::default_ubo_bindings(context.renderer).unwrap()]
+                    .into(),
+                sampled_images: [(1, input_texture.clone())].into(),
+                ..Default::default()
+            },
+            context.renderer,
+        )
+        .expect("Failed to create mesh rendering");
+
+        let output_mesh_rendering_ref = MeshRendering::new(
             &mesh_ref,
             &material_ref,
             DescriptorResources {
@@ -84,23 +102,39 @@ impl BuildableApplicationState<()> for CSTState {
         )
         .expect("Failed to create mesh rendering");
 
+        context.ecs_manager.world.insert_resource(camera);
+
         let mut transform = Transform::default();
         transform.rotate(
             f32::to_radians(-90.0),
             morrigu::components::transform::Axis::X,
         );
-
-        context.ecs_manager.world.insert_resource(camera);
+        transform.set_position(&Vec3::new(-0.5, 0.0, -1.0));
+        transform.rescale(&Vec3::new(0.3, 0.3, 0.3));
         context
             .ecs_manager
             .world
-            .spawn((transform, mesh_rendering_ref.clone()));
+            .spawn((transform, input_mesh_rendering_ref.clone()));
+
+        transform.set_position(&Vec3::new(0.5, 0.0, -1.0));
+        context
+            .ecs_manager
+            .world
+            .spawn((transform, output_mesh_rendering_ref.clone()));
+
+        context.ecs_manager.redefine_systems_schedule(|schedule| {
+            schedule.add_stage(
+                "render meshes",
+                SystemStage::parallel().with_system(mesh_renderer::render_meshes::<Vertex>),
+            );
+        });
 
         Self {
             input_texture,
             output_texture,
             material_ref,
-            mesh_rendering_ref,
+            output_mesh_rendering_ref,
+            input_mesh_rendering_ref,
         }
     }
 }
@@ -109,7 +143,7 @@ impl ApplicationState for CSTState {
     fn on_attach(&mut self, context: &mut morrigu::application::StateContext) {
         let compute_shader = ComputeShader::builder()
             .build_from_spirv_u8(
-                include_bytes!("shaders/gen/sharpen.comp"),
+                include_bytes!("shaders/gen/blur.comp"),
                 DescriptorResources {
                     storage_images: [
                         (0, self.input_texture.lock().image_ref.clone()),
@@ -123,7 +157,6 @@ impl ApplicationState for CSTState {
             .expect("Failed to build compute shader");
 
         let [width, height] = self.input_texture.lock().dimensions;
-        let layout = self.output_texture.lock().image_ref.lock().layout;
 
         compute_shader
             .lock()
@@ -135,39 +168,91 @@ impl ApplicationState for CSTState {
                     dependency_flags: vk::DependencyFlags::empty(),
                     memory_barriers: vec![],
                     buffer_memory_barriers: vec![],
-                    image_memory_barriers: vec![vk::ImageMemoryBarrier::builder()
-                        .old_layout(layout)
-                        .new_layout(layout)
-                        .image(self.output_texture.lock().image_ref.lock().handle)
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-                        .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                        .build()],
+                    image_memory_barriers: vec![
+                        vk::ImageMemoryBarrier::builder()
+                            .old_layout(vk::ImageLayout::GENERAL)
+                            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                            .image(self.input_texture.lock().image_ref.lock().handle)
+                            .subresource_range(vk::ImageSubresourceRange {
+                                aspect_mask: vk::ImageAspectFlags::COLOR,
+                                base_mip_level: 0,
+                                level_count: 1,
+                                base_array_layer: 0,
+                                layer_count: 1,
+                            })
+                            .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+                            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                            .build(),
+                        vk::ImageMemoryBarrier::builder()
+                            .old_layout(vk::ImageLayout::GENERAL)
+                            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                            .image(self.output_texture.lock().image_ref.lock().handle)
+                            .subresource_range(vk::ImageSubresourceRange {
+                                aspect_mask: vk::ImageAspectFlags::COLOR,
+                                base_mip_level: 0,
+                                level_count: 1,
+                                base_array_layer: 0,
+                                layer_count: 1,
+                            })
+                            .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+                            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                            .build(),
+                    ],
                 },
                 context.renderer,
             )
             .expect("Failed to run compute shader");
+
+        compute_shader.lock().destroy(context.renderer);
     }
 
-    fn on_update(
-        &mut self,
-        _dt: std::time::Duration,
-        _context: &mut morrigu::application::StateContext,
-    ) {
+    fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        egui::Window::new("Debug info").show(context.egui_context, |ui| {
+            let color = match dt.as_millis() {
+                0..=25 => [51, 204, 51],
+                26..=50 => [255, 153, 0],
+                _ => [204, 51, 51],
+            };
+            ui.colored_label(
+                egui::Color32::from_rgb(color[0], color[1], color[2]),
+                format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()),
+            );
+        });
     }
 
-    fn on_update_egui(
-        &mut self,
-        _dt: std::time::Duration,
-        _context: &mut morrigu::application::EguiUpdateContext,
-    ) {
-    }
+    fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
+        self.output_mesh_rendering_ref
+            .lock()
+            .descriptor_resources
+            .uniform_buffers[&0]
+            .lock()
+            .destroy(&context.renderer.device, &mut context.renderer.allocator());
+        self.output_mesh_rendering_ref
+            .lock()
+            .destroy(context.renderer);
+        self.input_mesh_rendering_ref
+            .lock()
+            .descriptor_resources
+            .uniform_buffers[&0]
+            .lock()
+            .destroy(&context.renderer.device, &mut context.renderer.allocator());
+        self.input_mesh_rendering_ref
+            .lock()
+            .destroy(context.renderer);
 
-    fn on_drop(&mut self, _context: &mut morrigu::application::StateContext) {}
+        self.output_mesh_rendering_ref
+            .lock()
+            .mesh_ref
+            .lock()
+            .destroy(context.renderer);
+        self.material_ref.lock().destroy(context.renderer);
+        self.material_ref
+            .lock()
+            .shader_ref
+            .lock()
+            .destroy(&context.renderer.device);
+
+        self.output_texture.lock().destroy(context.renderer);
+        self.input_texture.lock().destroy(context.renderer);
+    }
 }
