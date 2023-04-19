@@ -1,133 +1,92 @@
-use nalgebra_glm as glm;
+use nalgebra::{Scale3, Transform3, Translation3, UnitQuaternion};
 
-use crate::vector_type::{Mat4, Vec3};
+use crate::vector_type::Mat4;
 
-pub enum Axis {
-    X,
-    Y,
-    Z,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, bevy_ecs::component::Component)]
+#[derive(bevy_ecs::component::Component)]
 pub struct Transform {
-    position: Vec3,
-    rotation: Vec3,
-    scale: Vec3,
+    translation: Translation3<f32>,
+    rotation: UnitQuaternion<f32>,
+    scale: Scale3<f32>,
 
-    cached_transform: Mat4,
+    transform: nalgebra::Transform3<f32>,
 }
 
-impl Transform {
-    pub fn position(&self) -> &Vec3 {
-        &self.position
-    }
+impl From<nalgebra::Transform3<f32>> for Transform {
+    fn from(value: nalgebra::Transform3<f32>) -> Self {
+        let intermediate: nalgebra::Affine3<f32> =
+            nalgebra::try_convert(value).expect("Invalid transform in gltf!");
 
-    pub fn rotation(&self) -> &Vec3 {
-        &self.rotation
-    }
-
-    pub fn scale(&self) -> &Vec3 {
-        &self.scale
-    }
-
-    fn recompute_matrix(&mut self) {
-        let translation_matrix = glm::translate(&Mat4::identity(), &self.position);
-        let rotation_matrix = {
-            let rot_x = glm::rotation(self.rotation.x, &Vec3::new(1.0, 0.0, 0.0));
-            let rot_y = glm::rotation(self.rotation.y, &Vec3::new(0.0, 1.0, 0.0));
-            let rot_z = glm::rotation(self.rotation.z, &Vec3::new(0.0, 0.0, 1.0));
-
-            rot_x * rot_y * rot_z
-        };
-        let scale_matrix = glm::scale(&Mat4::identity(), &self.scale);
-        self.cached_transform = translation_matrix * rotation_matrix * scale_matrix;
-    }
-
-    pub fn set_position(&mut self, position: &Vec3) -> &mut Self {
-        self.position = *position;
-        self.recompute_matrix();
-
-        self
-    }
-
-    pub fn translate(&mut self, translation: &Vec3) -> &mut Self {
-        self.position += translation;
-        self.recompute_matrix();
-
-        self
-    }
-
-    pub fn set_rotation(&mut self, rotation: &Vec3) -> &mut Self {
-        self.rotation = *rotation;
-        self.recompute_matrix();
-
-        self
-    }
-
-    // @TODO(Ithyx): Rework this to allow rotation on arbitrary axis
-    // Updating the transform is easy enough.
-    // However, my brain is veri smol, so not sure how to update individual values
-    pub fn rotate(&mut self, rotation: f32, axis: Axis) -> &mut Self {
-        let axis_rotation = match axis {
-            Axis::X => &mut self.rotation.x,
-            Axis::Y => &mut self.rotation.y,
-            Axis::Z => &mut self.rotation.z,
-        };
-
-        *axis_rotation += rotation;
-        self.recompute_matrix();
-
-        self
-    }
-
-    pub fn set_scale(&mut self, scale: &Vec3) -> &mut Self {
-        self.scale = *scale;
-        self.recompute_matrix();
-
-        self
-    }
-
-    pub fn rescale(&mut self, scale: &Vec3) -> &mut Self {
-        self.scale = self.scale.component_mul(scale);
-        self.recompute_matrix();
-
-        self
-    }
-
-    pub fn set_matrix(&mut self, matrix: &Mat4) -> &mut Self {
-        self.cached_transform = *matrix;
-
-        // @TODO(Ithyx)
-        // Find a way to revert tranform matrix to it's original components
-        // https://github.com/g-truc/glm/blob/master/glm/gtx/matrix_decompose.inl
-
-        self
-    }
-
-    pub fn matrix(&self) -> &Mat4 {
-        &self.cached_transform
+        alga::linear::AffineTransformation::decompose(&intermediate);
+        Self {
+            translation: nalgebra::try_convert(value).unwrap(),
+            rotation: nalgebra::try_convert(value).unwrap(),
+            scale: nalgebra::try_convert(value).unwrap(),
+            transform: value,
+        }
     }
 }
 
 impl Default for Transform {
     fn default() -> Self {
         Self {
-            position: Default::default(),
-            rotation: Default::default(),
-            scale: Vec3::new(1.0, 1.0, 1.0),
-            cached_transform: Mat4::identity(),
+            translation: Translation3::default(),
+            rotation: UnitQuaternion::default(),
+            scale: Scale3::new(1.0, 1.0, 1.0),
+            transform: nalgebra::Transform::default(),
         }
     }
 }
 
-impl std::fmt::Display for Transform {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_fmt(format_args!(
-            "{{ position: {}, rotation: {}, scale: {} }}",
-            self.position, self.rotation, self.scale
-        ))
+impl From<Transform> for nalgebra::Transform3<f32> {
+    fn from(val: Transform) -> Self {
+        val.transform
     }
 }
 
-impl Transform {}
+impl Transform {
+    pub fn from_matrix(matrix: Mat4) -> Self {
+        nalgebra::Transform3::<f32>::from_matrix_unchecked(matrix).into()
+    }
+
+    pub fn matrix(&self) -> &Mat4 {
+        self.transform.matrix()
+    }
+    pub fn update_matrix(&mut self) {
+        let intermediate: Transform3<f32> = nalgebra::convert(self.translation * self.rotation);
+        self.transform = intermediate * nalgebra::convert::<_, Transform3<f32>>(self.scale);
+    }
+
+    pub fn translation(&self) -> &Translation3<f32> {
+        &self.translation
+    }
+    pub fn set_translation(&mut self, translation: &Translation3<f32>) {
+        self.translation = *translation;
+    }
+    pub fn set_translation_and_update(&mut self, translation: &Translation3<f32>) {
+        self.set_translation(translation);
+        self.update_matrix();
+    }
+    pub fn re_translate(&mut self, translation: &Translation3<f32>) {}
+
+    pub fn rotation(&self) -> &UnitQuaternion<f32> {
+        &self.rotation
+    }
+    pub fn set_rotation(&mut self, rotation: &UnitQuaternion<f32>) {
+        self.rotation = *rotation;
+    }
+    pub fn set_rotation_and_update(&mut self, rotation: &UnitQuaternion<f32>) {
+        self.set_rotation(rotation);
+        self.update_matrix();
+    }
+
+    pub fn scale(&self) -> &Scale3<f32> {
+        &self.scale
+    }
+    pub fn set_scale(&mut self, scale: &Scale3<f32>) {
+        self.scale = *scale;
+    }
+    pub fn set_scalei_and_update(&mut self, scale: &Scale3<f32>) {
+        self.set_scale(scale);
+        self.update_matrix();
+    }
+}

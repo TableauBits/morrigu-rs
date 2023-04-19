@@ -956,6 +956,10 @@ impl Renderer {
             .lock()
     }
 
+    pub fn default_texture(&self) -> ThreadSafeRef<Texture> {
+        self.default_texture_ref.clone()
+    }
+
     pub(crate) fn begin_frame(&mut self) -> bool {
         if self.window_width == 0 || self.window_height == 0 {
             return false;

@@ -4,6 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use shaderc::{CompileOptions, EnvVersion, TargetEnv};
+
 fn build_shaders(source_path: PathBuf) {
     let mut output_path = source_path.clone();
     output_path.push("gen");
@@ -86,6 +88,9 @@ fn compile_shader(entry: DirEntry, output_path: &Path) {
     }
     .expect("Failed to parse shader type");
 
+    let mut compile_options = CompileOptions::new().unwrap();
+    compile_options.set_target_env(TargetEnv::Vulkan, EnvVersion::Vulkan1_1 as u32);
+
     let compiler = shaderc::Compiler::new().expect("Failed to create shaderc compiler");
     let compiled_spirv = compiler
         .compile_into_spirv(
@@ -93,7 +98,7 @@ fn compile_shader(entry: DirEntry, output_path: &Path) {
             shader_type,
             input_file_name.to_str().expect("Invalid file name"),
             "main",
-            None,
+            Some(&compile_options),
         )
         .expect("Failed to compile shader");
 
@@ -107,10 +112,9 @@ fn compile_shader(entry: DirEntry, output_path: &Path) {
 }
 
 fn main() {
-    println!("cargo:rerun-if-changed=src/shaders/src");
-    println!("cargo:rerun-if-changed=src/shaders/gen");
     println!("Running build script");
 
-    build_shaders(PathBuf::from("src/editor/shaders"));
     build_shaders(PathBuf::from("src/compute_shader_test/shaders"));
+    build_shaders(PathBuf::from("src/editor/shaders"));
+    build_shaders(PathBuf::from("src/gltf_loader/shaders"));
 }

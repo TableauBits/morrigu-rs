@@ -1,5 +1,7 @@
 use std::{fs::DirEntry, io::Write, path::Path};
 
+use shaderc::{CompileOptions, EnvVersion, TargetEnv};
+
 fn compile_shader(entry: DirEntry) {
     if !entry.file_type().unwrap().is_file() {
         return;
@@ -48,6 +50,9 @@ fn compile_shader(entry: DirEntry) {
     }
     .expect("Failed to parse shader type");
 
+    let mut compile_options = CompileOptions::new().unwrap();
+    compile_options.set_target_env(TargetEnv::Vulkan, EnvVersion::Vulkan1_1 as u32);
+
     let compiler = shaderc::Compiler::new().expect("Failed to create shaderc compiler");
     let compiled_spirv = compiler
         .compile_into_spirv(
@@ -55,7 +60,7 @@ fn compile_shader(entry: DirEntry) {
             shader_type,
             input_file_name.to_str().expect("Invalid file name"),
             "main",
-            None,
+            Some(&compile_options),
         )
         .expect("Failed to compile shader");
 

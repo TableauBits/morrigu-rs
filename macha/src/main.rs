@@ -1,8 +1,8 @@
 mod compute_shader_test;
 mod editor;
+mod gltf_loader;
 
-use compute_shader_test::CSTState;
-// use editor::MachaState;
+use gltf_loader::GLTFViewerState;
 use morrigu::application::ApplicationBuilder;
 
 fn init_logging() {
@@ -31,5 +31,5 @@ fn main() {
         .with_dimensions(1280, 720)
         .with_application_name("Macha")
         .with_application_version(0, 1, 0)
-        .build_and_run_inplace::<CSTState, ()>(());
+        .build_and_run_inplace::<GLTFViewerState, ()>(());
 }

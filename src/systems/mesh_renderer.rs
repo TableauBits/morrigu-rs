@@ -58,7 +58,7 @@ pub fn render_meshes<VertexType>(
     let mut last_material: Option<ThreadSafeRef<Material<VertexType>>> = None;
     let mut last_material_pipeline: Option<vk::Pipeline> = None;
     let device = renderer.device.clone();
-    let cmd_buffer = renderer.primary_command_buffer.clone();
+    let cmd_buffer = renderer.primary_command_buffer;
     for (transform, mesh_rendering_ref) in query.iter() {
         let mut mesh_rendering = mesh_rendering_ref.lock();
         if mesh_rendering

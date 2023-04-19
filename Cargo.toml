@@ -30,6 +30,7 @@ ash-window = "0.12.0"
 gpu-allocator = "0.22"
 spirv-reflect = "0.2"
 
+alga = "0.9.3"
 nalgebra = { version = "0.32", features = ["bytemuck"] }
 nalgebra-glm = { version = "0.18", features = ["convert-bytemuck"] }
 
@@ -38,14 +39,13 @@ image = "0.24"
 memoffset = "0.8.0"
 bytemuck = "1.9"
 
-bevy_ecs = "0.9.1"
+bevy_ecs = "0.10.0"
 
 ply-rs = "0.1"
 tobj = "3.2"
 
 egui = { version = "0.21.0", optional = true, features = ["bytemuck"] }
-egui-winit = { version = "0.21.0", optional = true }
-gltf = "1.1.0"
+egui-winit = { version = "0.21.1", optional = true }
 
 [features]
 egui = ["dep:egui", "dep:egui-winit"]

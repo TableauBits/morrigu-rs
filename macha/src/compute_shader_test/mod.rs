@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use ash::vk;
-use bevy_ecs::schedule::SystemStage;
 use morrigu::{
     application::{ApplicationState, BuildableApplicationState, EguiUpdateContext},
     components::{
