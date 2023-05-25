@@ -1,5 +1,4 @@
 use ash::vk;
-use nalgebra_glm as glm;
 use thiserror::Error;
 
 use crate::{
@@ -8,6 +7,7 @@ use crate::{
         DescriptorResources, DescriptorSetUpdateError, ResourceBindingError, UniformUpdateError,
     },
     material::{Material, Vertex},
+    math_types::Mat4,
     mesh::Mesh,
     renderer::Renderer,
     texture::Texture,
@@ -31,7 +31,7 @@ where
 pub fn default_ubo_bindings(
     renderer: &mut Renderer,
 ) -> Result<(u32, ThreadSafeRef<AllocatedBuffer>), BufferBuildError> {
-    let size: u64 = std::mem::size_of::<glm::Mat4>().try_into().unwrap();
+    let size: u64 = std::mem::size_of::<Mat4>().try_into().unwrap();
     Ok((
         0,
         ThreadSafeRef::new(AllocatedBuffer::builder(size).build(renderer)?),

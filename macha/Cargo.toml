@@ -14,10 +14,8 @@ anyhow = "1.0.70"
 gltf = { git = "https://github.com/Ithyx/gltf", rev = "19627cdf94afc4155a3ee572024f02ed9c67a715" }
 morrigu = { path = "../", features = ["egui"] }
 bevy_ecs = "0.10.1"
-egui = "0.21.0"
+egui = "0.22.0"
 egui-gizmo = "0.10.0"
-nalgebra = { version = "0.32.2", features = ["bytemuck"] }
-nalgebra-glm = { version = "0.18.0", features = ["convert-bytemuck"] }
 winit = "0.28.3"
 winit_input_helper = "0.14.1"
 bytemuck = "1.13.1"

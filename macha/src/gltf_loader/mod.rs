@@ -8,9 +8,9 @@ use morrigu::{
     application::{ApplicationState, BuildableApplicationState, EguiUpdateContext, Event},
     components::camera::{Camera, PerspectiveData},
     descriptor_resources::DescriptorResources,
+    math_types::{Vec2, Vec3, Vec4},
     shader::Shader,
     systems::mesh_renderer,
-    vector_type::{Vec2, Vec3, Vec4},
 };
 
 use self::{

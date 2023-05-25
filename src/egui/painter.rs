@@ -2,12 +2,12 @@ use crate::{
     components::mesh_rendering::MeshRendering,
     descriptor_resources::DescriptorResources,
     material::{Material, MaterialBuildError, MaterialBuilder, Vertex, VertexInputDescription},
+    math_types::{Vec2, Vec4},
     mesh::{upload_mesh_data, Mesh, UploadData},
     renderer::Renderer,
     shader::{Shader, ShaderBuildError},
     texture::{Texture, TextureFormat},
     utils::ThreadSafeRef,
-    vector_type::{Vec2, Vec4},
 };
 
 use ash::vk;

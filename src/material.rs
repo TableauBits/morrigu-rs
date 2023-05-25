@@ -6,12 +6,12 @@ use crate::{
     descriptor_resources::{
         DescriptorResources, DescriptorSetUpdateError, ResourceBindingError, UniformUpdateError,
     },
+    math_types::{Mat4, Vec4},
     pipeline_builder::{PipelineBuildError, PipelineBuilder},
     renderer::Renderer,
     shader::Shader,
     texture::Texture,
     utils::ThreadSafeRef,
-    vector_type::{Mat4, Vec4},
 };
 
 pub struct VertexInputDescription {

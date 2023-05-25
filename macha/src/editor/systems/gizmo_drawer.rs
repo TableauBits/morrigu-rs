@@ -3,7 +3,7 @@ use egui::LayerId;
 use egui_gizmo::{Gizmo, GizmoVisuals};
 use morrigu::{
     components::{camera::Camera, resource_wrapper::ResourceWrapper, transform::Transform},
-    vector_type::Mat4,
+    math_types::Mat4,
 };
 use winit_input_helper::WinitInputHelper;
 
@@ -38,9 +38,9 @@ pub fn draw_gizmo(
                     visuals.inactive_alpha += 0.25;
 
                     let gizmo = Gizmo::new("Selected entity gizmo")
-                        .view_matrix(*camera.view())
-                        .projection_matrix(*camera.projection())
-                        .model_matrix(*transform.matrix())
+                        .view_matrix(camera.view().to_cols_array_2d())
+                        .projection_matrix(camera.projection().to_cols_array_2d())
+                        .model_matrix((*transform).into())
                         .mode(macha_options.preferred_gizmo)
                         .visuals(visuals)
                         .snap_distance(0.5)
@@ -49,8 +49,8 @@ pub fn draw_gizmo(
                         .snapping(is_snapping_enabled);
 
                     if let Some(response) = gizmo.interact(ui) {
-                        let mut foreign_transform = response.transform_cols_array_2d().into_iter().flatten();
-                        transform.set_matrix(&Mat4::from_iterator(&mut foreign_transform));
+                        *transform =
+                            Mat4::from_cols_array_2d(&response.transform_cols_array_2d()).into();
                     }
                 });
             });

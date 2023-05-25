@@ -3,14 +3,13 @@ use morrigu::{
     allocated_types::AllocatedBuffer,
     components::{mesh_rendering::default_descriptor_resources, transform::Transform},
     descriptor_resources::DescriptorResources,
+    math_types::{Mat4, Vec3, Vec4},
     mesh::{upload_index_buffer, upload_vertex_buffer, Mesh},
     renderer::Renderer,
     shader::Shader,
     texture::{Texture, TextureFormat},
     utils::ThreadSafeRef,
-    vector_type::{Vec3, Vec4},
 };
-use nalgebra_glm::Mat4;
 use std::{hint::black_box, iter::zip, path::Path};
 
 use super::scene::{Material, MeshRendering, Scene, Vertex};

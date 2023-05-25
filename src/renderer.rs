@@ -1,8 +1,8 @@
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage},
+    math_types::Vec4,
     texture::Texture,
     utils::{CommandUploader, ImmediateCommandError, ThreadSafeRef},
-    vector_type::Vec4,
 };
 
 use ash::{

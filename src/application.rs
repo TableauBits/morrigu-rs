@@ -6,9 +6,9 @@ pub use winit::{
 use crate::{
     components::camera::{Camera, PerspectiveData, Projection},
     ecs_manager::ECSManager,
+    math_types::Vec2,
     renderer::{Renderer, RendererBuilder},
     utils::ThreadSafeRef,
-    vector_type::Vec2,
 };
 
 use ash::vk;

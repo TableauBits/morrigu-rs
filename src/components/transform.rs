@@ -1,92 +1,93 @@
-use nalgebra::{Scale3, Transform3, Translation3, UnitQuaternion};
+use std::cell::RefCell;
 
-use crate::vector_type::Mat4;
+use crate::{
+    math_types::{Mat4, Quat, Vec3},
+    utils::ThreadSafeRef,
+};
 
-#[derive(bevy_ecs::component::Component)]
+#[derive(Debug, Clone, bevy_ecs::component::Component)]
 pub struct Transform {
-    translation: Translation3<f32>,
-    rotation: UnitQuaternion<f32>,
-    scale: Scale3<f32>,
+    translation: Vec3,
+    rotation: Quat,
+    scale: Vec3,
 
-    transform: nalgebra::Transform3<f32>,
-}
-
-impl From<nalgebra::Transform3<f32>> for Transform {
-    fn from(value: nalgebra::Transform3<f32>) -> Self {
-        let intermediate: nalgebra::Affine3<f32> =
-            nalgebra::try_convert(value).expect("Invalid transform in gltf!");
-
-        alga::linear::AffineTransformation::decompose(&intermediate);
-        Self {
-            translation: nalgebra::try_convert(value).unwrap(),
-            rotation: nalgebra::try_convert(value).unwrap(),
-            scale: nalgebra::try_convert(value).unwrap(),
-            transform: value,
-        }
-    }
+    is_cache_outdated: bool,
+    cached_matrix: ThreadSafeRef<Mat4>, // Necessary for interior mutability and MT
 }
 
 impl Default for Transform {
     fn default() -> Self {
         Self {
-            translation: Translation3::default(),
-            rotation: UnitQuaternion::default(),
-            scale: Scale3::new(1.0, 1.0, 1.0),
-            transform: nalgebra::Transform::default(),
+            translation: Vec3::default(),
+            rotation: Quat::default(),
+            scale: Vec3::ONE,
+            is_cache_outdated: false,
+            cached_matrix: ThreadSafeRef::new(Mat4::IDENTITY),
         }
     }
 }
 
-impl From<Transform> for nalgebra::Transform3<f32> {
-    fn from(val: Transform) -> Self {
-        val.transform
+impl From<Mat4> for Transform {
+    fn from(value: Mat4) -> Self {
+        let (scale, rotation, translation) = value.to_scale_rotation_translation();
+        Self {
+            translation,
+            rotation,
+            scale,
+            is_cache_outdated: false,
+            cached_matrix: ThreadSafeRef::new(value),
+        }
+    }
+}
+
+impl From<Transform> for Mat4 {
+    fn from(value: Transform) -> Self {
+        *value.cached_matrix.lock()
     }
 }
 
 impl Transform {
-    pub fn from_matrix(matrix: Mat4) -> Self {
-        nalgebra::Transform3::<f32>::from_matrix_unchecked(matrix).into()
-    }
-
-    pub fn matrix(&self) -> &Mat4 {
-        self.transform.matrix()
-    }
-    pub fn update_matrix(&mut self) {
-        let intermediate: Transform3<f32> = nalgebra::convert(self.translation * self.rotation);
-        self.transform = intermediate * nalgebra::convert::<_, Transform3<f32>>(self.scale);
-    }
-
-    pub fn translation(&self) -> &Translation3<f32> {
+    pub fn translation(&self) -> &Vec3 {
         &self.translation
     }
-    pub fn set_translation(&mut self, translation: &Translation3<f32>) {
-        self.translation = *translation;
-    }
-    pub fn set_translation_and_update(&mut self, translation: &Translation3<f32>) {
-        self.set_translation(translation);
-        self.update_matrix();
-    }
-    pub fn re_translate(&mut self, translation: &Translation3<f32>) {}
-
-    pub fn rotation(&self) -> &UnitQuaternion<f32> {
+    pub fn rotation(&self) -> &Quat {
         &self.rotation
     }
-    pub fn set_rotation(&mut self, rotation: &UnitQuaternion<f32>) {
-        self.rotation = *rotation;
-    }
-    pub fn set_rotation_and_update(&mut self, rotation: &UnitQuaternion<f32>) {
-        self.set_rotation(rotation);
-        self.update_matrix();
-    }
-
-    pub fn scale(&self) -> &Scale3<f32> {
+    pub fn scale(&self) -> &Vec3 {
         &self.scale
     }
-    pub fn set_scale(&mut self, scale: &Scale3<f32>) {
-        self.scale = *scale;
+    pub fn matrix(&self) -> Mat4 {
+        if self.is_cache_outdated {
+            *self.cached_matrix.lock() =
+                Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation);
+        }
+
+        *self.cached_matrix.lock()
     }
-    pub fn set_scalei_and_update(&mut self, scale: &Scale3<f32>) {
-        self.set_scale(scale);
-        self.update_matrix();
+
+    pub fn set_translation(&mut self, translation: &Vec3) {
+        self.translation = *translation;
+        self.is_cache_outdated = true;
+    }
+    pub fn set_rotation(&mut self, rotation: &Quat) {
+        self.rotation = *rotation;
+        self.is_cache_outdated = true;
+    }
+    pub fn set_scale(&mut self, scale: &Vec3) {
+        self.scale = *scale;
+        self.is_cache_outdated = true;
+    }
+
+    pub fn translate(&mut self, translation: &Vec3) {
+        self.translation += *translation;
+        self.is_cache_outdated = true;
+    }
+    pub fn rotate(&mut self, rotation: &Quat) {
+        self.rotation *= *rotation;
+        self.is_cache_outdated = true;
+    }
+    pub fn rescale(&mut self, scale: &Vec3) {
+        self.scale *= *scale;
+        self.is_cache_outdated = true;
     }
 }

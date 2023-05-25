@@ -1,10 +1,11 @@
 use bevy_ecs::system::Resource;
-use nalgebra as na;
-use nalgebra_glm as glm;
 
 use std::default::Default;
 
-use crate::vector_type::{Mat4, Vec2, Vec3};
+use crate::{
+    math_types::Quat,
+    math_types::{Mat4, Vec2, Vec3},
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct PerspectiveData {
@@ -75,7 +76,7 @@ pub struct Camera {
     pitch: f32,
     yaw: f32,
     roll: f32,
-    orientation: na::UnitQuaternion<f32>,
+    orientation: Quat,
 
     projection: Mat4,
     view: Mat4,
@@ -89,15 +90,15 @@ impl Camera {
         CameraBuilder::new()
     }
 
-    fn compute_orientation(pitch: f32, yaw: f32, roll: f32) -> na::UnitQuaternion<f32> {
-        na::UnitQuaternion::from_euler_angles(roll, pitch, yaw)
+    fn compute_orientation(pitch: f32, yaw: f32, roll: f32) -> Quat {
+        Quat::from_euler(glam::EulerRot::XYZ, roll, pitch, yaw)
     }
 
     fn compute_projection(projection_type: &Projection, aspect_ratio: f32) -> Mat4 {
         match projection_type {
-            Projection::Perspective(data) => glm::perspective(
-                aspect_ratio,
+            Projection::Perspective(data) => Mat4::perspective_rh(
                 data.horizontal_fov,
+                aspect_ratio,
                 data.near_plane,
                 data.far_plane,
             ),
@@ -108,19 +109,18 @@ impl Camera {
                 let top = data.scale * 0.5;
                 let bottom = -top;
 
-                glm::ortho(left, right, bottom, top, data.near_plane, data.far_plane)
+                Mat4::orthographic_rh(left, right, bottom, top, data.near_plane, data.far_plane)
             }
         }
     }
 
-    fn compute_view(position: &Vec3, orientation: &na::UnitQuaternion<f32>) -> Mat4 {
-        let view_inverse =
-            glm::translate(&Mat4::identity(), position) * glm::quat_to_mat4(orientation);
-        glm::inverse(&view_inverse)
+    fn compute_view(position: &Vec3, orientation: &Quat) -> Mat4 {
+        let view_inverse = glam::Mat4::from_rotation_translation(*orientation, *position);
+        view_inverse.inverse()
     }
 
     pub fn compute_view_projection(view: &Mat4, projection: &Mat4) -> Mat4 {
-        projection * view
+        (*projection) * (*view)
     }
 
     pub fn view(&self) -> &Mat4 {
@@ -202,24 +202,15 @@ impl Camera {
     }
 
     pub fn forward_vector(&self) -> Vec3 {
-        glm::quat_rotate_vec3(
-            &Self::compute_orientation(self.pitch, self.yaw, self.roll),
-            &Vec3::new(0.0, 0.0, -1.0),
-        )
+        Self::compute_orientation(self.pitch, self.yaw, self.roll).mul_vec3(glam::Vec3::NEG_Z)
     }
 
     pub fn right_vector(&self) -> Vec3 {
-        glm::quat_rotate_vec3(
-            &Self::compute_orientation(self.pitch, self.yaw, self.roll),
-            &Vec3::new(-1.0, 0.0, 0.0),
-        )
+        Self::compute_orientation(self.pitch, self.yaw, self.roll).mul_vec3(glam::Vec3::NEG_X)
     }
 
     pub fn up_vector(&self) -> Vec3 {
-        glm::quat_rotate_vec3(
-            &Self::compute_orientation(self.pitch, self.yaw, self.roll),
-            &Vec3::new(0.0, -1.0, 0.0),
-        )
+        Self::compute_orientation(self.pitch, self.yaw, self.roll).mul_vec3(glam::Vec3::NEG_Y)
     }
 
     pub fn on_resize(&mut self, width: u32, height: u32) {

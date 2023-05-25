@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use morrigu::{
     components::camera::Camera,
-    vector_type::{Vec2, Vec3},
+    math_types::{Vec2, Vec3},
 };
 use winit::event::VirtualKeyCode;
 use winit_input_helper::WinitInputHelper;
@@ -75,25 +75,27 @@ impl ViewerCamera {
 
         if input.key_held(VirtualKeyCode::W) {
             let forward = self.mrg_camera.forward_vector();
-            let new_focal_point = self.focal_point() + forward * dt.as_secs_f32() * self.move_speed;
+            let new_focal_point =
+                *self.focal_point() + forward * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
         if input.key_held(VirtualKeyCode::S) {
             let forward = self.mrg_camera.forward_vector();
-            let new_focal_point = self.focal_point() - forward * dt.as_secs_f32() * self.move_speed;
+            let new_focal_point =
+                *self.focal_point() - forward * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
         if input.key_held(VirtualKeyCode::A) {
             let right = self.mrg_camera.right_vector();
-            let new_focal_point = self.focal_point() + right * dt.as_secs_f32() * self.move_speed;
+            let new_focal_point = *self.focal_point() + right * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
         if input.key_held(VirtualKeyCode::D) {
             let right = self.mrg_camera.right_vector();
-            let new_focal_point = self.focal_point() - right * dt.as_secs_f32() * self.move_speed;
+            let new_focal_point = *self.focal_point() - right * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
     }
@@ -105,7 +107,7 @@ impl ViewerCamera {
         let new_roll = self.mrg_camera.roll() + delta.y * 0.8;
         self.mrg_camera.set_roll(new_roll);
 
-        let new_position = self.focal_point() - self.mrg_camera.forward_vector() * self.distance;
+        let new_position = *self.focal_point() - self.mrg_camera.forward_vector() * self.distance;
         self.mrg_camera.set_position(&new_position);
     }
 
@@ -116,7 +118,7 @@ impl ViewerCamera {
         let clamped_distance = (self.distance - delta * capped_speed).clamp(0.1, 100.0);
         self.distance = clamped_distance;
 
-        let new_position = self.focal_point() - self.mrg_camera.forward_vector() * self.distance;
+        let new_position = *self.focal_point() - self.mrg_camera.forward_vector() * self.distance;
         self.mrg_camera.set_position(&new_position);
     }
 

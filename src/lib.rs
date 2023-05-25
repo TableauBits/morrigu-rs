@@ -3,14 +3,14 @@ pub mod application;
 pub mod compute_shader;
 pub mod descriptor_resources;
 pub mod material;
+pub mod math_types;
 pub mod mesh;
+pub mod pipeline_barrier;
 pub mod renderer;
 pub mod sample_vertex;
 pub mod shader;
 pub mod texture;
 pub mod utils;
-pub mod vector_type;
-pub mod pipeline_barrier;
 
 pub mod components;
 pub mod ecs_manager;
