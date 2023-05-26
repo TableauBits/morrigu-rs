@@ -91,7 +91,7 @@ impl Camera {
     }
 
     fn compute_orientation(pitch: f32, yaw: f32, roll: f32) -> Quat {
-        Quat::from_euler(glam::EulerRot::XYZ, roll, pitch, yaw)
+        Quat::from_euler(glam::EulerRot::YZX, pitch, yaw, roll)
     }
 
     fn compute_projection(projection_type: &Projection, aspect_ratio: f32) -> Mat4 {
