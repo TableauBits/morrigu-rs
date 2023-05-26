@@ -115,7 +115,7 @@ impl BuildableApplicationState<()> for CSTState {
         context
             .ecs_manager
             .world
-            .spawn((transform, input_mesh_rendering_ref.clone()));
+            .spawn((transform.clone(), input_mesh_rendering_ref.clone()));
 
         transform.set_translation(&Vec3::new(0.5, 0.0, -1.0));
         context

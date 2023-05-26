@@ -3,7 +3,7 @@ use morrigu::{
     allocated_types::AllocatedBuffer,
     components::{mesh_rendering::default_descriptor_resources, transform::Transform},
     descriptor_resources::DescriptorResources,
-    math_types::{Mat4, Vec3, Vec4},
+    math_types::{Mat4, Quat, Vec3, Vec4},
     mesh::{upload_index_buffer, upload_vertex_buffer, Mesh},
     renderer::Renderer,
     shader::Shader,
@@ -79,15 +79,20 @@ pub fn load_node(
     let mesh_renderings = vec![];
 
     let diff_transform = match current_node.transform() {
-        gltf::scene::Transform::Matrix { matrix } => Transform::from_matrix(matrix.into()),
+        gltf::scene::Transform::Matrix { matrix } => Mat4::from_cols_array_2d(&matrix).into(),
         gltf::scene::Transform::Decomposed {
             translation,
             rotation,
             scale,
         } => {
             let mut initial = Transform::default();
-            initial.set_position(&translation.into());
-            initial.set_rotation(&rotation.into());
+            initial.set_translation(&translation.into());
+            initial.set_rotation(&Quat::from_xyzw(
+                rotation[0],
+                rotation[1],
+                rotation[2],
+                rotation[3],
+            ));
             initial.set_scale(&scale.into());
 
             initial

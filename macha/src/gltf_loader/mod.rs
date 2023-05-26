@@ -73,7 +73,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             context
                 .ecs_manager
                 .world
-                .spawn((*transform, mesh_rendering_ref.clone()));
+                .spawn((transform.clone(), mesh_rendering_ref.clone()));
         }
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {

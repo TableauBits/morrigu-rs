@@ -153,7 +153,7 @@ impl BuildableApplicationState<()> for MachaState {
             .insert_resource(MachaGlobalOptions::new());
 
         context.ecs_manager.world.spawn((
-            transform,
+            transform.clone(),
             mesh_rendering_ref.clone(),
             MachaEntityOptions {
                 name: "planet".to_owned(),

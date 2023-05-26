@@ -40,7 +40,7 @@ pub fn draw_gizmo(
                     let gizmo = Gizmo::new("Selected entity gizmo")
                         .view_matrix(camera.view().to_cols_array_2d())
                         .projection_matrix(camera.projection().to_cols_array_2d())
-                        .model_matrix((*transform).into())
+                        .model_matrix(transform.matrix().to_cols_array_2d())
                         .mode(macha_options.preferred_gizmo)
                         .visuals(visuals)
                         .snap_distance(0.5)
