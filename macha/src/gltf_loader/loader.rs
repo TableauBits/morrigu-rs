@@ -75,8 +75,8 @@ pub fn load_node(
     current_node: gltf::Node,
     parent_transform: Transform,
 ) -> (Vec<Mat4>, Vec<MeshRendering>) {
-    let transforms = vec![];
-    let mesh_renderings = vec![];
+    let mut transforms = vec![];
+    let mut mesh_renderings = vec![];
 
     let diff_transform = match current_node.transform() {
         gltf::scene::Transform::Matrix { matrix } => Mat4::from_cols_array_2d(&matrix).into(),
@@ -84,21 +84,20 @@ pub fn load_node(
             translation,
             rotation,
             scale,
-        } => {
-            let mut initial = Transform::default();
-            initial.set_translation(&translation.into());
-            initial.set_rotation(&Quat::from_xyzw(
-                rotation[0],
-                rotation[1],
-                rotation[2],
-                rotation[3],
-            ));
-            initial.set_scale(&scale.into());
-
-            initial
-        }
+        } => Transform::from_trs(
+            &translation.into(),
+            &Quat::from_xyzw(rotation[0], rotation[1], rotation[2], rotation[3]),
+            &scale.into(),
+        ),
     };
-    let new_transform = parent_transform * diff_transform;
+    let current_transform = parent_transform * diff_transform;
+    let mesh = current_node.mesh();
+
+    for child in current_node.children() {
+        let (mut child_transforms, mut child_meshes) = load_node(child, current_transform.clone());
+        transforms.append(&mut child_transforms);
+        mesh_renderings.append(&mut child_meshes);
+    }
 
     (transforms, mesh_renderings)
 }
