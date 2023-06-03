@@ -1,4 +1,5 @@
 use anyhow::Context;
+use gltf::buffer::Data;
 use morrigu::{
     allocated_types::AllocatedBuffer,
     components::{mesh_rendering::default_descriptor_resources, transform::Transform},
@@ -74,7 +75,12 @@ fn convert_texture_format(gltf_format: gltf::image::Format) -> TextureFormat {
 pub fn load_node(
     current_node: gltf::Node,
     parent_transform: Transform,
-) -> (Vec<Mat4>, Vec<MeshRendering>) {
+    materials: &[Material],
+    buffers: &[Data],
+    default_texture: ThreadSafeRef<Texture>,
+    default_material: ThreadSafeRef<Material>,
+    renderer: &mut Renderer,
+) -> anyhow::Result<(Vec<Mat4>, Vec<MeshRendering>)> {
     let mut transforms = vec![];
     let mut mesh_renderings = vec![];
 
@@ -91,7 +97,65 @@ pub fn load_node(
         ),
     };
     let current_transform = parent_transform * diff_transform;
-    let mesh = current_node.mesh();
+    if let Some(mesh) = current_node.mesh() {
+        // We are considering each primitive as a mesh
+        for primitive in mesh.primitives() {
+            let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+            let positions = reader
+                .read_positions()
+                .context("primitive must have POSITION attribute")?;
+            let normals = reader
+                .read_normals()
+                .context("primitive must have NORMAL attribute")?;
+            let uvs = reader
+                .read_tex_coords(0)
+                .context("primitive must have TEXCOORD0 attribute")?
+                .into_f32();
+
+            let vertices = zip(zip(positions, normals), uvs)
+                .map(|((positions, normals), uvs)| Vertex {
+                    position: positions.into(),
+                    normal: normals.into(),
+                    texture_coords: uvs.into(),
+                })
+                .collect::<Vec<_>>();
+
+            let vertex_buffer = upload_vertex_buffer(&vertices, renderer)?;
+
+            let (index_buffer, indices) = match reader.read_indices() {
+                Some(indices) => {
+                    let indices = indices.into_u32().collect::<Vec<_>>();
+                    (
+                        Some(upload_index_buffer(&indices, renderer)?),
+                        Some(indices),
+                    )
+                }
+                None => (None, None),
+            };
+
+            let new_mesh_ref = ThreadSafeRef::new(Mesh {
+                vertices,
+                indices,
+                vertex_buffer,
+                index_buffer,
+            });
+            meshes.push(new_mesh_ref.clone());
+
+            let material_ref = match primitive.material().index() {
+                Some(index) => materials[index].clone(),
+                None => default_material.clone(),
+            };
+            mesh_renderings.push(MeshRendering::new(
+                &new_mesh_ref,
+                &material_ref,
+                default_descriptor_resources(renderer)?,
+                renderer,
+            )?);
+
+            // @TODO(Ithyx): actually make this work??
+            transforms.push(Transform::default());
+        }
+    }
 
     for child in current_node.children() {
         let (mut child_transforms, mut child_meshes) = load_node(child, current_transform.clone());
@@ -226,67 +290,7 @@ pub fn load_gltf(
         None => document.scenes().next().context("No scene in gltf file")?,
     };
 
-    for node in scene.nodes() {
-        if let Some(mesh) = node.mesh() {
-            // We are considering each primitive as a mesh
-            for primitive in mesh.primitives() {
-                let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-                let positions = reader
-                    .read_positions()
-                    .context("primitive must have POSITION attribute")?;
-                let normals = reader
-                    .read_normals()
-                    .context("primitive must have NORMAL attribute")?;
-                let uvs = reader
-                    .read_tex_coords(0)
-                    .context("primitive must have TEXCOORD0 attribute")?
-                    .into_f32();
-
-                let vertices = zip(zip(positions, normals), uvs)
-                    .map(|((positions, normals), uvs)| Vertex {
-                        position: positions.into(),
-                        normal: normals.into(),
-                        texture_coords: uvs.into(),
-                    })
-                    .collect::<Vec<_>>();
-
-                let vertex_buffer = upload_vertex_buffer(&vertices, renderer)?;
-
-                let (index_buffer, indices) = match reader.read_indices() {
-                    Some(indices) => {
-                        let indices = indices.into_u32().collect::<Vec<_>>();
-                        (
-                            Some(upload_index_buffer(&indices, renderer)?),
-                            Some(indices),
-                        )
-                    }
-                    None => (None, None),
-                };
-
-                let new_mesh_ref = ThreadSafeRef::new(Mesh {
-                    vertices,
-                    indices,
-                    vertex_buffer,
-                    index_buffer,
-                });
-                meshes.push(new_mesh_ref.clone());
-
-                let material_ref = match primitive.material().index() {
-                    Some(index) => materials[index].clone(),
-                    None => default_material.clone(),
-                };
-                mesh_renderings.push(MeshRendering::new(
-                    &new_mesh_ref,
-                    &material_ref,
-                    default_descriptor_resources(renderer)?,
-                    renderer,
-                )?);
-
-                // @TODO(Ithyx): actually make this work??
-                transforms.push(Transform::default());
-            }
-        }
-    }
+    for node in scene.nodes() {}
 
     Ok(Scene {
         default_material,
