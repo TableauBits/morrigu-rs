@@ -9,6 +9,7 @@ use crate::{
     utils::ImmediateCommandError,
 };
 
+#[derive(Debug)]
 pub struct Mesh<VertexType>
 where
     VertexType: Vertex,

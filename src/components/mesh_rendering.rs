@@ -14,7 +14,7 @@ use crate::{
     utils::ThreadSafeRef,
 };
 
-#[derive(bevy_ecs::prelude::Component)]
+#[derive(Debug, bevy_ecs::prelude::Component)]
 pub struct MeshRendering<VertexType>
 where
     VertexType: Vertex,

@@ -17,6 +17,7 @@ pub struct BindingData {
     pub size: u32,
 }
 
+#[derive(Debug)]
 pub struct Shader {
     pub(crate) vertex_module: vk::ShaderModule,
     pub(crate) fragment_module: vk::ShaderModule,

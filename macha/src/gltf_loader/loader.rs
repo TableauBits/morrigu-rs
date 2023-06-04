@@ -5,7 +5,7 @@ use morrigu::{
     components::{mesh_rendering::default_descriptor_resources, transform::Transform},
     descriptor_resources::DescriptorResources,
     math_types::{Mat4, Quat, Vec3, Vec4},
-    mesh::{upload_index_buffer, upload_vertex_buffer, Mesh},
+    mesh::{upload_index_buffer, upload_vertex_buffer},
     renderer::Renderer,
     shader::Shader,
     texture::{Texture, TextureFormat},
@@ -13,7 +13,7 @@ use morrigu::{
 };
 use std::{hint::black_box, iter::zip, path::Path};
 
-use super::scene::{Material, MeshRendering, Scene, Vertex};
+use super::scene::{Material, Mesh, MeshRendering, Scene, Vertex};
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
@@ -72,19 +72,15 @@ fn convert_texture_format(gltf_format: gltf::image::Format) -> TextureFormat {
     }
 }
 
-pub fn load_node(
-    current_node: gltf::Node,
-    parent_transform: Transform,
-    materials: &[Material],
-    buffers: &[Data],
-    default_texture: ThreadSafeRef<Texture>,
-    default_material: ThreadSafeRef<Material>,
-    renderer: &mut Renderer,
-) -> anyhow::Result<(Vec<Mat4>, Vec<MeshRendering>)> {
-    let mut transforms = vec![];
-    let mut mesh_renderings = vec![];
+#[derive(Debug, Default)]
+pub struct LoadData {
+    pub meshes: Vec<ThreadSafeRef<Mesh>>,
+    pub mesh_renderings: Vec<ThreadSafeRef<MeshRendering>>,
+    pub transforms: Vec<Transform>,
+}
 
-    let diff_transform = match current_node.transform() {
+fn convert_transform(value: gltf::scene::Transform) -> Transform {
+    match value {
         gltf::scene::Transform::Matrix { matrix } => Mat4::from_cols_array_2d(&matrix).into(),
         gltf::scene::Transform::Decomposed {
             translation,
@@ -95,7 +91,20 @@ pub fn load_node(
             &Quat::from_xyzw(rotation[0], rotation[1], rotation[2], rotation[3]),
             &scale.into(),
         ),
-    };
+    }
+}
+
+pub fn load_node(
+    current_node: &gltf::Node,
+    parent_transform: Transform,
+    materials: &[ThreadSafeRef<Material>],
+    buffers: &[Data],
+    default_material: &ThreadSafeRef<Material>,
+    renderer: &mut Renderer,
+) -> anyhow::Result<LoadData> {
+    let mut load_data = LoadData::default();
+
+    let diff_transform = convert_transform(current_node.transform());
     let current_transform = parent_transform * diff_transform;
     if let Some(mesh) = current_node.mesh() {
         // We are considering each primitive as a mesh
@@ -139,31 +148,42 @@ pub fn load_node(
                 vertex_buffer,
                 index_buffer,
             });
-            meshes.push(new_mesh_ref.clone());
+            load_data.meshes.push(new_mesh_ref.clone());
 
             let material_ref = match primitive.material().index() {
                 Some(index) => materials[index].clone(),
                 None => default_material.clone(),
             };
-            mesh_renderings.push(MeshRendering::new(
+            load_data.mesh_renderings.push(MeshRendering::new(
                 &new_mesh_ref,
                 &material_ref,
                 default_descriptor_resources(renderer)?,
                 renderer,
             )?);
 
-            // @TODO(Ithyx): actually make this work??
-            transforms.push(Transform::default());
+            load_data.transforms.push(current_transform.clone());
         }
     }
 
-    for child in current_node.children() {
-        let (mut child_transforms, mut child_meshes) = load_node(child, current_transform.clone());
-        transforms.append(&mut child_transforms);
-        mesh_renderings.append(&mut child_meshes);
+    let children = current_node.children().collect::<Vec<_>>();
+    log::debug!("children: {:?}", children);
+    for child in children {
+        let mut child_data = load_node(
+            &child,
+            current_transform.clone(),
+            materials,
+            buffers,
+            default_material,
+            renderer,
+        )?;
+        load_data.meshes.append(&mut child_data.meshes);
+        load_data
+            .mesh_renderings
+            .append(&mut child_data.mesh_renderings);
+        load_data.transforms.append(&mut child_data.transforms);
     }
 
-    (transforms, mesh_renderings)
+    Ok(load_data)
 }
 
 pub fn load_gltf(
@@ -281,24 +301,36 @@ pub fn load_gltf(
         materials.push(new_material);
     }
 
-    let mut meshes = vec![];
-    let mut mesh_renderings = vec![];
-    let mut transforms = vec![];
-
     let scene = match document.default_scene() {
         Some(default_scene) => default_scene,
         None => document.scenes().next().context("No scene in gltf file")?,
     };
 
-    for node in scene.nodes() {}
+    // Only support one root node for now
+    let root_nodes = scene.nodes().collect::<Vec<_>>();
+    log::debug!("Root nodes: {:?}", root_nodes);
+    let load_data = match scene.nodes().next() {
+        Some(root_node) => load_node(
+            &root_node,
+            convert_transform(root_node.transform()),
+            &materials,
+            &buffers,
+            &default_material,
+            renderer,
+        )?,
+        None => {
+            log::warn!("No nodes in default scene (or scene 1 if no default scene was specified)");
+            LoadData::default()
+        }
+    };
 
     Ok(Scene {
         default_material,
         pbr_shader,
         images,
-        meshes,
+        meshes: load_data.meshes,
         materials,
-        mesh_renderings,
-        transforms,
+        mesh_renderings: load_data.mesh_renderings,
+        transforms: load_data.transforms,
     })
 }

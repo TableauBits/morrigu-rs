@@ -15,6 +15,7 @@ use crate::{
 use ply_rs::{parser, ply};
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct TexturedVertex {
     pub position: Vec3,
     pub normal: Vec3,

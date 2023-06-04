@@ -61,7 +61,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             .expect("Failed to create default material");
 
         let scene = loader::load_gltf(
-            Path::new("assets/scenes/metallic_monkey.glb"),
+            Path::new("assets/scenes/buggy.glb"),
             pbr_shader,
             context.renderer.default_texture(),
             default_material,

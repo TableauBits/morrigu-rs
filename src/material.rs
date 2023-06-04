@@ -29,6 +29,7 @@ struct CameraData {
     world_position: Vec4,
 }
 
+#[derive(Debug)]
 pub struct Material<VertexType>
 where
     VertexType: Vertex,
