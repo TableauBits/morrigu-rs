@@ -64,11 +64,12 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             .expect("Failed to create default material");
 
         let scene = loader::load_gltf(
-            Path::new("assets/scenes/buggy.glb"),
+            Path::new("assets/scenes/sponza/Sponza.gltf"),
+            // Transform::default(),
             Transform::from_trs(
                 &Vec3::default(),
                 &Quat::default(),
-                &Vec3::new(0.05, 0.05, 0.05),
+                &Vec3::new(100.0, 100.0, 100.0),
             ),
             pbr_shader,
             context.renderer.default_texture(),

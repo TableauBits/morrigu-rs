@@ -98,6 +98,18 @@ impl ViewerCamera {
             let new_focal_point = *self.focal_point() - right * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
+
+        if input.key_held(VirtualKeyCode::Q) {
+            let up = self.mrg_camera.up_vector();
+            let new_focal_point = *self.focal_point() + up * dt.as_secs_f32() * self.move_speed;
+            self.set_focal_point(&new_focal_point);
+        }
+
+        if input.key_held(VirtualKeyCode::E) {
+            let up = self.mrg_camera.up_vector();
+            let new_focal_point = *self.focal_point() - up * dt.as_secs_f32() * self.move_speed;
+            self.set_focal_point(&new_focal_point);
+        }
     }
 
     fn mouse_rotate(&mut self, delta: &Vec2) {
