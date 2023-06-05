@@ -115,7 +115,7 @@ impl ViewerCamera {
         let capped_distance_unit = f32::max(self.distance * 0.2, 0.0);
         let capped_speed = f32::min(capped_distance_unit * capped_distance_unit, 100.0);
 
-        let clamped_distance = (self.distance - delta * capped_speed).clamp(0.1, 300.0);
+        let clamped_distance = (self.distance - delta * capped_speed).clamp(0.001, 100.0);
         self.distance = clamped_distance;
 
         let new_position = *self.focal_point() - self.mrg_camera.forward_vector() * self.distance;
