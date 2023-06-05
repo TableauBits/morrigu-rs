@@ -116,10 +116,10 @@ pub fn load_node(
             let normals = reader
                 .read_normals()
                 .context("primitive must have NORMAL attribute")?;
-            let uvs = reader
-                .read_tex_coords(0)
-                .context("primitive must have TEXCOORD0 attribute")?
-                .into_f32();
+            let uvs: Box<dyn Iterator<Item = [f32; 2]>> = match reader.read_tex_coords(0) {
+                Some(reader) => Box::new(reader.into_f32()),
+                None => Box::new(std::iter::repeat([0.0, 0.0])),
+            };
 
             let vertices = zip(zip(positions, normals), uvs)
                 .map(|((positions, normals), uvs)| Vertex {
@@ -165,9 +165,7 @@ pub fn load_node(
         }
     }
 
-    let children = current_node.children().collect::<Vec<_>>();
-    log::debug!("children: {:?}", children);
-    for child in children {
+    for child in current_node.children() {
         let mut child_data = load_node(
             &child,
             current_transform.clone(),
@@ -307,22 +305,25 @@ pub fn load_gltf(
     };
 
     // Only support one root node for now
-    let root_nodes = scene.nodes().collect::<Vec<_>>();
-    log::debug!("Root nodes: {:?}", root_nodes);
-    let load_data = match scene.nodes().next() {
-        Some(root_node) => load_node(
+    let mut load_data = LoadData::default();
+    for root_node in scene.nodes() {
+        let mut current_load_data = load_node(
             &root_node,
             convert_transform(root_node.transform()),
             &materials,
             &buffers,
             &default_material,
             renderer,
-        )?,
-        None => {
-            log::warn!("No nodes in default scene (or scene 1 if no default scene was specified)");
-            LoadData::default()
-        }
-    };
+        )?;
+
+        load_data.meshes.append(&mut current_load_data.meshes);
+        load_data
+            .mesh_renderings
+            .append(&mut current_load_data.mesh_renderings);
+        load_data
+            .transforms
+            .append(&mut current_load_data.transforms);
+    }
 
     Ok(Scene {
         default_material,
