@@ -57,13 +57,15 @@ impl From<Transform> for Mat4 {
 
 impl Transform {
     pub fn from_trs(translation: &Vec3, rotation: &Quat, scale: &Vec3) -> Self {
+        let matrix = Mat4::from_scale_rotation_translation(*scale, *rotation, *translation);
+
         Self {
             translation: *translation,
             rotation: *rotation,
             scale: *scale,
             cache: ThreadSafeRef::new(CacheData {
                 is_outdated: false,
-                matrix: Mat4::IDENTITY,
+                matrix,
             }),
         }
     }
