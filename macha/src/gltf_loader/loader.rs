@@ -186,6 +186,7 @@ pub fn load_node(
 
 pub fn load_gltf(
     path: &Path,
+    transform: Transform,
     pbr_shader: ThreadSafeRef<Shader>,
     default_texture: ThreadSafeRef<Texture>,
     default_material: ThreadSafeRef<Material>,
@@ -304,12 +305,12 @@ pub fn load_gltf(
         None => document.scenes().next().context("No scene in gltf file")?,
     };
 
-    // Only support one root node for now
     let mut load_data = LoadData::default();
     for root_node in scene.nodes() {
+        let initial_transform = transform.clone() * convert_transform(root_node.transform());
         let mut current_load_data = load_node(
             &root_node,
-            convert_transform(root_node.transform()),
+            initial_transform,
             &materials,
             &buffers,
             &default_material,

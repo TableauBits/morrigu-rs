@@ -6,9 +6,12 @@ use std::{iter::zip, path::Path};
 
 use morrigu::{
     application::{ApplicationState, BuildableApplicationState, EguiUpdateContext, Event},
-    components::camera::{Camera, PerspectiveData},
+    components::{
+        camera::{Camera, PerspectiveData},
+        transform::Transform,
+    },
     descriptor_resources::DescriptorResources,
-    math_types::{Vec2, Vec3, Vec4},
+    math_types::{Quat, Vec2, Vec3, Vec4},
     shader::Shader,
     systems::mesh_renderer,
 };
@@ -62,6 +65,11 @@ impl BuildableApplicationState<()> for GLTFViewerState {
 
         let scene = loader::load_gltf(
             Path::new("assets/scenes/buggy.glb"),
+            Transform::from_trs(
+                &Vec3::default(),
+                &Quat::default(),
+                &Vec3::new(0.05, 0.05, 0.05),
+            ),
             pbr_shader,
             context.renderer.default_texture(),
             default_material,
