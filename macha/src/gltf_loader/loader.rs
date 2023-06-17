@@ -8,7 +8,7 @@ use morrigu::{
     mesh::{upload_index_buffer, upload_vertex_buffer},
     renderer::Renderer,
     shader::Shader,
-    texture::{Texture, TextureFormat},
+    texture::Texture,
     utils::ThreadSafeRef,
 };
 use std::{hint::black_box, iter::zip, path::Path};
@@ -56,21 +56,6 @@ pub struct MapPresenceInfo {
 
 unsafe impl bytemuck::Zeroable for MapPresenceInfo {}
 unsafe impl bytemuck::Pod for MapPresenceInfo {}
-
-fn convert_texture_format(gltf_format: gltf::image::Format) -> TextureFormat {
-    match gltf_format {
-        gltf::image::Format::R8 => todo!(),
-        gltf::image::Format::R8G8 => todo!(),
-        gltf::image::Format::R8G8B8 => todo!(),
-        gltf::image::Format::R8G8B8A8 => TextureFormat::RGBA8_UNORM,
-        gltf::image::Format::R16 => todo!(),
-        gltf::image::Format::R16G16 => todo!(),
-        gltf::image::Format::R16G16B16 => todo!(),
-        gltf::image::Format::R16G16B16A16 => todo!(),
-        gltf::image::Format::R32G32B32FLOAT => todo!(),
-        gltf::image::Format::R32G32B32A32FLOAT => todo!(),
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct LoadData {
@@ -196,12 +181,15 @@ pub fn load_gltf(
 
     let images = images
         .into_iter()
-        .map(|data| {
+        .map(|image| {
+            let image = image
+                .convert_format(gltf::image::Format::R8G8B8A8)
+                .context("Failed to convert GLTF image to RGAB8")?;
             Texture::builder()
-                .with_format(convert_texture_format(data.format))
-                .build_from_data(&data.pixels, data.width, data.height, renderer)
+                .build_from_data(&image.pixels, image.width, image.height, renderer)
+                .context("Failed to create texture form GTLF data")
         })
-        .collect::<Result<Vec<_>, _>>()
+        .collect::<anyhow::Result<Vec<_>, _>>()
         .context("Failed to build textures")?;
 
     let mut materials = vec![];

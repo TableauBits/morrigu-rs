@@ -70,6 +70,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
                 &Vec3::default(),
                 &Quat::default(),
                 &Vec3::new(100.0, 100.0, 100.0),
+                // &Vec3::default(),
             ),
             pbr_shader,
             context.renderer.default_texture(),

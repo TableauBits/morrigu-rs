@@ -11,7 +11,7 @@ log = "0.4.17"
 ash = "0.37.2"
 flexi_logger = "0.25.3"
 anyhow = "1.0.70"
-gltf = { git = "https://github.com/Ithyx/gltf", rev = "19627cdf94afc4155a3ee572024f02ed9c67a715" }
+gltf = { git = "https://github.com/Ithyx/gltf", rev = "875c134bb7a6f35d27d88d9d49997f66269fec5e" }
 morrigu = { path = "../", features = ["egui"] }
 bevy_ecs = "0.10.1"
 egui = "0.22.0"
