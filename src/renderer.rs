@@ -1,8 +1,8 @@
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedBufferBuilder, AllocatedImage},
+    math_types::Vec4,
     texture::Texture,
     utils::{CommandUploader, ImmediateCommandError, ThreadSafeRef},
-    vector_type::Vec4,
 };
 
 use ash::{
@@ -954,6 +954,10 @@ impl Renderer {
             .as_ref()
             .expect("Allocator was not initialized")
             .lock()
+    }
+
+    pub fn default_texture(&self) -> ThreadSafeRef<Texture> {
+        self.default_texture_ref.clone()
     }
 
     pub(crate) fn begin_frame(&mut self) -> bool {

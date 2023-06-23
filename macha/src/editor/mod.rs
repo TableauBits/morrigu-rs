@@ -3,7 +3,7 @@ mod components;
 mod ecs_buffer;
 mod systems;
 
-use bevy_ecs::{prelude::Entity, schedule::SystemStage};
+use bevy_ecs::prelude::Entity;
 use camera::MachaEditorCamera;
 use components::{
     macha_options::{MachaEntityOptions, MachaGlobalOptions},
@@ -19,14 +19,14 @@ use morrigu::{
         camera::{Camera, PerspectiveData},
         mesh_rendering,
         resource_wrapper::ResourceWrapper,
-        transform::{Axis, Transform},
+        transform::Transform,
     },
     descriptor_resources::DescriptorResources,
+    math_types::{EulerRot, Quat, Vec2},
     shader::Shader,
     systems::mesh_renderer,
     texture::{Texture, TextureFormat},
     utils::ThreadSafeRef,
-    vector_type::Vec2,
 };
 use systems::{gizmo_drawer, hierarchy_panel};
 use winit::event::{KeyboardInput, VirtualKeyCode};
@@ -137,9 +137,14 @@ impl BuildableApplicationState<()> for MachaState {
         .expect("Failed to create mesh rendering");
 
         let mut transform = Transform::default();
-        transform.rotate(f32::to_radians(-90.0), Axis::X);
+        transform.rotate(&Quat::from_euler(
+            EulerRot::XYZ,
+            f32::to_radians(-90.0),
+            0.0,
+            0.0,
+        ));
 
-        camera.set_focal_point(transform.position());
+        camera.set_focal_point(transform.translation());
 
         context.ecs_manager.world.insert_resource(ECSBuffer::new());
         context
@@ -148,7 +153,7 @@ impl BuildableApplicationState<()> for MachaState {
             .insert_resource(MachaGlobalOptions::new());
 
         context.ecs_manager.world.spawn((
-            transform,
+            transform.clone(),
             mesh_rendering_ref.clone(),
             MachaEntityOptions {
                 name: "planet".to_owned(),
@@ -163,24 +168,14 @@ impl BuildableApplicationState<()> for MachaState {
         ));
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
-            schedule.add_stage(
-                "render meshes",
-                SystemStage::parallel().with_system(mesh_renderer::render_meshes::<Vertex>),
-            );
+            schedule.add_system(mesh_renderer::render_meshes::<Vertex>);
         });
 
         context
             .ecs_manager
             .redefine_ui_systems_schedule(|schedule| {
-                schedule.add_stage(
-                    "hierarchy panel",
-                    SystemStage::parallel()
-                        .with_system(hierarchy_panel::draw_hierarchy_panel_stable),
-                );
-                schedule.add_stage(
-                    "gizmo",
-                    SystemStage::parallel().with_system(gizmo_drawer::draw_gizmo),
-                );
+                schedule.add_system(hierarchy_panel::draw_hierarchy_panel_stable);
+                schedule.add_system(gizmo_drawer::draw_gizmo);
             });
 
         MachaState {

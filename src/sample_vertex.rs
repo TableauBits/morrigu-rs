@@ -3,14 +3,19 @@ use thiserror::Error;
 
 use crate::{
     material::{Vertex, VertexInputDescription},
-    mesh::{upload_index_buffer, upload_mesh_data, upload_vertex_buffer, Mesh, MeshDataUploadError, UploadError},
+    math_types::{Vec2, Vec3},
+    mesh::{
+        upload_index_buffer, upload_mesh_data, upload_vertex_buffer, Mesh, MeshDataUploadError,
+        UploadError,
+    },
     renderer::Renderer,
-    utils::ThreadSafeRef, vector_type::{Vec3, Vec2},
+    utils::ThreadSafeRef,
 };
 
 use ply_rs::{parser, ply};
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct TexturedVertex {
     pub position: Vec3,
     pub normal: Vec3,

@@ -230,11 +230,8 @@ impl AllocatedImage {
         command_uploader: &CommandUploader,
     ) -> Result<(), ImageDataUploadError> {
         let mut staging_buffer = AllocatedBufferBuilder::staging_buffer_default(
-            u64::try_from(
-                data.len() * std::mem::size_of::<u8>(), // Multiplication is redundant, but just in case :3 (technically a byte is not necessarily 8 bits)
-            )
-            .map_err(|_| {
-                ImageDataUploadError::SizeConversionFailed(data.len() * std::mem::size_of::<u8>())
+            u64::try_from(std::mem::size_of_val(data)).map_err(|_| {
+                ImageDataUploadError::SizeConversionFailed(std::mem::size_of_val(data))
             })?,
         )
         .build_internal(device, allocator)

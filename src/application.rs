@@ -6,9 +6,9 @@ pub use winit::{
 use crate::{
     components::camera::{Camera, PerspectiveData, Projection},
     ecs_manager::ECSManager,
+    math_types::Vec2,
     renderer::{Renderer, RendererBuilder},
     utils::ThreadSafeRef,
-    vector_type::Vec2,
 };
 
 use ash::vk;
@@ -202,7 +202,9 @@ impl<'a> ApplicationBuilder<'a> {
             }
 
             if events_cleared {
-                if context.window_input_state.quit() {
+                if context.window_input_state.close_requested()
+                    || context.window_input_state.destroyed()
+                {
                     control_flow.set_exit();
                 }
 

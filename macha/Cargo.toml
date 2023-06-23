@@ -7,12 +7,15 @@ edition = "2021"
 shaderc = "0.8.0"
 
 [dependencies]
-log = "0.4"
-ash = "0.37"
-flexi_logger = "0.24.2"
+log = "0.4.17"
+ash = "0.37.2"
+flexi_logger = "0.25.3"
+anyhow = "1.0.70"
+gltf = { git = "https://github.com/Ithyx/gltf", rev = "875c134bb7a6f35d27d88d9d49997f66269fec5e" }
 morrigu = { path = "../", features = ["egui"] }
-bevy_ecs = "0.9.1"
-egui = "0.20.1"
-egui-gizmo = { git = "https://github.com/matthiascy/egui-gizmo", rev = "516dc8453bb6423d8cf050af172e854611a8a1d9" }
-winit = "0.27"
-winit_input_helper = "0.13"
+bevy_ecs = "0.10.1"
+egui = "0.22.0"
+egui-gizmo = { git = "https://github.com/Ithyx/egui-gizmo", rev = "d9c944c41d529ee2b7c43caa60d2c7a57e039fd2" }
+winit = "0.28.3"
+winit_input_helper = "0.14.1"
+bytemuck = "1.13.1"

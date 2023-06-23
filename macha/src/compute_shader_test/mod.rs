@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use ash::vk;
-use bevy_ecs::schedule::SystemStage;
 use morrigu::{
     application::{ApplicationState, BuildableApplicationState, EguiUpdateContext},
     components::{
@@ -11,12 +10,12 @@ use morrigu::{
     },
     compute_shader::ComputeShader,
     descriptor_resources::DescriptorResources,
+    math_types::{EulerRot, Quat, Vec2, Vec3},
     pipeline_barrier::PipelineBarrier,
     shader::Shader,
     systems::mesh_renderer,
     texture::{Texture, TextureFormat},
     utils::ThreadSafeRef,
-    vector_type::{Vec2, Vec3},
 };
 
 type Vertex = morrigu::sample_vertex::TexturedVertex;
@@ -105,28 +104,27 @@ impl BuildableApplicationState<()> for CSTState {
         context.ecs_manager.world.insert_resource(camera);
 
         let mut transform = Transform::default();
-        transform.rotate(
+        transform.rotate(&Quat::from_euler(
+            EulerRot::XYZ,
             f32::to_radians(-90.0),
-            morrigu::components::transform::Axis::X,
-        );
-        transform.set_position(&Vec3::new(-0.5, 0.0, -1.0));
+            0.0,
+            0.0,
+        ));
+        transform.set_translation(&Vec3::new(-0.5, 0.0, -1.0));
         transform.rescale(&Vec3::new(0.3, 0.3, 0.3));
         context
             .ecs_manager
             .world
-            .spawn((transform, input_mesh_rendering_ref.clone()));
+            .spawn((transform.clone(), input_mesh_rendering_ref.clone()));
 
-        transform.set_position(&Vec3::new(0.5, 0.0, -1.0));
+        transform.set_translation(&Vec3::new(0.5, 0.0, -1.0));
         context
             .ecs_manager
             .world
             .spawn((transform, output_mesh_rendering_ref.clone()));
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
-            schedule.add_stage(
-                "render meshes",
-                SystemStage::parallel().with_system(mesh_renderer::render_meshes::<Vertex>),
-            );
+            schedule.add_system(mesh_renderer::render_meshes::<Vertex>);
         });
 
         Self {

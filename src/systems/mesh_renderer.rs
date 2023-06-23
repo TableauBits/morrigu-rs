@@ -6,15 +6,14 @@ use crate::{
         transform::Transform,
     },
     material::{Material, Vertex},
+    math_types::{Mat4, Vec4},
     renderer::Renderer,
     utils::ThreadSafeRef,
-    vector_type::{Mat4, Vec4},
 };
 
 use ash::vk;
 use bevy_ecs::{prelude::Query, system::Res};
 use bytemuck::{bytes_of, Pod, Zeroable};
-use nalgebra_glm as glm;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -58,11 +57,11 @@ pub fn render_meshes<VertexType>(
     let mut last_material: Option<ThreadSafeRef<Material<VertexType>>> = None;
     let mut last_material_pipeline: Option<vk::Pipeline> = None;
     let device = renderer.device.clone();
-    let cmd_buffer = renderer.primary_command_buffer.clone();
+    let cmd_buffer = renderer.primary_command_buffer;
     for (transform, mesh_rendering_ref) in query.iter() {
         let mut mesh_rendering = mesh_rendering_ref.lock();
         if mesh_rendering
-            .update_uniform(0, *transform.matrix())
+            .update_uniform(0, transform.matrix())
             .is_err()
         {
             log::warn!("Failed to upload model data to slot 0");
@@ -149,7 +148,7 @@ pub fn render_meshes<VertexType>(
 
         let camera_data = CameraData {
             view_projection: *camera.view_projection(),
-            world_position: glm::vec3_to_vec4(camera.position()),
+            world_position: (*camera.position(), 1.0).into(),
         };
 
         unsafe {

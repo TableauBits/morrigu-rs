@@ -1,9 +1,6 @@
 use std::time::Instant;
 
-use bevy_ecs::{
-    prelude::World,
-    schedule::{Schedule, Stage},
-};
+use bevy_ecs::{prelude::World, schedule::Schedule};
 
 use crate::{
     components::{camera::Camera, resource_wrapper::ResourceWrapper},

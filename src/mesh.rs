@@ -9,6 +9,7 @@ use crate::{
     utils::ImmediateCommandError,
 };
 
+#[derive(Debug)]
 pub struct Mesh<VertexType>
 where
     VertexType: Vertex,
@@ -64,9 +65,7 @@ pub fn upload_vertex_buffer<VertexType>(
 where
     VertexType: Vertex,
 {
-    let vertex_data_size: u64 = (vertices.len() * std::mem::size_of::<VertexType>())
-        .try_into()
-        .unwrap();
+    let vertex_data_size: u64 = std::mem::size_of_val(vertices).try_into().unwrap();
     let mut vertex_staging_buffer = AllocatedBuffer::builder(vertex_data_size)
         .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
@@ -121,9 +120,7 @@ pub fn upload_index_buffer(
     indices: &[u32],
     renderer: &mut Renderer,
 ) -> Result<AllocatedBuffer, UploadError> {
-    let index_data_size: u64 = (indices.len() * std::mem::size_of::<u32>())
-        .try_into()
-        .unwrap();
+    let index_data_size: u64 = std::mem::size_of_val(indices).try_into().unwrap();
     let mut index_staging_buffer = AllocatedBuffer::builder(index_data_size)
         .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
