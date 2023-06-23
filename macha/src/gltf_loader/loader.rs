@@ -98,9 +98,10 @@ pub fn load_node(
             let positions = reader
                 .read_positions()
                 .context("primitive must have POSITION attribute")?;
-            let normals = reader
-                .read_normals()
-                .context("primitive must have NORMAL attribute")?;
+            let normals: Box<dyn Iterator<Item = [f32; 3]>> = match reader.read_normals() {
+                Some(reader) => Box::new(reader),
+                None => Box::new(std::iter::repeat([0.0, 0.0, 0.0])),
+            };
             let uvs: Box<dyn Iterator<Item = [f32; 2]>> = match reader.read_tex_coords(0) {
                 Some(reader) => Box::new(reader.into_f32()),
                 None => Box::new(std::iter::repeat([0.0, 0.0])),
@@ -192,101 +193,112 @@ pub fn load_gltf(
         .collect::<anyhow::Result<Vec<_>, _>>()
         .context("Failed to build textures")?;
 
-    let mut materials = vec![];
+    let materials = document
+        .materials()
+        .map(|material| {
+            let metallic_data = material.pbr_metallic_roughness();
 
-    for material in document.materials() {
-        let metallic_data = material.pbr_metallic_roughness();
+            let params = PBRData {
+                base_color_factor: metallic_data.base_color_factor().into(),
+                metallic_factor: metallic_data.metallic_factor(),
+                roughness_factor: metallic_data.roughness_factor(),
+                alpha_cutoff: material.alpha_cutoff().unwrap_or(-1.0),
+                _padding: 0.0,
+            };
 
-        let params = PBRData {
-            base_color_factor: metallic_data.base_color_factor().into(),
-            metallic_factor: metallic_data.metallic_factor(),
-            roughness_factor: metallic_data.roughness_factor(),
-            alpha_cutoff: material.alpha_cutoff().unwrap_or(-1.0),
-            _padding: 0.0,
-        };
+            let base_color_map = metallic_data.base_color_texture();
+            let normal_map = material.normal_texture();
+            let metal_roughness_map = metallic_data.metallic_roughness_texture();
+            let map_presence_info = black_box(MapPresenceInfo {
+                has_base_color_map: base_color_map.is_some().into(),
+                has_normal_map: normal_map.is_some().into(),
+                has_metal_roughness_map: metal_roughness_map.is_some().into(),
+                _padding: 0,
+            });
 
-        let base_color_map = metallic_data.base_color_texture();
-        let normal_map = material.normal_texture();
-        let metal_roughness_map = metallic_data.metallic_roughness_texture();
-        let map_presence_info = black_box(MapPresenceInfo {
-            has_base_color_map: base_color_map.is_some().into(),
-            has_normal_map: normal_map.is_some().into(),
-            has_metal_roughness_map: metal_roughness_map.is_some().into(),
-            _padding: 0,
-        });
+            log::trace!("Material texture indices:");
 
-        let new_material = Material::builder()
-            .build::<Vertex>(
-                &pbr_shader,
-                DescriptorResources {
-                    uniform_buffers: [
-                        (
-                            0,
-                            ThreadSafeRef::new(
-                                AllocatedBuffer::builder(
-                                    std::mem::size_of::<LightData>().try_into()?,
-                                )
-                                .build(renderer)
-                                .context("Failed to build LightData buffer")?,
+            Material::builder()
+                .build::<Vertex>(
+                    &pbr_shader,
+                    DescriptorResources {
+                        uniform_buffers: [
+                            (
+                                0,
+                                ThreadSafeRef::new(
+                                    AllocatedBuffer::builder(
+                                        std::mem::size_of::<LightData>().try_into()?,
+                                    )
+                                    .build(renderer)
+                                    .context("Failed to build LightData buffer")?,
+                                ),
                             ),
-                        ),
-                        (
-                            1,
-                            ThreadSafeRef::new(
-                                AllocatedBuffer::builder(
-                                    std::mem::size_of::<PBRData>().try_into()?,
-                                )
-                                .build_with_data(params, renderer)
-                                .context("Failed to build PBRData buffer")?,
+                            (
+                                1,
+                                ThreadSafeRef::new(
+                                    AllocatedBuffer::builder(
+                                        std::mem::size_of::<PBRData>().try_into()?,
+                                    )
+                                    .build_with_data(params, renderer)
+                                    .context("Failed to build PBRData buffer")?,
+                                ),
                             ),
-                        ),
-                        (
-                            2,
-                            ThreadSafeRef::new(
-                                AllocatedBuffer::builder(
-                                    std::mem::size_of::<MapPresenceInfo>().try_into()?,
-                                )
-                                .build_with_data(map_presence_info, renderer)
-                                .context("Failed to create map presence info buffer")?,
+                            (
+                                2,
+                                ThreadSafeRef::new(
+                                    AllocatedBuffer::builder(
+                                        std::mem::size_of::<MapPresenceInfo>().try_into()?,
+                                    )
+                                    .build_with_data(map_presence_info, renderer)
+                                    .context("Failed to create map presence info buffer")?,
+                                ),
                             ),
-                        ),
-                    ]
-                    .into(),
-                    sampled_images: [
-                        (
-                            3,
-                            if let Some(color_map_info) = base_color_map {
-                                images[color_map_info.texture().index()].clone()
-                            } else {
-                                default_texture.clone()
-                            },
-                        ),
-                        (
-                            4,
-                            if let Some(normal_map_info) = normal_map {
-                                images[normal_map_info.texture().index()].clone()
-                            } else {
-                                default_texture.clone()
-                            },
-                        ),
-                        (
-                            5,
-                            if let Some(mr_map) = metal_roughness_map {
-                                images[mr_map.texture().index()].clone()
-                            } else {
-                                default_texture.clone()
-                            },
-                        ),
-                    ]
-                    .into(),
-                    ..Default::default()
-                },
-                renderer,
-            )
-            .context("Failed to create material")?;
-
-        materials.push(new_material);
-    }
+                        ]
+                        .into(),
+                        sampled_images: [
+                            (
+                                3,
+                                if let Some(color_map_info) = base_color_map {
+                                    log::trace!(
+                                        "\talbedo: {}",
+                                        color_map_info.texture().source().index()
+                                    );
+                                    images[color_map_info.texture().source().index()].clone()
+                                } else {
+                                    default_texture.clone()
+                                },
+                            ),
+                            (
+                                4,
+                                if let Some(normal_map_info) = normal_map {
+                                    log::trace!(
+                                        "\tnormal: {}",
+                                        normal_map_info.texture().source().index()
+                                    );
+                                    images[normal_map_info.texture().source().index()].clone()
+                                } else {
+                                    default_texture.clone()
+                                },
+                            ),
+                            (
+                                5,
+                                if let Some(mr_map_info) = metal_roughness_map {
+                                    log::trace!("\tMR: {}", mr_map_info.texture().source().index());
+                                    images[mr_map_info.texture().source().index()].clone()
+                                } else {
+                                    default_texture.clone()
+                                },
+                            ),
+                        ]
+                        .into(),
+                        ..Default::default()
+                    },
+                    renderer,
+                )
+                .context("Failed to create material")
+        })
+        .collect::<anyhow::Result<Vec<_>, _>>()
+        .context("Failed to build materials")?;
 
     let scene = match document.default_scene() {
         Some(default_scene) => default_scene,
