@@ -240,7 +240,7 @@ impl Texture {
                 .base_mip_level(0)
                 .level_count(1)
                 .base_array_layer(0)
-                .layer_count(1);
+                .layer_count(image.layer_count);
             let transfer_src_barrier = vk::ImageMemoryBarrier::builder()
                 .src_access_mask(vk::AccessFlags::NONE)
                 .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
@@ -272,7 +272,7 @@ impl Texture {
                     aspect_mask: vk::ImageAspectFlags::COLOR,
                     mip_level: 0,
                     base_array_layer: 0,
-                    layer_count: 1,
+                    layer_count: image.layer_count,
                 })
                 .extent(vk::Extent3D {
                     width: self.dimensions[0],

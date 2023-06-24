@@ -313,6 +313,7 @@ fn create_swapchain(
             layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             format: depth_image_create_info_builder.format,
             extent: depth_extent,
+            layer_count: 1,
         },
         preferred_present_mode,
         loader: swapchain_loader,
