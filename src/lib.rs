@@ -1,6 +1,7 @@
 pub mod allocated_types;
 pub mod application;
 pub mod compute_shader;
+pub mod cubemap;
 pub mod descriptor_resources;
 pub mod material;
 pub mod math_types;

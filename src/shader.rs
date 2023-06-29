@@ -4,7 +4,7 @@ use crate::{
 };
 
 use ash::{vk, Device};
-use spirv_reflect::types::{ReflectBlockVariable, ReflectDescriptorType};
+use spirv_reflect::types::{ReflectBlockVariable, ReflectDescriptorType, ReflectDimension};
 use thiserror::Error;
 
 use std::{fs, path::Path};
@@ -15,6 +15,7 @@ pub struct BindingData {
     pub slot: u32,
     pub descriptor_type: ReflectDescriptorType,
     pub size: u32,
+    pub dim: ReflectDimension,
 }
 
 #[derive(Debug)]
@@ -230,6 +231,7 @@ impl Shader {
                 slot: binding.binding,
                 descriptor_type: binding.descriptor_type,
                 size: binding.block.size,
+                dim: binding.image.dim,
             })
             .collect::<Vec<_>>();
         let fragment_bindings = fragment_bindings_reflection
@@ -239,6 +241,7 @@ impl Shader {
                 slot: binding.binding,
                 descriptor_type: binding.descriptor_type,
                 size: binding.block.size,
+                dim: binding.image.dim,
             })
             .collect::<Vec<_>>();
 
