@@ -212,7 +212,7 @@ impl DescriptorResources {
                                 },
                             )?;
                             let texture = texture_ref.lock();
-                            (texture.image_ref.lock(), texture.sampler)
+                            (texture.image_ref.clone(), texture.sampler)
                         }
                         spirv_reflect::types::ReflectDimension::Cube => {
                             let cubemap_ref = self.cubemap_images.get(&binding.slot).ok_or(
@@ -222,10 +222,12 @@ impl DescriptorResources {
                                 },
                             )?;
                             let cubemap = cubemap_ref.lock();
-                            (cubemap.image_ref.lock(), cubemap.sampler)
+                            (cubemap.image_ref.clone(), cubemap.sampler)
                         }
                         _ => todo!(),
                     };
+
+                    let image = image.lock();
 
                     self.update_layout(
                         image.handle,
