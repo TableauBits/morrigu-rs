@@ -19,7 +19,7 @@ layout(location = 2) out vec2 fs_UVPassthrough;
 
 void main() {
     mat4 transform = pc_CameraData.viewProjection * u_ModelData.modelMatrix;
-  gl_Position = transform * vec4(v_Position, 1);
+    gl_Position = transform * vec4(v_Position, 1);
     fs_PositionPassthrough = gl_Position.xyz;
     fs_NormalPassthrough = v_Normal;
     fs_UVPassthrough = v_UV;

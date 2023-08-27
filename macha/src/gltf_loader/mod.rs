@@ -8,18 +8,21 @@ use morrigu::{
     application::{ApplicationState, BuildableApplicationState, EguiUpdateContext, Event},
     components::{
         camera::{Camera, PerspectiveData},
+        mesh_rendering::default_descriptor_resources,
         transform::Transform,
     },
+    cubemap::Cubemap,
     descriptor_resources::DescriptorResources,
     math_types::{Quat, Vec2, Vec3, Vec4},
     shader::Shader,
     systems::mesh_renderer,
+    utils::ThreadSafeRef,
 };
 
 use self::{
     camera::ViewerCamera,
     loader::LightData,
-    scene::{Material, Scene, Vertex},
+    scene::{Material, MeshRendering, Scene, Vertex},
 };
 
 pub struct GLTFViewerState {
@@ -27,6 +30,11 @@ pub struct GLTFViewerState {
     camera: ViewerCamera,
     scene: Scene,
 }
+
+type SkyboxVertex = morrigu::vertices::simple::SimpleVertex;
+type SkyboxMaterial = morrigu::material::Material<SkyboxVertex>;
+type SkyboxMesh = morrigu::mesh::Mesh<SkyboxVertex>;
+type SkyboxMeshRendering = morrigu::components::mesh_rendering::MeshRendering<SkyboxVertex>;
 
 impl BuildableApplicationState<()> for GLTFViewerState {
     fn build(context: &mut morrigu::application::StateContext, _: ()) -> Self {
@@ -63,6 +71,43 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             )
             .expect("Failed to create default material");
 
+        let skybox_cubemap = Cubemap::build_from_folder(
+            "assets/textures/skybox",
+            "jpg",
+            morrigu::texture::TextureFormat::RGBA8_UNORM,
+            context.renderer,
+        )
+        .expect("Failed to build skybox");
+        let skybox_shader = Shader::from_spirv_u8(
+            include_bytes!("shaders/gen/cubemap/cubemap.vert"),
+            include_bytes!("shaders/gen/cubemap/cubemap.frag"),
+            &context.renderer.device,
+        )
+        .expect("Failed to create skybox shader");
+        let skybox_material: ThreadSafeRef<SkyboxMaterial> = Material::builder()
+            .build(
+                &skybox_shader,
+                DescriptorResources {
+                    cubemap_images: [(0, skybox_cubemap)].into(),
+                    ..Default::default()
+                },
+                context.renderer,
+            )
+            .expect("Failed to create skybox material");
+        let skybox_mesh = SkyboxVertex::load_model_from_path_obj(
+            Path::new("assets/meshes/cube.obj"),
+            context.renderer,
+        )
+        .expect("Failed to load cube obj");
+        let skybox = SkyboxMeshRendering::new(
+            &skybox_mesh,
+            &skybox_material,
+            default_descriptor_resources(context.renderer)
+                .expect("Failed to create default descriptor resources"),
+            context.renderer,
+        )
+        .expect("Failed to create skybox mesh rendering");
+
         let scene = loader::load_gltf(
             Path::new("assets/scenes/sponza/Sponza.gltf"),
             // Transform::default(),
@@ -86,8 +131,18 @@ impl BuildableApplicationState<()> for GLTFViewerState {
                 .spawn((transform.clone(), mesh_rendering_ref.clone()));
         }
 
+        context.ecs_manager.world.spawn((
+            Transform::from_trs(
+                &Vec3::default(),
+                &Quat::default(),
+                &Vec3::new(500.0, 500.0, 500.0),
+            ),
+            skybox,
+        ));
+
         context.ecs_manager.redefine_systems_schedule(|schedule| {
             schedule.add_system(mesh_renderer::render_meshes::<Vertex>);
+            schedule.add_system(mesh_renderer::render_meshes::<SkyboxVertex>);
         });
 
         let light_data = LightData {

@@ -3,7 +3,7 @@ use morrigu::{
     utils::ThreadSafeRef,
 };
 
-pub type Vertex = morrigu::sample_vertex::TexturedVertex;
+pub type Vertex = morrigu::vertices::textured::TexturedVertex;
 pub type Material = morrigu::material::Material<Vertex>;
 pub type Mesh = morrigu::mesh::Mesh<Vertex>;
 pub type MeshRendering = morrigu::components::mesh_rendering::MeshRendering<Vertex>;
