@@ -1,33 +1,28 @@
 use ash::vk;
-use thiserror::Error;
+use ply_rs::{parser, ply};
 
 use crate::{
     material::{Vertex, VertexInputDescription},
-    math_types::{Vec2, Vec3},
-    mesh::{
-        upload_index_buffer, upload_mesh_data, upload_vertex_buffer, Mesh, MeshDataUploadError,
-        UploadError,
-    },
+    math_types::Vec3,
+    mesh::{upload_index_buffer, upload_mesh_data, upload_vertex_buffer, Mesh},
     renderer::Renderer,
     utils::ThreadSafeRef,
 };
 
-use ply_rs::{parser, ply};
+use super::{Face, VertexModelLoadingError};
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct TexturedVertex {
+pub struct SimpleVertex {
     pub position: Vec3,
-    pub normal: Vec3,
-    pub texture_coords: Vec2,
 }
 
-impl Vertex for TexturedVertex {
+impl Vertex for SimpleVertex {
     fn vertex_input_description() -> VertexInputDescription {
         let main_binding = vk::VertexInputBindingDescription::builder()
             .binding(0)
             .stride(
-                std::mem::size_of::<TexturedVertex>()
+                std::mem::size_of::<SimpleVertex>()
                     .try_into()
                     .expect("Unsupported architecture"),
             )
@@ -39,29 +34,7 @@ impl Vertex for TexturedVertex {
             .binding(0)
             .format(vk::Format::R32G32B32_SFLOAT)
             .offset(
-                memoffset::offset_of!(TexturedVertex, position)
-                    .try_into()
-                    .expect("Unsupported architecture"),
-            )
-            .build();
-
-        let normal = vk::VertexInputAttributeDescription::builder()
-            .location(1)
-            .binding(0)
-            .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(
-                memoffset::offset_of!(TexturedVertex, normal)
-                    .try_into()
-                    .expect("Unsupported architecture"),
-            )
-            .build();
-
-        let texture_coords = vk::VertexInputAttributeDescription::builder()
-            .location(2)
-            .binding(0)
-            .format(vk::Format::R32G32_SFLOAT)
-            .offset(
-                memoffset::offset_of!(TexturedVertex, texture_coords)
+                memoffset::offset_of!(SimpleVertex, position)
                     .try_into()
                     .expect("Unsupported architecture"),
             )
@@ -69,17 +42,15 @@ impl Vertex for TexturedVertex {
 
         VertexInputDescription {
             bindings: vec![main_binding],
-            attributes: vec![position, normal, texture_coords],
+            attributes: vec![position],
         }
     }
 }
 
-impl ply::PropertyAccess for TexturedVertex {
+impl ply::PropertyAccess for SimpleVertex {
     fn new() -> Self {
         Self {
             position: Vec3::default(),
-            normal: Vec3::default(),
-            texture_coords: Vec2::default(),
         }
     }
 
@@ -88,56 +59,16 @@ impl ply::PropertyAccess for TexturedVertex {
             ("x", ply::Property::Float(v)) => self.position.x = v,
             ("y", ply::Property::Float(v)) => self.position.y = v,
             ("z", ply::Property::Float(v)) => self.position.z = v,
-            ("nx", ply::Property::Float(v)) => self.normal.x = v,
-            ("ny", ply::Property::Float(v)) => self.normal.y = v,
-            ("nz", ply::Property::Float(v)) => self.normal.z = v,
-            ("s", ply::Property::Float(v)) => self.texture_coords.x = v,
-            ("t", ply::Property::Float(v)) => self.texture_coords.y = v,
             (_, _) => (),
         }
     }
 }
 
-struct Face {
-    indices: Vec<u32>,
-}
-
-impl ply::PropertyAccess for Face {
-    fn new() -> Self {
-        Self {
-            indices: Vec::default(),
-        }
-    }
-
-    #[allow(clippy::single_match)]
-    fn set_property(&mut self, key: String, property: ply::Property) {
-        match (key.as_ref(), property) {
-            ("vertex_indices", ply::Property::ListUInt(v)) => self.indices = v,
-            (_, _) => (),
-        }
-    }
-}
-
-#[derive(Error, Debug)]
-pub enum SampleModelLoadingError {
-    #[error("Loading of the OBJ file failed with error: {0}.")]
-    OBJLoadError(#[from] tobj::LoadError),
-
-    #[error("Uploading of the mesh data failed with error: {0}.")]
-    MeshDatauploadFailed(#[from] MeshDataUploadError),
-
-    #[error("Reading of model file failed with error: {0}.")]
-    FileReadingError(#[from] std::io::Error),
-
-    #[error("Uploading of the mesh data failed with error: {0}.")]
-    BufferUploadFailed(#[from] UploadError),
-}
-
-impl TexturedVertex {
+impl SimpleVertex {
     pub fn load_model_from_path_obj(
         path: &std::path::Path,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<Mesh<Self>>, SampleModelLoadingError> {
+    ) -> Result<ThreadSafeRef<Mesh<Self>>, VertexModelLoadingError> {
         let (load_result, _) = tobj::load_obj(
             path,
             &tobj::LoadOptions {
@@ -154,24 +85,10 @@ impl TexturedVertex {
             .chunks_exact(3)
             .map(|slice| Vec3::new(slice[0], slice[1], slice[2]))
             .collect::<Vec<Vec3>>();
-        let normals = mesh
-            .normals
-            .chunks_exact(3)
-            .map(|slice| Vec3::new(slice[0], slice[1], slice[2]))
-            .collect::<Vec<Vec3>>();
-        let texture_coordinates = mesh
-            .texcoords
-            .chunks_exact(2)
-            .map(|slice| Vec2::new(slice[0], slice[1]))
-            .collect::<Vec<Vec2>>();
 
         let mut vertices = Vec::with_capacity(positions.len());
-        for index in 0..positions.len() {
-            vertices.push(TexturedVertex {
-                position: positions[index],
-                normal: normals[index],
-                texture_coords: texture_coordinates[index],
-            });
+        for position in positions {
+            vertices.push(SimpleVertex { position });
         }
 
         let indices = mesh.indices.clone();
@@ -189,7 +106,7 @@ impl TexturedVertex {
     pub fn load_model_from_path_ply(
         path: &std::path::Path,
         renderer: &mut Renderer,
-    ) -> Result<ThreadSafeRef<Mesh<Self>>, SampleModelLoadingError> {
+    ) -> Result<ThreadSafeRef<Mesh<Self>>, VertexModelLoadingError> {
         let file = std::fs::File::open(path)?;
         let mut file = std::io::BufReader::new(file);
 
