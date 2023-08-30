@@ -24,6 +24,7 @@ impl Scene {
         for mesh_rendering in &self.mesh_renderings {
             let mut mesh_rendering = mesh_rendering.lock();
 
+            mesh_rendering.destroy(renderer);
             mesh_rendering
                 .descriptor_resources
                 .uniform_buffers
@@ -33,12 +34,12 @@ impl Scene {
                         .lock()
                         .destroy(&renderer.device, &mut renderer.allocator())
                 });
-            mesh_rendering.destroy(renderer);
         }
 
         for material in &self.materials {
             let mut material = material.lock();
 
+            material.destroy(renderer);
             material
                 .descriptor_resources
                 .uniform_buffers
@@ -48,7 +49,6 @@ impl Scene {
                         .lock()
                         .destroy(&renderer.device, &mut renderer.allocator())
                 });
-            material.destroy(renderer);
         }
 
         for mesh in &self.meshes {

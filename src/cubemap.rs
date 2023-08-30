@@ -100,4 +100,10 @@ impl Cubemap {
             path: Some(folder_path.to_owned()),
         }))
     }
+
+    pub fn destroy(&mut self, renderer: &mut Renderer) {
+        unsafe { renderer.device.destroy_sampler(self.sampler, None) };
+
+        self.image_ref.lock().destroy(renderer);
+    }
 }

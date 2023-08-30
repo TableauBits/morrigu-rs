@@ -29,7 +29,8 @@ pub struct GLTFViewerState {
     light_data: LightData,
     camera: ViewerCamera,
     scene: Scene,
-    skybox: bevy_ecs::entity::Entity,
+    skybox_entity_ref: bevy_ecs::entity::Entity,
+    skybox: ThreadSafeRef<SkyboxMeshRendering>,
 }
 
 type SkyboxVertex = morrigu::vertices::simple::SimpleVertex;
@@ -116,7 +117,6 @@ impl BuildableApplicationState<()> for GLTFViewerState {
                 &Vec3::default(),
                 &Quat::default(),
                 &Vec3::new(10.0, 10.0, 10.0),
-                // &Vec3::default(),
             ),
             pbr_shader,
             context.renderer.default_texture(),
@@ -132,7 +132,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
                 .spawn((transform.clone(), mesh_rendering_ref.clone()));
         }
 
-        let skybox = context
+        let skybox_entity_ref = context
             .ecs_manager
             .world
             .spawn((
@@ -141,7 +141,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
                     &Quat::default(),
                     &Vec3::new(1.0, 1.0, 1.0),
                 ),
-                skybox,
+                skybox.clone(),
             ))
             .id();
 
@@ -170,6 +170,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             light_data,
             camera,
             scene,
+            skybox_entity_ref,
             skybox,
         }
     }
@@ -191,7 +192,7 @@ impl ApplicationState for GLTFViewerState {
         let mut entity_ref = context
             .ecs_manager
             .world
-            .get_entity_mut(self.skybox)
+            .get_entity_mut(self.skybox_entity_ref)
             .expect("Failed to retreive skybox entity");
         if let Some(mut transform) = entity_ref.get_mut::<Transform>() {
             transform.set_translation(cam_pos);
@@ -241,6 +242,30 @@ impl ApplicationState for GLTFViewerState {
     }
 
     fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
+        let mut skybox = self.skybox.lock();
+        skybox.destroy(context.renderer);
+        skybox
+            .descriptor_resources
+            .uniform_buffers
+            .values()
+            .for_each(|buffer| {
+                buffer
+                    .lock()
+                    .destroy(&context.renderer.device, &mut context.renderer.allocator())
+            });
+        let mut skybox_material = skybox.material_ref.lock();
+        skybox_material.destroy(context.renderer);
+        skybox_material
+            .descriptor_resources
+            .cubemap_images
+            .values()
+            .for_each(|image| image.lock().destroy(context.renderer));
+        skybox_material
+            .shader_ref
+            .lock()
+            .destroy(&context.renderer.device);
+        skybox.mesh_ref.lock().destroy(context.renderer);
+
         self.scene.destroy(context.renderer);
     }
 }
