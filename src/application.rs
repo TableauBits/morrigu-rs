@@ -347,7 +347,14 @@ impl<'a> ApplicationBuilder<'a> {
 
         self.main_loop(&mut context, &mut state);
 
+        let instant = std::time::Instant::now();
         self.exit(&mut context, &mut state);
+        let engine_shut_down_time = instant.elapsed();
+        log::debug!(
+            "Custom state shut down time: {}ms",
+            engine_shut_down_time.as_millis()
+        );
+        log::debug!("Engine shut down");
     }
 
     pub fn build_and_run(self, state: &mut impl ApplicationState) {
@@ -378,7 +385,14 @@ impl<'a> ApplicationBuilder<'a> {
 
         self.main_loop(&mut context, state);
 
+        let instant = std::time::Instant::now();
         self.exit(&mut context, state);
+        let engine_shut_down_time = instant.elapsed();
+        log::debug!(
+            "Custom state shut down time: {}ms",
+            engine_shut_down_time.as_millis()
+        );
+        log::debug!("Engine shut down");
     }
 }
 
