@@ -17,6 +17,7 @@ void main() {
     fs_TexCoords = v_Position;
 
     mat4 transform = pc_CameraData.viewProjection * u_ModelData.modelMatrix;
-    gl_Position = transform * vec4(v_Position, 1);
+    vec4 pos = transform * vec4(v_Position, 1);
+    gl_Position = pos.xyww;
 }
 

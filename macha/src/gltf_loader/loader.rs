@@ -23,7 +23,8 @@ pub struct LightData {
     pub ambient_light_color: Vec3,
     pub ambient_light_intensity: f32,
 
-    pub camera_position: Vec4,
+    pub camera_position: Vec3,
+    pub __padding: f32,
 }
 
 unsafe impl bytemuck::Zeroable for LightData {}

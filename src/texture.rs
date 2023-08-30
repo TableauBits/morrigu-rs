@@ -74,7 +74,7 @@ impl TextureBuilder {
         dimensions: [u32; 2],
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Texture>, TextureBuildError> {
-        let pattern = vec![255, 255, 255, 255, 255, 0, 255, 255];
+        let pattern = [255, 255, 255, 255, 255, 0, 255, 255];
         let data = pattern
             .iter()
             .cycle()

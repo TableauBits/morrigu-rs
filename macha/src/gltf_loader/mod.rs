@@ -22,23 +22,23 @@ use morrigu::{
 use self::{
     camera::ViewerCamera,
     loader::LightData,
-    scene::{Material, MeshRendering, Scene, Vertex},
+    scene::{Material, Scene, Vertex},
 };
 
 pub struct GLTFViewerState {
     light_data: LightData,
     camera: ViewerCamera,
     scene: Scene,
+    skybox: bevy_ecs::entity::Entity,
 }
 
 type SkyboxVertex = morrigu::vertices::simple::SimpleVertex;
 type SkyboxMaterial = morrigu::material::Material<SkyboxVertex>;
-type SkyboxMesh = morrigu::mesh::Mesh<SkyboxVertex>;
 type SkyboxMeshRendering = morrigu::components::mesh_rendering::MeshRendering<SkyboxVertex>;
 
 impl BuildableApplicationState<()> for GLTFViewerState {
     fn build(context: &mut morrigu::application::StateContext, _: ()) -> Self {
-        let mut camera = Camera::builder().build(
+        let camera = Camera::builder().build(
             morrigu::components::camera::Projection::Perspective(PerspectiveData {
                 horizontal_fov: f32::to_radians(50.0),
                 near_plane: 0.001,
@@ -46,9 +46,9 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             }),
             &Vec2::new(1280.0, 720.0),
         );
-        camera.set_position(&Vec3::new(0.0, 0.0, 3.0));
 
-        let camera = ViewerCamera::new(camera);
+        let mut camera = ViewerCamera::new(camera);
+        camera.set_distance(0.0);
 
         let pbr_shader = Shader::from_spirv_u8(
             include_bytes!("shaders/gen/pbr/pbr.vert"),
@@ -77,7 +77,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             morrigu::texture::TextureFormat::RGBA8_UNORM,
             context.renderer,
         )
-        .expect("Failed to build skybox");
+        .expect("Failed to build skybox cubemap texture");
         let skybox_shader = Shader::from_spirv_u8(
             include_bytes!("shaders/gen/cubemap/cubemap.vert"),
             include_bytes!("shaders/gen/cubemap/cubemap.frag"),
@@ -85,6 +85,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
         )
         .expect("Failed to create skybox shader");
         let skybox_material: ThreadSafeRef<SkyboxMaterial> = Material::builder()
+            .z_write(false)
             .build(
                 &skybox_shader,
                 DescriptorResources {
@@ -114,7 +115,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             Transform::from_trs(
                 &Vec3::default(),
                 &Quat::default(),
-                &Vec3::new(100.0, 100.0, 100.0),
+                &Vec3::new(10.0, 10.0, 10.0),
                 // &Vec3::default(),
             ),
             pbr_shader,
@@ -131,14 +132,18 @@ impl BuildableApplicationState<()> for GLTFViewerState {
                 .spawn((transform.clone(), mesh_rendering_ref.clone()));
         }
 
-        context.ecs_manager.world.spawn((
-            Transform::from_trs(
-                &Vec3::default(),
-                &Quat::default(),
-                &Vec3::new(500.0, 500.0, 500.0),
-            ),
-            skybox,
-        ));
+        let skybox = context
+            .ecs_manager
+            .world
+            .spawn((
+                Transform::from_trs(
+                    camera.mrg_camera.position(),
+                    &Quat::default(),
+                    &Vec3::new(1.0, 1.0, 1.0),
+                ),
+                skybox,
+            ))
+            .id();
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
             schedule.add_system(mesh_renderer::render_meshes::<Vertex>);
@@ -147,10 +152,11 @@ impl BuildableApplicationState<()> for GLTFViewerState {
 
         let light_data = LightData {
             light_direction: Vec4::new(-1.0, -1.0, 0.0, 0.0).normalize(),
-            light_color: Vec4::new(0.7, 0.2, 0.2, 1.0),
+            light_color: Vec4::new(0.68, 0.68, 0.68, 1.0),
             ambient_light_color: Vec3::new(0.3, 0.3, 0.3),
             ambient_light_intensity: 0.2,
-            camera_position: Vec4::new(0.0, 0.0, 3.0, 0.0),
+            camera_position: *camera.mrg_camera.position(),
+            __padding: 0.0,
         };
 
         for material in &scene.materials {
@@ -164,6 +170,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             light_data,
             camera,
             scene,
+            skybox,
         }
     }
 }
@@ -179,7 +186,16 @@ impl ApplicationState for GLTFViewerState {
         self.camera.on_update(dt, context.window_input_state);
 
         let cam_pos = self.camera.mrg_camera.position();
-        self.light_data.camera_position = Vec4::new(cam_pos.x, cam_pos.y, cam_pos.z, 0.0);
+        self.light_data.camera_position = *cam_pos;
+
+        let mut entity_ref = context
+            .ecs_manager
+            .world
+            .get_entity_mut(self.skybox)
+            .expect("Failed to retreive skybox entity");
+        if let Some(mut transform) = entity_ref.get_mut::<Transform>() {
+            transform.set_translation(cam_pos);
+        }
 
         for material in &self.scene.materials {
             material
