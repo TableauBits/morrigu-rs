@@ -151,6 +151,7 @@ impl ComputeShaderBuilder {
                 slot: binding.binding,
                 descriptor_type: binding.descriptor_type,
                 size: binding.block.size,
+                dim: binding.image.dim,
             })
             .collect::<Vec<_>>();
 

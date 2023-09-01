@@ -197,6 +197,7 @@ pub struct AllocatedImage {
     pub layout: vk::ImageLayout,
     pub format: vk::Format,
     pub extent: vk::Extent3D,
+    pub layer_count: u32,
 }
 
 #[derive(Error, Debug)]
@@ -258,7 +259,7 @@ impl AllocatedImage {
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
-                    .layer_count(1);
+                    .layer_count(self.layer_count);
                 if self.layout != vk::ImageLayout::TRANSFER_DST_OPTIMAL {
                     let transfer_dst_barrier = vk::ImageMemoryBarrier::builder()
                         .src_access_mask(vk::AccessFlags::NONE)
@@ -285,7 +286,7 @@ impl AllocatedImage {
                         aspect_mask: vk::ImageAspectFlags::COLOR,
                         mip_level: 0,
                         base_array_layer: 0,
-                        layer_count: 1,
+                        layer_count: self.layer_count,
                     })
                     .image_extent(self.extent);
                 unsafe {
@@ -436,6 +437,36 @@ impl<'a> AllocatedImageBuilder<'a> {
         self
     }
 
+    pub fn cubemap_default(mut self, format: vk::Format) -> Self {
+        self.layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
+
+        self.image_create_info_builder = self
+            .image_create_info_builder
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(format)
+            .mip_levels(1)
+            .array_layers(6)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(self.usage | vk::ImageUsageFlags::SAMPLED)
+            .flags(vk::ImageCreateFlags::CUBE_COMPATIBLE)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        self.image_view_create_info_builder = self
+            .image_view_create_info_builder
+            .view_type(vk::ImageViewType::CUBE)
+            .format(format)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 6,
+            });
+
+        self
+    }
+
     pub fn storage_image_default(mut self, format: vk::Format) -> Self {
         self.image_create_info_builder = self
             .image_create_info_builder
@@ -509,6 +540,7 @@ impl<'a> AllocatedImageBuilder<'a> {
             layout: vk::ImageLayout::UNDEFINED,
             format: self.image_create_info_builder.format,
             extent: self.image_create_info_builder.extent,
+            layer_count: self.image_create_info_builder.array_layers,
         };
 
         let data = match self.data {
@@ -568,6 +600,7 @@ impl<'a> AllocatedImageBuilder<'a> {
             layout: vk::ImageLayout::UNDEFINED,
             format: self.image_create_info_builder.format,
             extent: self.image_create_info_builder.extent,
+            layer_count: self.image_create_info_builder.array_layers,
         })
     }
 }

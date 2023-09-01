@@ -10,9 +10,9 @@ use winit_input_helper::WinitInputHelper;
 pub struct ViewerCamera {
     pub mrg_camera: Camera,
     pub move_speed: f32,
-    pub distance: f32,
     pub mouse_input_factor: f32,
 
+    distance: f32,
     focal_point: Vec3,
 }
 
@@ -22,8 +22,8 @@ impl ViewerCamera {
 
         let mut new_camera = Self {
             mrg_camera,
-            move_speed: 4.0,
-            distance: 7.0,
+            move_speed: 1.0,
+            distance: 1.0,
             mouse_input_factor: 0.003,
             focal_point,
         };
@@ -39,6 +39,17 @@ impl ViewerCamera {
 
     pub fn set_focal_point(&mut self, new_focal_point: &Vec3) {
         self.focal_point = *new_focal_point;
+        let forward = self.mrg_camera.forward_vector();
+        let new_position = self.focal_point - forward * self.distance;
+        self.mrg_camera.set_position(&new_position);
+    }
+
+    pub fn distance(&self) -> &f32 {
+        &self.distance
+    }
+
+    pub fn set_distance(&mut self, new_distance: f32) {
+        self.distance = new_distance.clamp(0.5, 100.0);
         let forward = self.mrg_camera.forward_vector();
         let new_position = self.focal_point - forward * self.distance;
         self.mrg_camera.set_position(&new_position);
@@ -127,7 +138,7 @@ impl ViewerCamera {
         let capped_distance_unit = f32::max(self.distance * 0.2, 0.0);
         let capped_speed = f32::min(capped_distance_unit * capped_distance_unit, 100.0);
 
-        let clamped_distance = (self.distance - delta * capped_speed).clamp(0.001, 100.0);
+        let clamped_distance = (self.distance - delta * capped_speed).clamp(0.1, 100.0);
         self.distance = clamped_distance;
 
         let new_position = *self.focal_point() - self.mrg_camera.forward_vector() * self.distance;

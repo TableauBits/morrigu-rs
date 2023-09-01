@@ -33,7 +33,7 @@ use winit::event::{KeyboardInput, VirtualKeyCode};
 
 use std::path::Path;
 
-type Vertex = morrigu::sample_vertex::TexturedVertex;
+type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;
 type Mesh = morrigu::mesh::Mesh<Vertex>;
 type MeshRendering = morrigu::components::mesh_rendering::MeshRendering<Vertex>;

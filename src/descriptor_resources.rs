@@ -1,5 +1,6 @@
 use crate::{
     allocated_types::{AllocatedBuffer, AllocatedImage, BufferDataUploadError},
+    cubemap::Cubemap,
     renderer::Renderer,
     shader::BindingData,
     texture::Texture,
@@ -118,6 +119,7 @@ pub struct DescriptorResources {
     pub uniform_buffers: HashMap<u32, ThreadSafeRef<AllocatedBuffer>>,
     pub storage_images: HashMap<u32, ThreadSafeRef<AllocatedImage>>,
     pub sampled_images: HashMap<u32, ThreadSafeRef<Texture>>,
+    pub cubemap_images: HashMap<u32, ThreadSafeRef<Cubemap>>,
 }
 
 impl DescriptorResources {
@@ -201,14 +203,31 @@ impl DescriptorResources {
                     )?;
                 }
                 vk::DescriptorType::COMBINED_IMAGE_SAMPLER => {
-                    let texture_ref = self.sampled_images.get(&binding.slot).ok_or(
-                        DescriptorSetUpdateError::ResourceNotProvided {
-                            set: binding.set,
-                            slot: binding.slot,
-                        },
-                    )?;
-                    let texture = texture_ref.lock();
-                    let image = texture.image_ref.lock();
+                    let (image, sampler) = match binding.dim {
+                        spirv_reflect::types::ReflectDimension::Type2d => {
+                            let texture_ref = self.sampled_images.get(&binding.slot).ok_or(
+                                DescriptorSetUpdateError::ResourceNotProvided {
+                                    set: binding.set,
+                                    slot: binding.slot,
+                                },
+                            )?;
+                            let texture = texture_ref.lock();
+                            (texture.image_ref.clone(), texture.sampler)
+                        }
+                        spirv_reflect::types::ReflectDimension::Cube => {
+                            let cubemap_ref = self.cubemap_images.get(&binding.slot).ok_or(
+                                DescriptorSetUpdateError::ResourceNotProvided {
+                                    set: binding.set,
+                                    slot: binding.slot,
+                                },
+                            )?;
+                            let cubemap = cubemap_ref.lock();
+                            (cubemap.image_ref.clone(), cubemap.sampler)
+                        }
+                        _ => todo!(),
+                    };
+
+                    let image = image.lock();
 
                     self.update_layout(
                         image.handle,
@@ -218,7 +237,7 @@ impl DescriptorResources {
                     )?;
 
                     let descriptor_image_info = vk::DescriptorImageInfo::builder()
-                        .sampler(texture.sampler)
+                        .sampler(sampler)
                         .image_view(image.view)
                         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
 
