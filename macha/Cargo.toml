@@ -11,11 +11,11 @@ log = "0.4.17"
 ash = "0.37.2"
 flexi_logger = "0.26.0"
 anyhow = "1.0.70"
-gltf = { git = "https://github.com/Ithyx/gltf", rev = "875c134bb7a6f35d27d88d9d49997f66269fec5e" }
+gltf = { git = "https://github.com/Ithyx/gltf", rev = "21aaddec4fc1411f0280d8345d1d04992b0f8994" }
 morrigu = { path = "../", features = ["egui"] }
 bevy_ecs = "0.11.2"
 egui = "0.22.0"
-egui-gizmo = { git = "https://github.com/Ithyx/egui-gizmo", rev = "d9c944c41d529ee2b7c43caa60d2c7a57e039fd2" }
+egui-gizmo = "0.11.0"
 winit = "0.28.3"
 winit_input_helper = "0.14.1"
 bytemuck = "1.13.1"
