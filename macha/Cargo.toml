@@ -8,6 +8,8 @@ shaderc = "0.8.0"
 
 [dependencies]
 log = "0.4.17"
+profiling = { version = "1.0.10", features = ["profile-with-puffin"] }
+
 ash = "0.37.2"
 flexi_logger = "0.26.0"
 anyhow = "1.0.70"
@@ -16,6 +18,8 @@ morrigu = { path = "../", features = ["egui"] }
 bevy_ecs = "0.11.2"
 egui = "0.22.0"
 egui-gizmo = "0.11.0"
+puffin = "0.16.0"
+puffin_egui = "0.22.0"
 winit = "0.28.3"
 winit_input_helper = "0.14.1"
 bytemuck = "1.13.1"

@@ -65,6 +65,7 @@ pub struct LoadData {
     pub transforms: Vec<Transform>,
 }
 
+#[profiling::function]
 fn convert_transform(value: gltf::scene::Transform) -> Transform {
     match value {
         gltf::scene::Transform::Matrix { matrix } => Mat4::from_cols_array_2d(&matrix).into(),
@@ -80,6 +81,7 @@ fn convert_transform(value: gltf::scene::Transform) -> Transform {
     }
 }
 
+#[profiling::function]
 pub fn load_node(
     current_node: &gltf::Node,
     parent_transform: Transform,
@@ -171,6 +173,7 @@ pub fn load_node(
     Ok(load_data)
 }
 
+#[profiling::function]
 pub fn load_gltf(
     path: &Path,
     transform: Transform,
