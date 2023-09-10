@@ -35,6 +35,7 @@ impl ply::PropertyAccess for Face {
     }
 
     #[allow(clippy::single_match)]
+    #[profiling::function]
     fn set_property(&mut self, key: String, property: ply::Property) {
         match (key.as_ref(), property) {
             ("vertex_indices", ply::Property::ListUInt(v)) => self.indices = v,

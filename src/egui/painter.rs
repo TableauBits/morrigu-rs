@@ -105,6 +105,7 @@ pub enum PainterCreationError {
     MaterialCreationFailed(#[from] MaterialBuildError),
 }
 
+#[profiling::all_functions]
 impl Painter {
     pub fn new(renderer: &mut Renderer) -> Result<Self, PainterCreationError> {
         let max_texture_size = renderer

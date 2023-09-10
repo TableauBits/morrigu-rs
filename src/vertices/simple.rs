@@ -54,6 +54,7 @@ impl ply::PropertyAccess for SimpleVertex {
         }
     }
 
+    #[profiling::function]
     fn set_property(&mut self, key: String, property: ply::Property) {
         match (key.as_ref(), property) {
             ("x", ply::Property::Float(v)) => self.position.x = v,
@@ -64,6 +65,7 @@ impl ply::PropertyAccess for SimpleVertex {
     }
 }
 
+#[profiling::all_functions]
 impl SimpleVertex {
     pub fn load_model_from_path_obj(
         path: &std::path::Path,

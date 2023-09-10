@@ -15,6 +15,7 @@ shaderc = "0.8"
 
 [dependencies]
 log = "0.4"
+profiling = "1.0"
 
 thiserror = "1.0"
 

@@ -58,6 +58,7 @@ pub enum MeshRenderingBuildError {
     DescriptorSetUpdateFailed(#[from] DescriptorSetUpdateError),
 }
 
+#[profiling::all_functions]
 impl<VertexType> MeshRendering<VertexType>
 where
     VertexType: Vertex,

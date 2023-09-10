@@ -32,6 +32,7 @@ pub enum BufferDataUploadError {
     MemoryMappingFailed,
 }
 
+#[profiling::all_functions]
 impl AllocatedBuffer {
     /// This defaults to a uniform buffer usage
     pub fn builder(size: u64) -> AllocatedBufferBuilder {
@@ -153,6 +154,7 @@ impl AllocatedBufferBuilder {
         Ok(buffer)
     }
 
+    #[profiling::function]
     pub(crate) fn build_internal(
         self,
         device: &ash::Device,
@@ -220,6 +222,7 @@ pub enum ImageDataUploadError {
     ImageTransferCommandFailed(#[from] ImmediateCommandError),
 }
 
+#[profiling::all_functions]
 impl AllocatedImage {
     pub fn upload_data(
         &mut self,
@@ -503,6 +506,7 @@ impl<'a> AllocatedImageBuilder<'a> {
         )
     }
 
+    #[profiling::function]
     pub(crate) fn build_internal(
         mut self,
         device: &ash::Device,

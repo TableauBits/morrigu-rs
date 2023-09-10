@@ -321,6 +321,7 @@ fn create_swapchain(
     }
 }
 
+#[profiling::function]
 fn create_framebuffers(
     width: u32,
     height: u32,
@@ -961,6 +962,7 @@ impl Renderer {
         self.default_texture_ref.clone()
     }
 
+    #[profiling::function]
     pub(crate) fn begin_frame(&mut self) -> bool {
         if self.window_width == 0 || self.window_height == 0 {
             return false;
@@ -1049,6 +1051,7 @@ impl Renderer {
         }
     }
 
+    #[profiling::function]
     pub(crate) fn end_frame(&mut self) {
         unsafe { self.device.cmd_end_render_pass(self.primary_command_buffer) };
         unsafe { self.device.end_command_buffer(self.primary_command_buffer) }
@@ -1098,6 +1101,7 @@ impl Renderer {
         self.window_height = height;
     }
 
+    #[profiling::function]
     fn recreate_swapchain(&mut self) {
         unsafe { self.device.device_wait_idle() }.expect("Failed to wait for device");
 

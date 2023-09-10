@@ -24,6 +24,7 @@ struct CameraData {
 unsafe impl Zeroable for CameraData {}
 unsafe impl Pod for CameraData {}
 
+#[profiling::function]
 pub fn render_meshes<VertexType>(
     query: Query<(&Transform, &ThreadSafeRef<MeshRendering<VertexType>>)>,
     timer: Res<ResourceWrapper<Instant>>,

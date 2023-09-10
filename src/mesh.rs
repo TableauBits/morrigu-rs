@@ -20,6 +20,7 @@ where
     pub index_buffer: Option<AllocatedBuffer>,
 }
 
+#[profiling::all_functions]
 impl<VertexType> Mesh<VertexType>
 where
     VertexType: Vertex,
@@ -58,6 +59,7 @@ pub enum UploadError {
     CopyCommandFailed(ImmediateCommandError),
 }
 
+#[profiling::function]
 pub fn upload_vertex_buffer<VertexType>(
     vertices: &[VertexType],
     renderer: &mut Renderer,
@@ -116,6 +118,7 @@ where
     Ok(vertex_buffer)
 }
 
+#[profiling::function]
 pub fn upload_index_buffer(
     indices: &[u32],
     renderer: &mut Renderer,
@@ -171,6 +174,7 @@ pub enum MeshDataUploadError {
     IndexBufferUploadFailed(UploadError),
 }
 
+#[profiling::function]
 pub fn upload_mesh_data<VertexType>(
     vertices: &[VertexType],
     indices: &[u32],

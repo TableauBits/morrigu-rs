@@ -55,6 +55,7 @@ impl From<Transform> for Mat4 {
     }
 }
 
+#[profiling::all_functions]
 impl Transform {
     pub fn from_trs(translation: &Vec3, rotation: &Quat, scale: &Vec3) -> Self {
         let matrix = Mat4::from_scale_rotation_translation(*scale, *rotation, *translation);
@@ -70,15 +71,19 @@ impl Transform {
         }
     }
 
+    #[profiling::skip]
     pub fn translation(&self) -> &Vec3 {
         &self.translation
     }
+    #[profiling::skip]
     pub fn rotation(&self) -> &Quat {
         &self.rotation
     }
+    #[profiling::skip]
     pub fn scale(&self) -> &Vec3 {
         &self.scale
     }
+    #[profiling::skip]
     pub fn matrix(&self) -> Mat4 {
         let mut cache_data = self.cache.lock();
         if cache_data.is_outdated {

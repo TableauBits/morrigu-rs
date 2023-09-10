@@ -62,6 +62,7 @@ impl ECSManager {
         }
     }
 
+    #[profiling::function]
     pub fn redefine_systems_schedule<F>(&mut self, f: F)
     where
         F: FnOnce(&mut Schedule),
@@ -73,11 +74,13 @@ impl ECSManager {
         self.systems_schedule = new_schedule;
     }
 
+    #[profiling::function]
     pub(crate) fn run_schedule(&mut self) {
         self.systems_schedule.run(&mut self.world);
     }
 
     #[cfg(feature = "egui")]
+    #[profiling::function]
     pub fn redefine_ui_systems_schedule<F>(&mut self, f: F)
     where
         F: FnOnce(&mut Schedule),
@@ -90,6 +93,7 @@ impl ECSManager {
     }
 
     #[cfg(feature = "egui")]
+    #[profiling::function]
     pub(crate) fn run_ui_schedule(&mut self, egui_context: &egui::Context) {
         self.world
             .insert_resource(ResourceWrapper::new(egui_context.clone()));

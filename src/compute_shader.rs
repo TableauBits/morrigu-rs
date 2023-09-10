@@ -79,6 +79,7 @@ pub enum ComputeShaderBuildError {
     PipelineCreationFailed(#[from] PipelineBuildError),
 }
 
+#[profiling::all_functions]
 impl ComputeShaderBuilder {
     pub fn new() -> Self {
         Self {
@@ -262,6 +263,7 @@ impl Default for ComputeShaderBuilder {
     }
 }
 
+#[profiling::all_functions]
 impl ComputeShader {
     pub fn builder() -> ComputeShaderBuilder {
         ComputeShaderBuilder::new()

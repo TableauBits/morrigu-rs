@@ -73,6 +73,7 @@ pub enum ShaderBuildError {
     DSLCreationFailed(#[from] DSLCreationError),
 }
 
+#[profiling::all_functions]
 impl Shader {
     /// This function expects a valid path for both **SPIR-V compiled** shader files.
     pub fn from_path(
