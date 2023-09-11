@@ -147,8 +147,8 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             .id();
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
-            schedule.add_system(mesh_renderer::render_meshes::<Vertex>);
-            schedule.add_system(mesh_renderer::render_meshes::<SkyboxVertex>);
+            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
+            schedule.add_systems(mesh_renderer::render_meshes::<SkyboxVertex>);
         });
 
         let light_data = LightData {
