@@ -122,7 +122,6 @@ pub struct DescriptorResources {
     pub cubemap_images: HashMap<u32, ThreadSafeRef<Cubemap>>,
 }
 
-#[profiling::all_functions]
 impl DescriptorResources {
     /// Returns a completely empty descriptor set resource structure. This cannot be used with
     /// graphics mesh rendering component, as it requires at least a uniform at `location = 0` for

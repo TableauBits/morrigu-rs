@@ -113,7 +113,6 @@ impl CommandUploader {
         };
     }
 
-    #[profiling::function]
     pub fn immediate_command<F>(
         &self,
         device: &ash::Device,

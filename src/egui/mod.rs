@@ -14,7 +14,6 @@ pub struct EguiIntegration {
     textures_delta: egui::TexturesDelta,
 }
 
-#[profiling::all_functions]
 impl EguiIntegration {
     pub fn new(
         event_loop: &winit::event_loop::EventLoopWindowTarget<()>,
