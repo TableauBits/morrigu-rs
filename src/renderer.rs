@@ -13,7 +13,10 @@ use ash::{
     vk::{self, PhysicalDeviceType},
     Entry, Instance,
 };
-use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
+use gpu_allocator::{
+    vulkan::{Allocator, AllocatorCreateDesc},
+    AllocationSizes,
+};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::Window;
 
@@ -570,6 +573,7 @@ impl<'a> RendererBuilder<'a> {
             device,
             debug_settings: Default::default(),
             buffer_device_address: false,
+            allocation_sizes: AllocationSizes::default(),
         })
         .expect("Failed to create GPU allocator")
     }
