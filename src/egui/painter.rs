@@ -122,8 +122,9 @@ impl Painter {
             include_bytes!("shaders/gen/egui.frag"),
             &renderer.device,
         )?;
-        let material =
-            MaterialBuilder::new().build(&shader, DescriptorResources::empty(), renderer)?;
+        let material = MaterialBuilder::new()
+            .cull_mode(vk::CullModeFlags::NONE)
+            .build(&shader, DescriptorResources::empty(), renderer)?;
 
         Ok(Self {
             max_texture_size,
