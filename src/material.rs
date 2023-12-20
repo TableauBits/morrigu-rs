@@ -228,7 +228,7 @@ impl MaterialBuilder {
         let rasterizer_state_info = vk::PipelineRasterizationStateCreateInfo::builder()
             .polygon_mode(vk::PolygonMode::FILL)
             .cull_mode(self.cull_mode)
-            .front_face(vk::FrontFace::CLOCKWISE)
+            .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .line_width(1.0);
         let multisampling_state_info = vk::PipelineMultisampleStateCreateInfo::builder()
             .rasterization_samples(vk::SampleCountFlags::TYPE_1)
