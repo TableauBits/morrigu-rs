@@ -55,9 +55,12 @@ where
     }
 }
 
+pub use vk::CullModeFlags;
+
 pub struct MaterialBuilder {
     pub z_test: bool,
     pub z_write: bool,
+    pub cull_mode: CullModeFlags,
 }
 
 #[derive(Error, Debug)]
@@ -88,6 +91,7 @@ impl MaterialBuilder {
         Self {
             z_test: true,
             z_write: true,
+            cull_mode: CullModeFlags::BACK,
         }
     }
 
@@ -98,6 +102,11 @@ impl MaterialBuilder {
 
     pub fn z_write(mut self, z_write: bool) -> Self {
         self.z_write = z_write;
+        self
+    }
+
+    pub fn cull_mode(mut self, cull_mode: CullModeFlags) -> Self {
+        self.cull_mode = cull_mode;
         self
     }
 
@@ -218,7 +227,7 @@ impl MaterialBuilder {
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
         let rasterizer_state_info = vk::PipelineRasterizationStateCreateInfo::builder()
             .polygon_mode(vk::PolygonMode::FILL)
-            .cull_mode(vk::CullModeFlags::NONE)
+            .cull_mode(self.cull_mode)
             .front_face(vk::FrontFace::CLOCKWISE)
             .line_width(1.0);
         let multisampling_state_info = vk::PipelineMultisampleStateCreateInfo::builder()
