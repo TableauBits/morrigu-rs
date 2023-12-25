@@ -7,15 +7,19 @@ edition = "2021"
 shaderc = "0.8.0"
 
 [dependencies]
-log = "0.4.17"
-ash = "0.37.2"
-flexi_logger = "0.25.3"
-anyhow = "1.0.70"
-gltf = { git = "https://github.com/Ithyx/gltf", rev = "875c134bb7a6f35d27d88d9d49997f66269fec5e" }
+log = "0.4"
+profiling = { version = "1.0", features = ["profile-with-puffin"] }
+
+ash = "0.37"
+flexi_logger = "0.27"
+anyhow = "1.0"
+gltf = { git = "https://github.com/Ithyx/gltf", rev = "21aaddec4fc1411f0280d8345d1d04992b0f8994" }
 morrigu = { path = "../", features = ["egui"] }
-bevy_ecs = "0.10.1"
-egui = "0.22.0"
-egui-gizmo = { git = "https://github.com/Ithyx/egui-gizmo", rev = "d9c944c41d529ee2b7c43caa60d2c7a57e039fd2" }
-winit = "0.28.3"
-winit_input_helper = "0.14.1"
-bytemuck = "1.13.1"
+bevy_ecs = "0.12"
+egui = "0.22"
+egui-gizmo = "0.11"
+puffin = "0.16"
+puffin_egui = "0.22"
+winit = "0.28"
+winit_input_helper = "0.14"
+bytemuck = "1.14"

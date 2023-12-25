@@ -27,6 +27,7 @@ fn init_logging() {
 
 fn main() {
     init_logging();
+    puffin::set_scopes_on(true);
 
     ApplicationBuilder::new()
         .with_window_name("Macha editor")

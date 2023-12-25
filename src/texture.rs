@@ -69,6 +69,7 @@ impl TextureBuilder {
         self
     }
 
+    #[profiling::function]
     pub fn build(
         self,
         dimensions: [u32; 2],
@@ -93,6 +94,7 @@ impl TextureBuilder {
         )
     }
 
+    #[profiling::function]
     pub fn build_from_path(
         self,
         path: &std::path::Path,
@@ -107,6 +109,7 @@ impl TextureBuilder {
         Ok(new_texture)
     }
 
+    #[profiling::function]
     pub fn build_from_data(
         self,
         data: &[u8],
@@ -218,7 +221,9 @@ pub enum TextureCloneError {
     VulkanSamplerCreationFailed(vk::Result),
 }
 
+#[profiling::all_functions]
 impl Texture {
+    #[profiling::skip]
     pub fn builder() -> TextureBuilder {
         TextureBuilder::default()
     }
@@ -356,6 +361,7 @@ impl Texture {
         self.destroy_internal(&renderer.device, &mut renderer.allocator())
     }
 
+    #[profiling::skip]
     pub(crate) fn destroy_internal(
         &mut self,
         device: &ash::Device,

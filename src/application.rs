@@ -220,6 +220,8 @@ impl<'a> ApplicationBuilder<'a> {
 
                 let mut renderer = context.renderer_ref.lock();
                 if renderer.begin_frame() {
+                    profiling::scope!("main loop");
+
                     #[cfg(feature = "egui")]
                     context.egui.painter.cleanup_previous_frame(&mut renderer);
 
@@ -231,24 +233,31 @@ impl<'a> ApplicationBuilder<'a> {
                         window: &context.window,
                         window_input_state: &context.window_input_state,
                     };
-                    state.on_update(delta, &mut state_context);
+                    {
+                        profiling::scope!("on_update");
+                        state.on_update(delta, &mut state_context);
+                    }
                     drop(renderer);
 
-                    context.ecs_manager.run_schedule();
-                    let mut renderer = context.renderer_ref.lock();
-                    let mut state_context = StateContext {
-                        #[cfg(feature = "egui")]
-                        egui: &mut context.egui,
-                        renderer: &mut renderer,
-                        ecs_manager: &mut context.ecs_manager,
-                        window: &context.window,
-                        window_input_state: &context.window_input_state,
-                    };
-                    state.after_systems(delta, &mut state_context);
-                    drop(renderer);
+                    {
+                        profiling::scope!("ECS schedule");
+                        context.ecs_manager.run_schedule();
+                        let mut renderer = context.renderer_ref.lock();
+                        let mut state_context = StateContext {
+                            #[cfg(feature = "egui")]
+                            egui: &mut context.egui,
+                            renderer: &mut renderer,
+                            ecs_manager: &mut context.ecs_manager,
+                            window: &context.window,
+                            window_input_state: &context.window_input_state,
+                        };
+                        state.after_systems(delta, &mut state_context);
+                        drop(renderer);
+                    }
 
                     #[cfg(feature = "egui")]
                     {
+                        profiling::scope!("egui update");
                         let mut renderer = context.renderer_ref.lock();
                         context.egui.run(&context.window, |egui_context| {
                             let mut egui_update_context = EguiUpdateContext {
@@ -270,6 +279,7 @@ impl<'a> ApplicationBuilder<'a> {
 
                     let mut renderer = context.renderer_ref.lock();
                     renderer.end_frame();
+                    profiling::finish_frame!();
                 }
             }
 

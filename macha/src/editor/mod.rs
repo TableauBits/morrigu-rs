@@ -168,14 +168,14 @@ impl BuildableApplicationState<()> for MachaState {
         ));
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
-            schedule.add_system(mesh_renderer::render_meshes::<Vertex>);
+            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
         });
 
         context
             .ecs_manager
             .redefine_ui_systems_schedule(|schedule| {
-                schedule.add_system(hierarchy_panel::draw_hierarchy_panel_stable);
-                schedule.add_system(gizmo_drawer::draw_gizmo);
+                schedule.add_systems(hierarchy_panel::draw_hierarchy_panel_stable);
+                schedule.add_systems(gizmo_drawer::draw_gizmo);
             });
 
         MachaState {

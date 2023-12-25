@@ -16,6 +16,7 @@ pub struct ViewerCamera {
     focal_point: Vec3,
 }
 
+#[profiling::all_functions]
 impl ViewerCamera {
     pub fn new(mrg_camera: Camera) -> Self {
         let focal_point = Default::default();
@@ -33,6 +34,7 @@ impl ViewerCamera {
         new_camera
     }
 
+    #[profiling::skip]
     pub fn focal_point(&self) -> &Vec3 {
         &self.focal_point
     }
@@ -44,6 +46,8 @@ impl ViewerCamera {
         self.mrg_camera.set_position(&new_position);
     }
 
+    #[allow(unused)]
+    #[profiling::skip]
     pub fn distance(&self) -> &f32 {
         &self.distance
     }

@@ -110,6 +110,7 @@ impl MaterialBuilder {
         self
     }
 
+    #[profiling::function]
     pub fn build<VertexType>(
         self,
         shader_ref: &ThreadSafeRef<Shader>,
@@ -282,10 +283,12 @@ impl Default for MaterialBuilder {
     }
 }
 
+#[profiling::all_functions]
 impl<VertexType> Material<VertexType>
 where
     VertexType: Vertex,
 {
+    #[profiling::skip]
     pub fn builder() -> MaterialBuilder {
         MaterialBuilder::new()
     }

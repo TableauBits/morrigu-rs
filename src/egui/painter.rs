@@ -383,6 +383,7 @@ impl Painter {
         };
         let texture = Texture::builder()
             .with_format(TextureFormat::RGBA8_SRGB)
+            .with_usage(vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST)
             .build_from_data(
                 &pixels,
                 delta

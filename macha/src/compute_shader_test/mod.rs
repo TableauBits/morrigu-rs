@@ -124,7 +124,7 @@ impl BuildableApplicationState<()> for CSTState {
             .spawn((transform, output_mesh_rendering_ref.clone()));
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
-            schedule.add_system(mesh_renderer::render_meshes::<Vertex>);
+            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
         });
 
         Self {

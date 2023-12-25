@@ -37,6 +37,7 @@ type SkyboxVertex = morrigu::vertices::simple::SimpleVertex;
 type SkyboxMaterial = morrigu::material::Material<SkyboxVertex>;
 type SkyboxMeshRendering = morrigu::components::mesh_rendering::MeshRendering<SkyboxVertex>;
 
+#[profiling::all_functions]
 impl BuildableApplicationState<()> for GLTFViewerState {
     fn build(context: &mut morrigu::application::StateContext, _: ()) -> Self {
         let camera = Camera::builder().build(
@@ -146,8 +147,8 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             .id();
 
         context.ecs_manager.redefine_systems_schedule(|schedule| {
-            schedule.add_system(mesh_renderer::render_meshes::<Vertex>);
-            schedule.add_system(mesh_renderer::render_meshes::<SkyboxVertex>);
+            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
+            schedule.add_systems(mesh_renderer::render_meshes::<SkyboxVertex>);
         });
 
         let light_data = LightData {
@@ -176,6 +177,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
     }
 }
 
+#[profiling::all_functions]
 impl ApplicationState for GLTFViewerState {
     fn on_attach(&mut self, _context: &mut morrigu::application::StateContext) {}
 
@@ -227,18 +229,8 @@ impl ApplicationState for GLTFViewerState {
         }
     }
 
-    fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        egui::Window::new("Debug info").show(context.egui_context, |ui| {
-            let color = match dt.as_millis() {
-                0..=25 => [51, 204, 51],
-                26..=50 => [255, 153, 0],
-                _ => [204, 51, 51],
-            };
-            ui.colored_label(
-                egui::Color32::from_rgb(color[0], color[1], color[2]),
-                format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()),
-            );
-        });
+    fn on_update_egui(&mut self, _dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        puffin_egui::profiler_window(context.egui_context);
     }
 
     fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {

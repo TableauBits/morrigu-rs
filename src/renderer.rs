@@ -13,7 +13,10 @@ use ash::{
     vk::{self, PhysicalDeviceType},
     Entry, Instance,
 };
-use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
+use gpu_allocator::{
+    vulkan::{Allocator, AllocatorCreateDesc},
+    AllocationSizes,
+};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::Window;
 
@@ -168,8 +171,8 @@ pub struct RendererBuilder<'a> {
 
 #[allow(clippy::too_many_arguments)]
 fn create_swapchain(
-    width: u32,
-    height: u32,
+    mut width: u32,
+    mut height: u32,
     preferred_present_mode: vk::PresentModeKHR,
     instance: &ash::Instance,
     physical_device: vk::PhysicalDevice,
@@ -189,7 +192,12 @@ fn create_swapchain(
 
     let surface_extent = match capabilities.current_extent.width {
         std::u32::MAX => vk::Extent2D { width, height },
-        _ => capabilities.current_extent,
+        _ => {
+            width = capabilities.current_extent.width;
+            height = capabilities.current_extent.height;
+
+            capabilities.current_extent
+        }
     };
 
     let present_modes = unsafe {
@@ -570,6 +578,7 @@ impl<'a> RendererBuilder<'a> {
             device,
             debug_settings: Default::default(),
             buffer_device_address: false,
+            allocation_sizes: AllocationSizes::default(),
         })
         .expect("Failed to create GPU allocator")
     }
@@ -792,7 +801,7 @@ impl<'a> RendererBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> ThreadSafeRef<Renderer> {
+    pub fn build(mut self) -> ThreadSafeRef<Renderer> {
         let entry = Entry::linked();
         let instance = self.create_instance(&entry);
         let debug_messenger = self.create_debug_messenger(&entry, &instance);
@@ -876,6 +885,8 @@ impl<'a> RendererBuilder<'a> {
             &surface.loader,
             &mut gpu_allocator,
         );
+        self.width = swapchain.extent.width;
+        self.height = swapchain.extent.height;
 
         let primary_render_pass =
             self.create_render_passes(&surface, &swapchain.depth_image, &device);

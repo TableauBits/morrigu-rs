@@ -19,6 +19,7 @@ pub struct Scene {
     pub transforms: Vec<Transform>,
 }
 
+#[profiling::all_functions]
 impl Scene {
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         for mesh_rendering in &self.mesh_renderings {

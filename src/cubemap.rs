@@ -29,6 +29,7 @@ pub struct Cubemap {
     pub path: Option<String>,
 }
 
+#[profiling::all_functions]
 impl Cubemap {
     pub fn build_from_folder(
         folder_path: &str,

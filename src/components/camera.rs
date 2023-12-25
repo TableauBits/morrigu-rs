@@ -40,6 +40,7 @@ impl CameraBuilder {
         Default::default()
     }
 
+    #[profiling::function]
     pub fn build(self, projection_type: Projection, size: &Vec2) -> Camera {
         let orientation = Camera::compute_orientation(self.pitch, self.yaw, self.roll);
 
@@ -85,7 +86,9 @@ pub struct Camera {
     size: Vec2,
 }
 
+#[profiling::all_functions]
 impl Camera {
+    #[profiling::skip]
     pub fn builder() -> CameraBuilder {
         CameraBuilder::new()
     }
@@ -123,38 +126,47 @@ impl Camera {
         (*projection) * (*view)
     }
 
+    #[profiling::skip]
     pub fn view(&self) -> &Mat4 {
         &self.view
     }
 
+    #[profiling::skip]
     pub fn projection(&self) -> &Mat4 {
         &self.projection
     }
 
+    #[profiling::skip]
     pub fn view_projection(&self) -> &Mat4 {
         &self.view_projection
     }
 
+    #[profiling::skip]
     pub fn position(&self) -> &Vec3 {
         &self.position
     }
 
+    #[profiling::skip]
     pub fn pitch(&self) -> &f32 {
         &self.pitch
     }
 
+    #[profiling::skip]
     pub fn yaw(&self) -> &f32 {
         &self.yaw
     }
 
+    #[profiling::skip]
     pub fn roll(&self) -> &f32 {
         &self.roll
     }
 
+    #[profiling::skip]
     pub fn aspect_ratio(&self) -> &f32 {
         &self.aspect_ratio
     }
 
+    #[profiling::skip]
     pub fn size(&self) -> &Vec2 {
         &self.size
     }
