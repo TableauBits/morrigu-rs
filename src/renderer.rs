@@ -167,6 +167,8 @@ pub struct RendererBuilder<'a> {
     height: u32,
     preferred_present_mode: vk::PresentModeKHR,
     input_attachments: Vec<(vk::AttachmentDescription, vk::AttachmentReference)>,
+
+    rt_requested: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -178,11 +180,10 @@ fn create_swapchain(
     physical_device: vk::PhysicalDevice,
     device: &ash::Device,
     surface: &SurfaceInfo,
-    surface_loader: &Surface,
     allocator: &mut Allocator,
 ) -> SwapchainInfo {
     let capabilities = unsafe {
-        surface_loader.get_physical_device_surface_capabilities(physical_device, surface.handle)
+        surface.loader.get_physical_device_surface_capabilities(physical_device, surface.handle)
     }
     .expect("Failed to query surface capabilities");
     let mut requested_image_count = capabilities.min_image_count + 1;
@@ -201,7 +202,7 @@ fn create_swapchain(
     };
 
     let present_modes = unsafe {
-        surface_loader.get_physical_device_surface_present_modes(physical_device, surface.handle)
+        surface.loader.get_physical_device_surface_present_modes(physical_device, surface.handle)
     }
     .expect("Failed to query surface present modes");
     let present_mode = present_modes
@@ -362,7 +363,7 @@ impl<'a> RendererBuilder<'a> {
         let app_info = vk::ApplicationInfo::builder()
             .application_name(self.application_name.as_c_str())
             .application_version(self.application_version)
-            .engine_name(engine_name.as_c_str())
+            .engine_name(&engine_name)
             .engine_version(vk::make_api_version(0, 1, 0, 0))
             .api_version(vk::make_api_version(0, 1, 2, 0));
 
@@ -470,10 +471,16 @@ impl<'a> RendererBuilder<'a> {
                     }
                     .expect("Failed to query surface compatibility");
 
+                    let meets_rt_requirements = true;
+                    // if self.rt_requested {
+
+                    // }
+
                     if supports_required_version
                         && supports_graphics
                         && supports_compute
                         && is_compatible_with_surface
+                        && meets_rt_requirements
                     {
                         Some((raw_physical_device, queue_index as u32))
                     } else {
@@ -549,21 +556,46 @@ impl<'a> RendererBuilder<'a> {
         physical_device: vk::PhysicalDevice,
         queue_family_index: u32,
     ) -> ash::Device {
-        let raw_extensions_name = [Swapchain::name().as_ptr()];
+        let mut raw_extensions_names = vec![Swapchain::name().as_ptr()];
         let features = vk::PhysicalDeviceFeatures::default();
         let priorities = [1.0];
+
+        if self.rt_requested {
+            // For rt acceleration structures
+            raw_extensions_names.push(ash::extensions::khr::AccelerationStructure::name().as_ptr());
+            // For vkCmdTraceRaysKHR
+            raw_extensions_names.push(ash::extensions::khr::RayTracingPipeline::name().as_ptr());
+            // Required by RayTracingPipeline
+            raw_extensions_names
+                .push(ash::extensions::khr::DeferredHostOperations::name().as_ptr());
+        }
 
         let queue_info = vk::DeviceQueueCreateInfo::builder()
             .queue_family_index(queue_family_index)
             .queue_priorities(&priorities);
 
-        let device_create_info = vk::DeviceCreateInfo::builder()
+        let mut device_create_info = vk::DeviceCreateInfo::builder()
             .enabled_features(&features)
-            .enabled_extension_names(&raw_extensions_name)
+            .enabled_extension_names(&raw_extensions_names)
             .queue_create_infos(std::slice::from_ref(&queue_info));
 
-        unsafe { instance.create_device(physical_device, &device_create_info, None) }
-            .expect("Failed to create logial device")
+        let mut as_features = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default();
+        let mut rtp_features = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default();
+        if self.rt_requested {
+            device_create_info = device_create_info.push_next(&mut as_features);
+            device_create_info = device_create_info.push_next(&mut rtp_features);
+        }
+
+        let device = unsafe { instance.create_device(physical_device, &device_create_info, None) }
+            .expect("Failed to create logial device");
+
+        if self.rt_requested {
+            log::info!("Ray tracing extensions features:");
+            log::info!("\t acceleration structure: {:?}", as_features);
+            log::info!("\t ray tracing pipeline: {:?}", rtp_features);
+        }
+
+        device
     }
 
     fn create_allocator(
@@ -777,6 +809,8 @@ impl<'a> RendererBuilder<'a> {
             height: 720,
             preferred_present_mode: vk::PresentModeKHR::MAILBOX,
             input_attachments: vec![],
+
+            rt_requested: false,
         }
     }
 
@@ -798,6 +832,11 @@ impl<'a> RendererBuilder<'a> {
 
     pub fn with_version(mut self, major: u32, minor: u32, patch: u32) -> Self {
         self.application_version = vk::make_api_version(0, major, minor, patch);
+        self
+    }
+
+    pub fn request_ray_tracing(mut self, request_ray_tracing: bool) -> Self {
+        self.rt_requested = request_ray_tracing;
         self
     }
 
@@ -882,7 +921,6 @@ impl<'a> RendererBuilder<'a> {
             physical_device,
             &device,
             &surface,
-            &surface.loader,
             &mut gpu_allocator,
         );
         self.width = swapchain.extent.width;
@@ -1146,7 +1184,6 @@ impl Renderer {
             self.physical_device,
             &self.device,
             &self.surface,
-            &self.surface.loader,
             &mut self.allocator.as_ref().unwrap().lock(),
         );
 
