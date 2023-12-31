@@ -18,6 +18,8 @@ pub mod ecs_manager;
 pub mod systems;
 
 #[cfg(feature = "egui")]
-pub mod egui;
+pub mod egui_integration;
+#[cfg(feature = "egui")]
+pub use egui;
 
 mod pipeline_builder;

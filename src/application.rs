@@ -15,7 +15,7 @@ use ash::vk;
 use winit::{
     dpi::PhysicalSize,
     event_loop::{ControlFlow, EventLoop},
-    platform::run_return::EventLoopExtRunReturn,
+    platform::run_on_demand::EventLoopExtRunOnDemand,
     window::WindowBuilder,
 };
 use winit_input_helper::WinitInputHelper;
@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 
 pub struct StateContext<'a> {
     #[cfg(feature = "egui")]
-    pub egui: &'a mut crate::egui::EguiIntegration,
+    pub egui: &'a mut crate::egui_integration::EguiIntegration,
 
     pub renderer: &'a mut Renderer,
     pub ecs_manager: &'a mut ECSManager,
@@ -60,7 +60,7 @@ pub trait BuildableApplicationState<UserData>: ApplicationState {
 
 struct ApplicationContext {
     #[cfg(feature = "egui")]
-    pub egui: crate::egui::EguiIntegration,
+    pub egui: crate::egui_integration::EguiIntegration,
 
     pub ecs_manager: ECSManager,
     pub renderer_ref: ThreadSafeRef<Renderer>,
@@ -130,7 +130,7 @@ impl<'a> ApplicationBuilder<'a> {
     */
 
     fn setup_context(&self) -> ApplicationContext {
-        let event_loop = EventLoop::new();
+        let event_loop = EventLoop::new().expect("Failed to create program event loop");
 
         let window = WindowBuilder::new()
             .with_title(self.window_name)
@@ -162,7 +162,7 @@ impl<'a> ApplicationBuilder<'a> {
         #[cfg(feature = "egui")]
         {
             let mut renderer = renderer_ref.lock();
-            let egui = crate::egui::EguiIntegration::new(&event_loop, &mut renderer)
+            let egui = crate::egui_integration::EguiIntegration::new(&window, &mut renderer)
                 .expect("Failed to create Egui intergration");
             drop(renderer);
 
@@ -191,13 +191,13 @@ impl<'a> ApplicationBuilder<'a> {
     fn main_loop(&self, context: &mut ApplicationContext, state: &mut dyn ApplicationState) {
         let mut prev_time = Instant::now();
 
-        context.event_loop.run_return(|event, _, control_flow| {
-            *control_flow = ControlFlow::Poll;
+        context.event_loop.set_control_flow(ControlFlow::Poll);
+        context.event_loop.run_on_demand(|event, target| {
 
             let events_cleared = context.window_input_state.update(&event);
 
             #[cfg(feature = "egui")]
-            if context.egui.handle_event(&event) {
+            if context.egui.handle_event(&context.window, &event) {
                 return;
             }
 
@@ -205,7 +205,7 @@ impl<'a> ApplicationBuilder<'a> {
                 if context.window_input_state.close_requested()
                     || context.window_input_state.destroyed()
                 {
-                    control_flow.set_exit();
+                    target.exit();
                 }
 
                 if let Some(PhysicalSize { width, height }) =
@@ -293,7 +293,7 @@ impl<'a> ApplicationBuilder<'a> {
                 window_input_state: &context.window_input_state,
             };
             state.on_event(event, &mut state_context);
-        });
+        }).expect("Error encountered during main loop");
     }
 
     fn exit(&self, context: &mut ApplicationContext, state: &mut dyn ApplicationState) {

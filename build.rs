@@ -96,7 +96,7 @@ fn compile_shaders_in_dir(parent_dir: &Path) {
 }
 
 fn main() {
-    let shader_dirs = [Path::new("src/egui/shaders")];
+    let shader_dirs = [Path::new("src/egui_integration/shaders")];
 
     for dir in shader_dirs {
         println!("cargo:rerun-if-changed={}", dir.display());
