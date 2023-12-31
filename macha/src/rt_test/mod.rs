@@ -1,4 +1,7 @@
-use morrigu::application::{ApplicationState, BuildableApplicationState};
+use morrigu::{
+    application::{ApplicationState, BuildableApplicationState},
+    winit,
+};
 
 pub struct RayTracerState {}
 

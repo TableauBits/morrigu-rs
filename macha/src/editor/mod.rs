@@ -15,6 +15,7 @@ use morrigu::{
     application::{
         ApplicationState, BuildableApplicationState, EguiUpdateContext, Event, StateContext,
     },
+    bevy_ecs,
     components::{
         camera::{Camera, PerspectiveData},
         mesh_rendering,
@@ -28,6 +29,7 @@ use morrigu::{
     systems::mesh_renderer,
     texture::{Texture, TextureFormat},
     utils::ThreadSafeRef,
+    winit,
 };
 use systems::hierarchy_panel;
 use winit::{event::KeyEvent, keyboard::KeyCode};

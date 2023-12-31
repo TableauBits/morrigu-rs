@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use ash::vk;
+use morrigu::ash::vk;
 use morrigu::{
     application::{ApplicationState, BuildableApplicationState, EguiUpdateContext},
     components::{

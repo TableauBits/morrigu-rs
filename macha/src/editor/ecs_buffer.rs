@@ -1,4 +1,5 @@
-use bevy_ecs::{
+use morrigu::bevy_ecs::{
+    self,
     prelude::{Component, Entity},
     system::Resource,
 };

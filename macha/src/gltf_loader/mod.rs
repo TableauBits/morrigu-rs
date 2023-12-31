@@ -6,6 +6,7 @@ use std::{iter::zip, path::Path};
 
 use morrigu::{
     application::{ApplicationState, BuildableApplicationState, EguiUpdateContext, Event},
+    bevy_ecs,
     components::{
         camera::{Camera, PerspectiveData},
         mesh_rendering::default_descriptor_resources,
@@ -17,6 +18,7 @@ use morrigu::{
     shader::Shader,
     systems::mesh_renderer,
     utils::ThreadSafeRef,
+    winit,
 };
 
 use self::{

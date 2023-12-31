@@ -1,10 +1,10 @@
 use std::time::Duration;
 
+use morrigu::winit::keyboard::KeyCode;
 use morrigu::{
     components::camera::Camera,
     math_types::{Vec2, Vec3},
 };
-use winit::keyboard::KeyCode;
 use winit_input_helper::WinitInputHelper;
 
 pub struct ViewerCamera {

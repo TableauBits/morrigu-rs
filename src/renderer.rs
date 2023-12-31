@@ -595,8 +595,8 @@ impl<'a> RendererBuilder<'a> {
 
         if self.rt_requested {
             log::info!("Ray tracing extensions features:");
-            log::info!("\t acceleration structure: {:?}", as_features);
-            log::info!("\t ray tracing pipeline: {:?}", rtp_features);
+            log::info!("\t acceleration structure: {:#?}", as_features);
+            log::info!("\t ray tracing pipeline: {:#?}", rtp_features);
         }
 
         device

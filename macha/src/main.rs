@@ -3,10 +3,10 @@ mod editor;
 mod gltf_loader;
 mod rt_test;
 
-use compute_shader_test::CSTState;
+// use compute_shader_test::CSTState;
 // use editor::MachaState;
 // use gltf_loader::GLTFViewerState;
-// use rt_test::RayTracerState;
+use rt_test::RayTracerState;
 
 use morrigu::application::ApplicationBuilder;
 
@@ -36,5 +36,6 @@ fn main() {
         .with_dimensions(1280, 720)
         .with_application_name("Macha")
         .with_application_version(0, 1, 0)
-        .build_and_run_inplace::<CSTState, ()>(());
+        .request_ray_tracing(true)
+        .build_and_run_inplace::<RayTracerState, ()>(());
 }

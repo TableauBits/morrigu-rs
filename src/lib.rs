@@ -19,7 +19,13 @@ pub mod systems;
 
 #[cfg(feature = "egui")]
 pub mod egui_integration;
-#[cfg(feature = "egui")]
-pub use egui;
 
 mod pipeline_builder;
+
+// Core re-exports
+pub use ash;
+pub use bevy_ecs;
+pub use winit;
+
+#[cfg(feature = "egui")]
+pub use egui;
