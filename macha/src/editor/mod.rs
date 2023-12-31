@@ -22,14 +22,15 @@ use morrigu::{
         transform::Transform,
     },
     descriptor_resources::DescriptorResources,
+    egui,
     math_types::{EulerRot, Quat, Vec2},
     shader::Shader,
     systems::mesh_renderer,
     texture::{Texture, TextureFormat},
     utils::ThreadSafeRef,
 };
-use systems::{gizmo_drawer, hierarchy_panel};
-use winit::event::{KeyboardInput, VirtualKeyCode};
+use systems::hierarchy_panel;
+use winit::{event::KeyEvent, keyboard::KeyCode};
 
 use std::path::Path;
 
@@ -175,7 +176,7 @@ impl BuildableApplicationState<()> for MachaState {
             .ecs_manager
             .redefine_ui_systems_schedule(|schedule| {
                 schedule.add_systems(hierarchy_panel::draw_hierarchy_panel_stable);
-                schedule.add_systems(gizmo_drawer::draw_gizmo);
+                // schedule.add_systems(gizmo_drawer::draw_gizmo);
             });
 
         MachaState {
@@ -202,7 +203,11 @@ impl ApplicationState for MachaState {
         let mut new_visuals = egui::Visuals::dark();
         new_visuals.selection = selection_style;
 
-        context.egui.context.set_visuals(new_visuals);
+        context
+            .egui
+            .egui_platform_state
+            .egui_ctx()
+            .set_visuals(new_visuals);
 
         let egui_texture = Texture::builder()
             .build_from_path(
@@ -238,7 +243,10 @@ impl ApplicationState for MachaState {
             );
         });
         egui::Window::new("Shader uniforms").show(context.egui_context, |ui| {
-            ui.image(self.egui_texture_id, (128.0, 128.0));
+            let image = egui::ImageSource::Texture(
+                (self.egui_texture_id, egui::Vec2::new(128.0, 128.0)).into(),
+            );
+            ui.image(image);
             ui.add(egui::Slider::new(&mut self.shader_options[0], 0.0..=1.0).text("flow speed"));
             ui.add(
                 egui::Slider::new(&mut self.shader_options[1], 0.0..=1.0).text("flow intensity"),
@@ -298,9 +306,9 @@ impl ApplicationState for MachaState {
         #[allow(clippy::single_match)] // Temporary
         match event {
             morrigu::application::Event::WindowEvent {
-                event: winit::event::WindowEvent::KeyboardInput { input, .. },
+                event: winit::event::WindowEvent::KeyboardInput { event, .. },
                 ..
-            } => self.on_keyboard_input(input, context),
+            } => self.on_keyboard_input(event, context),
             morrigu::application::Event::WindowEvent {
                 event:
                     winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize {
@@ -352,39 +360,36 @@ impl ApplicationState for MachaState {
 }
 
 impl MachaState {
-    fn on_keyboard_input(&mut self, input: KeyboardInput, context: &mut StateContext) {
-        if input.virtual_keycode.is_none() {
-            return;
-        }
-        let virtual_keycode = input.virtual_keycode.unwrap();
+    fn on_keyboard_input(&mut self, input: KeyEvent, context: &mut StateContext) {
+        if let winit::keyboard::PhysicalKey::Code(keycode) = input.physical_key {
+            match keycode {
+                KeyCode::KeyQ => {
+                    context
+                        .ecs_manager
+                        .world
+                        .get_resource_mut::<MachaGlobalOptions>()
+                        .unwrap()
+                        .preferred_gizmo = egui_gizmo::GizmoMode::Translate
+                }
+                KeyCode::KeyE => {
+                    context
+                        .ecs_manager
+                        .world
+                        .get_resource_mut::<MachaGlobalOptions>()
+                        .unwrap()
+                        .preferred_gizmo = egui_gizmo::GizmoMode::Rotate
+                }
+                KeyCode::KeyR => {
+                    context
+                        .ecs_manager
+                        .world
+                        .get_resource_mut::<MachaGlobalOptions>()
+                        .unwrap()
+                        .preferred_gizmo = egui_gizmo::GizmoMode::Scale
+                }
 
-        match virtual_keycode {
-            VirtualKeyCode::Q => {
-                context
-                    .ecs_manager
-                    .world
-                    .get_resource_mut::<MachaGlobalOptions>()
-                    .unwrap()
-                    .preferred_gizmo = egui_gizmo::GizmoMode::Translate
+                _ => (),
             }
-            VirtualKeyCode::E => {
-                context
-                    .ecs_manager
-                    .world
-                    .get_resource_mut::<MachaGlobalOptions>()
-                    .unwrap()
-                    .preferred_gizmo = egui_gizmo::GizmoMode::Rotate
-            }
-            VirtualKeyCode::R => {
-                context
-                    .ecs_manager
-                    .world
-                    .get_resource_mut::<MachaGlobalOptions>()
-                    .unwrap()
-                    .preferred_gizmo = egui_gizmo::GizmoMode::Scale
-            }
-
-            _ => (),
         }
     }
 }

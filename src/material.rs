@@ -299,8 +299,15 @@ where
         buffer_ref: ThreadSafeRef<AllocatedBuffer>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<AllocatedBuffer>, ResourceBindingError> {
-        let Some(old_buffer) = self.descriptor_resources.uniform_buffers.insert(binding_slot, buffer_ref.clone()) else {
-            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 2 });
+        let Some(old_buffer) = self
+            .descriptor_resources
+            .uniform_buffers
+            .insert(binding_slot, buffer_ref.clone())
+        else {
+            return Err(ResourceBindingError::InvalidBindingSlot {
+                slot: binding_slot,
+                set: 2,
+            });
         };
 
         let buffer = buffer_ref.lock();
@@ -349,8 +356,15 @@ where
         image_ref: ThreadSafeRef<AllocatedImage>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<AllocatedImage>, ResourceBindingError> {
-        let Some(old_image) = self.descriptor_resources.storage_images.insert(binding_slot, image_ref.clone()) else {
-            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 2 });
+        let Some(old_image) = self
+            .descriptor_resources
+            .storage_images
+            .insert(binding_slot, image_ref.clone())
+        else {
+            return Err(ResourceBindingError::InvalidBindingSlot {
+                slot: binding_slot,
+                set: 2,
+            });
         };
 
         let image = image_ref.lock();
@@ -381,8 +395,15 @@ where
         texture_ref: ThreadSafeRef<Texture>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Texture>, ResourceBindingError> {
-        let Some(old_texture) = self.descriptor_resources.sampled_images.insert(binding_slot, texture_ref.clone()) else {
-            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 2 });
+        let Some(old_texture) = self
+            .descriptor_resources
+            .sampled_images
+            .insert(binding_slot, texture_ref.clone())
+        else {
+            return Err(ResourceBindingError::InvalidBindingSlot {
+                slot: binding_slot,
+                set: 2,
+            });
         };
 
         let texture = texture_ref.lock();

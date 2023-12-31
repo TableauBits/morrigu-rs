@@ -192,57 +192,40 @@ impl<'a> ApplicationBuilder<'a> {
         let mut prev_time = Instant::now();
 
         context.event_loop.set_control_flow(ControlFlow::Poll);
-        context.event_loop.run_on_demand(|event, target| {
+        context
+            .event_loop
+            .run_on_demand(|event, target| {
+                let events_cleared = context.window_input_state.update(&event);
 
-            let events_cleared = context.window_input_state.update(&event);
-
-            #[cfg(feature = "egui")]
-            if context.egui.handle_event(&context.window, &event) {
-                return;
-            }
-
-            if events_cleared {
-                if context.window_input_state.close_requested()
-                    || context.window_input_state.destroyed()
-                {
-                    target.exit();
+                #[cfg(feature = "egui")]
+                if context.egui.handle_event(&context.window, &event) {
+                    return;
                 }
 
-                if let Some(PhysicalSize { width, height }) =
-                    context.window_input_state.window_resized()
-                {
-                    context.renderer_ref.lock().on_resize(width, height);
-                    context.ecs_manager.on_resize(width, height);
-                }
-
-                let delta = prev_time.elapsed();
-                prev_time = Instant::now();
-
-                let mut renderer = context.renderer_ref.lock();
-                if renderer.begin_frame() {
-                    profiling::scope!("main loop");
-
-                    #[cfg(feature = "egui")]
-                    context.egui.painter.cleanup_previous_frame(&mut renderer);
-
-                    let mut state_context = StateContext {
-                        #[cfg(feature = "egui")]
-                        egui: &mut context.egui,
-                        renderer: &mut renderer,
-                        ecs_manager: &mut context.ecs_manager,
-                        window: &context.window,
-                        window_input_state: &context.window_input_state,
-                    };
+                if events_cleared {
+                    if context.window_input_state.close_requested()
+                        || context.window_input_state.destroyed()
                     {
-                        profiling::scope!("on_update");
-                        state.on_update(delta, &mut state_context);
+                        target.exit();
                     }
-                    drop(renderer);
 
+                    if let Some(PhysicalSize { width, height }) =
+                        context.window_input_state.window_resized()
                     {
-                        profiling::scope!("ECS schedule");
-                        context.ecs_manager.run_schedule();
-                        let mut renderer = context.renderer_ref.lock();
+                        context.renderer_ref.lock().on_resize(width, height);
+                        context.ecs_manager.on_resize(width, height);
+                    }
+
+                    let delta = prev_time.elapsed();
+                    prev_time = Instant::now();
+
+                    let mut renderer = context.renderer_ref.lock();
+                    if renderer.begin_frame() {
+                        profiling::scope!("main loop");
+
+                        #[cfg(feature = "egui")]
+                        context.egui.painter.cleanup_previous_frame(&mut renderer);
+
                         let mut state_context = StateContext {
                             #[cfg(feature = "egui")]
                             egui: &mut context.egui,
@@ -251,49 +234,68 @@ impl<'a> ApplicationBuilder<'a> {
                             window: &context.window,
                             window_input_state: &context.window_input_state,
                         };
-                        state.after_systems(delta, &mut state_context);
+                        {
+                            profiling::scope!("on_update");
+                            state.on_update(delta, &mut state_context);
+                        }
                         drop(renderer);
-                    }
 
-                    #[cfg(feature = "egui")]
-                    {
-                        profiling::scope!("egui update");
-                        let mut renderer = context.renderer_ref.lock();
-                        context.egui.run(&context.window, |egui_context| {
-                            let mut egui_update_context = EguiUpdateContext {
-                                egui_context,
+                        {
+                            profiling::scope!("ECS schedule");
+                            context.ecs_manager.run_schedule();
+                            let mut renderer = context.renderer_ref.lock();
+                            let mut state_context = StateContext {
+                                #[cfg(feature = "egui")]
+                                egui: &mut context.egui,
                                 renderer: &mut renderer,
                                 ecs_manager: &mut context.ecs_manager,
                                 window: &context.window,
                                 window_input_state: &context.window_input_state,
                             };
-                            state.on_update_egui(delta, &mut egui_update_context);
-                            egui_update_context
-                                .ecs_manager
-                                .run_ui_schedule(egui_update_context.egui_context);
-                            state.after_ui_systems(delta, &mut egui_update_context);
-                        });
+                            state.after_systems(delta, &mut state_context);
+                            drop(renderer);
+                        }
 
-                        context.egui.paint(&mut renderer)
+                        #[cfg(feature = "egui")]
+                        {
+                            profiling::scope!("egui update");
+                            let mut renderer = context.renderer_ref.lock();
+                            context.egui.run(&context.window, |egui_context| {
+                                let mut egui_update_context = EguiUpdateContext {
+                                    egui_context,
+                                    renderer: &mut renderer,
+                                    ecs_manager: &mut context.ecs_manager,
+                                    window: &context.window,
+                                    window_input_state: &context.window_input_state,
+                                };
+                                state.on_update_egui(delta, &mut egui_update_context);
+                                egui_update_context
+                                    .ecs_manager
+                                    .run_ui_schedule(egui_update_context.egui_context);
+                                state.after_ui_systems(delta, &mut egui_update_context);
+                            });
+
+                            context.egui.paint(&mut renderer)
+                        }
+
+                        let mut renderer = context.renderer_ref.lock();
+                        renderer.end_frame();
+                        profiling::finish_frame!();
                     }
-
-                    let mut renderer = context.renderer_ref.lock();
-                    renderer.end_frame();
-                    profiling::finish_frame!();
                 }
-            }
 
-            let mut renderer = context.renderer_ref.lock();
-            let mut state_context = StateContext {
-                #[cfg(feature = "egui")]
-                egui: &mut context.egui,
-                renderer: &mut renderer,
-                ecs_manager: &mut context.ecs_manager,
-                window: &context.window,
-                window_input_state: &context.window_input_state,
-            };
-            state.on_event(event, &mut state_context);
-        }).expect("Error encountered during main loop");
+                let mut renderer = context.renderer_ref.lock();
+                let mut state_context = StateContext {
+                    #[cfg(feature = "egui")]
+                    egui: &mut context.egui,
+                    renderer: &mut renderer,
+                    ecs_manager: &mut context.ecs_manager,
+                    window: &context.window,
+                    window_input_state: &context.window_input_state,
+                };
+                state.on_event(event, &mut state_context);
+            })
+            .expect("Error encountered during main loop");
     }
 
     fn exit(&self, context: &mut ApplicationContext, state: &mut dyn ApplicationState) {

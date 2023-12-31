@@ -229,9 +229,7 @@ impl ApplicationState for GLTFViewerState {
         }
     }
 
-    fn on_update_egui(&mut self, _dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        puffin_egui::profiler_window(context.egui_context);
-    }
+    fn on_update_egui(&mut self, _dt: std::time::Duration, _context: &mut EguiUpdateContext) {}
 
     fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
         let mut skybox = self.skybox.lock();

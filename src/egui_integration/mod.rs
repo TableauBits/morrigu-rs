@@ -20,7 +20,8 @@ impl EguiIntegration {
     ) -> Result<Self, PainterCreationError> {
         let painter = Painter::new(renderer)?;
         let context = egui::Context::default();
-        let egui_platform_state = egui_winit::State::new(context.clone(), egui::ViewportId::ROOT, window, None, None);
+        let egui_platform_state =
+            egui_winit::State::new(context.clone(), egui::ViewportId::ROOT, window, None, None);
 
         Ok(Self {
             egui_platform_state,
@@ -30,7 +31,11 @@ impl EguiIntegration {
         })
     }
 
-    pub fn handle_event(&mut self, window: &winit::window::Window, event: &winit::event::Event<()>) -> bool {
+    pub fn handle_event(
+        &mut self,
+        window: &winit::window::Window,
+        event: &winit::event::Event<()>,
+    ) -> bool {
         match event {
             winit::event::Event::WindowEvent {
                 window_id: _,
@@ -45,19 +50,17 @@ impl EguiIntegration {
         }
     }
 
-    pub fn run(
-        &mut self,
-        window: &winit::window::Window,
-        ui_callback: impl FnMut(&egui::Context),
-    ) {
+    pub fn run(&mut self, window: &winit::window::Window, ui_callback: impl FnMut(&egui::Context)) {
         let raw_input = self.egui_platform_state.take_egui_input(window);
         let egui::FullOutput {
             platform_output,
             textures_delta,
             shapes,
             ..
-        } =
-        self.egui_platform_state.egui_ctx().run(raw_input, ui_callback);
+        } = self
+            .egui_platform_state
+            .egui_ctx()
+            .run(raw_input, ui_callback);
 
         self.egui_platform_state
             .handle_platform_output(window, platform_output);
@@ -67,7 +70,10 @@ impl EguiIntegration {
 
     pub fn paint(&mut self, renderer: &mut Renderer) {
         let shapes = std::mem::take(&mut self.shapes);
-        let clipped_primitives = self.egui_platform_state.egui_ctx().tessellate(shapes, self.egui_platform_state.egui_ctx().pixels_per_point());
+        let clipped_primitives = self.egui_platform_state.egui_ctx().tessellate(
+            shapes,
+            self.egui_platform_state.egui_ctx().pixels_per_point(),
+        );
         let textures_delta = std::mem::take(&mut self.textures_delta);
 
         self.painter.paint_and_update_textures(

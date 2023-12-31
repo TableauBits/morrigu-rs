@@ -10,6 +10,7 @@ use morrigu::{
     },
     compute_shader::ComputeShader,
     descriptor_resources::DescriptorResources,
+    egui,
     math_types::{EulerRot, Quat, Vec2, Vec3},
     pipeline_barrier::PipelineBarrier,
     shader::Shader,

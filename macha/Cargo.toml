@@ -17,8 +17,6 @@ gltf = { git = "https://github.com/Ithyx/gltf", rev = "21aaddec4fc1411f0280d8345
 morrigu = { path = "../", features = ["egui"] }
 bevy_ecs = "0.12"
 egui-gizmo = "0.13.0"
-puffin = "0.18.1"
-puffin_egui = "0.24.0"
 winit = "0.29.8"
 winit_input_helper = "0.15.1"
 bytemuck = "1.14"

@@ -8,10 +8,10 @@ pub mod math_types;
 pub mod mesh;
 pub mod pipeline_barrier;
 pub mod renderer;
-pub mod vertices;
 pub mod shader;
 pub mod texture;
 pub mod utils;
+pub mod vertices;
 
 pub mod components;
 pub mod ecs_manager;

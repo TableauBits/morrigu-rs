@@ -31,7 +31,7 @@ ash-window = "0.12.0"
 gpu-allocator = "0.24.0"
 spirv-reflect = "0.2.3"
 
-glam = { version = "0.25.0", features = ["bytemuck"] }
+glam = { version = "0.25.0", features = ["bytemuck", "mint"] }
 
 image = "0.24.7"
 

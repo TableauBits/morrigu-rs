@@ -183,7 +183,9 @@ fn create_swapchain(
     allocator: &mut Allocator,
 ) -> SwapchainInfo {
     let capabilities = unsafe {
-        surface.loader.get_physical_device_surface_capabilities(physical_device, surface.handle)
+        surface
+            .loader
+            .get_physical_device_surface_capabilities(physical_device, surface.handle)
     }
     .expect("Failed to query surface capabilities");
     let mut requested_image_count = capabilities.min_image_count + 1;
@@ -202,7 +204,9 @@ fn create_swapchain(
     };
 
     let present_modes = unsafe {
-        surface.loader.get_physical_device_surface_present_modes(physical_device, surface.handle)
+        surface
+            .loader
+            .get_physical_device_surface_present_modes(physical_device, surface.handle)
     }
     .expect("Failed to query surface present modes");
     let present_mode = present_modes
