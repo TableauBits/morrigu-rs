@@ -475,10 +475,27 @@ impl<'a> RendererBuilder<'a> {
                     }
                     .expect("Failed to query surface compatibility");
 
-                    let meets_rt_requirements = true;
-                    // if self.rt_requested {
+                    let mut meets_rt_requirements = true;
+                    if self.rt_requested {
+                        let mut as_features =
+                            vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default();
+                        let mut rtp_features =
+                            vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default();
+                        let mut features = vk::PhysicalDeviceFeatures2::builder()
+                            .push_next(&mut as_features)
+                            .push_next(&mut rtp_features);
+                        unsafe {
+                            instance
+                                .get_physical_device_features2(raw_physical_device, &mut features)
+                        };
 
-                    // }
+                        meets_rt_requirements = as_features.acceleration_structure == 1
+                            && rtp_features.ray_tracing_pipeline == 1;
+
+                        log::debug!("Ray tracing extensions features:");
+                        log::debug!("\t acceleration structure: {:#?}", as_features);
+                        log::debug!("\t ray tracing pipeline: {:#?}", rtp_features);
+                    }
 
                     if supports_required_version
                         && supports_graphics
@@ -583,23 +600,19 @@ impl<'a> RendererBuilder<'a> {
             .enabled_extension_names(&raw_extensions_names)
             .queue_create_infos(std::slice::from_ref(&queue_info));
 
-        let mut as_features = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default();
-        let mut rtp_features = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default();
+        let mut as_features = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
+            .acceleration_structure(true)
+            .build();
+        let mut rtp_features = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
+            .ray_tracing_pipeline(true)
+            .build();
         if self.rt_requested {
             device_create_info = device_create_info.push_next(&mut as_features);
             device_create_info = device_create_info.push_next(&mut rtp_features);
         }
 
-        let device = unsafe { instance.create_device(physical_device, &device_create_info, None) }
-            .expect("Failed to create logial device");
-
-        if self.rt_requested {
-            log::info!("Ray tracing extensions features:");
-            log::info!("\t acceleration structure: {:#?}", as_features);
-            log::info!("\t ray tracing pipeline: {:#?}", rtp_features);
-        }
-
-        device
+        unsafe { instance.create_device(physical_device, &device_create_info, None) }
+            .expect("Failed to create logial device")
     }
 
     fn create_allocator(
