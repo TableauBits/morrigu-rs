@@ -96,9 +96,6 @@ impl<VertexType: Vertex> RTMeshRendering<VertexType> {
                 / 3)
             .try_into()
             .map_err(|_| RTMeshRenderingBuildError::TooManyIndices)?;
-            let offset = vk::AccelerationStructureBuildRangeInfoKHR::builder()
-                .primitive_count(prim_count)
-                .primitive_offset(VertexType::position_offset());
 
             let acceleration_structure_loader = ash::extensions::khr::AccelerationStructure::new(
                 &renderer.instance,
@@ -112,12 +109,27 @@ impl<VertexType: Vertex> RTMeshRendering<VertexType> {
                 )
             };
 
-            let screatch_buffer = AllocatedBuffer::builder(necessary_size.build_scratch_size)
+            let scratch_buffer = AllocatedBuffer::builder(necessary_size.build_scratch_size)
                 .with_usage(
                     vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                         | vk::BufferUsageFlags::STORAGE_BUFFER,
                 )
                 .build(renderer)?;
+            let sb_info = vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer.handle);
+            let scratch_address = unsafe { renderer.device.get_buffer_device_address(&sb_info) };
+
+            let acceleration_structure_create_info =
+                vk::AccelerationStructureCreateInfoKHR::builder().size();
+
+            let offset = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+                .primitive_count(prim_count)
+                .primitive_offset(VertexType::position_offset());
+            renderer.immediate_command(|cmd_buffer| {
+                acceleration_structure_loader.cmd_build_acceleration_structures(
+                    *cmd_buffer,
+                    std::slice::from_ref(&geometry_info),
+                )
+            });
         }
 
         Ok(ThreadSafeRef::new(Self { mesh_ref }))
