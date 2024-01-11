@@ -2,7 +2,13 @@ use ash::vk;
 use bevy_ecs::prelude::Component;
 use thiserror::Error;
 
-use crate::{material::Vertex, mesh::Mesh, renderer::Renderer, utils::ThreadSafeRef};
+use crate::{
+    allocated_types::{AllocatedBuffer, BufferBuildError},
+    material::Vertex,
+    mesh::Mesh,
+    renderer::Renderer,
+    utils::ThreadSafeRef,
+};
 
 #[derive(Debug, Component)]
 pub struct RTMeshRendering<VertexType: Vertex> {
@@ -22,6 +28,9 @@ pub enum RTMeshRenderingBuildError {
 
     #[error("Too many indices in the mesh, mesh.indices.len() / 3 must fit in a u32")]
     TooManyIndices,
+
+    #[error("Failed to build the scratch memory buffer: {0}.")]
+    ScratchBufferBuildFailed(#[from] BufferBuildError),
 }
 
 impl<VertexType: Vertex> RTMeshRendering<VertexType> {
@@ -73,19 +82,42 @@ impl<VertexType: Vertex> RTMeshRendering<VertexType> {
                 .geometry(vk::AccelerationStructureGeometryDataKHR {
                     triangles: *triangle_data,
                 });
+            let geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+                .ty(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
+                .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
+                .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
+                .geometries(std::slice::from_ref(&geometry));
 
+            let prim_count = (mesh
+                .indices
+                .as_ref()
+                .ok_or(RTMeshRenderingBuildError::NonIndexedMesh)?
+                .len()
+                / 3)
+            .try_into()
+            .map_err(|_| RTMeshRenderingBuildError::TooManyIndices)?;
             let offset = vk::AccelerationStructureBuildRangeInfoKHR::builder()
-                .primitive_count(
-                    (mesh
-                        .indices
-                        .as_ref()
-                        .ok_or(RTMeshRenderingBuildError::NonIndexedMesh)?
-                        .len()
-                        / 3)
-                    .try_into()
-                    .map_err(|_| RTMeshRenderingBuildError::TooManyIndices)?,
-                )
+                .primitive_count(prim_count)
                 .primitive_offset(VertexType::position_offset());
+
+            let acceleration_structure_loader = ash::extensions::khr::AccelerationStructure::new(
+                &renderer.instance,
+                &renderer.device,
+            );
+            let necessary_size = unsafe {
+                acceleration_structure_loader.get_acceleration_structure_build_sizes(
+                    vk::AccelerationStructureBuildTypeKHR::DEVICE,
+                    &geometry_info,
+                    std::slice::from_ref(&prim_count),
+                )
+            };
+
+            let screatch_buffer = AllocatedBuffer::builder(necessary_size.build_scratch_size)
+                .with_usage(
+                    vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                        | vk::BufferUsageFlags::STORAGE_BUFFER,
+                )
+                .build(renderer)?;
         }
 
         Ok(ThreadSafeRef::new(Self { mesh_ref }))

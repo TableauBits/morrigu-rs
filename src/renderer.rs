@@ -153,7 +153,7 @@ pub struct Renderer {
     pub device_properties: vk::PhysicalDeviceProperties,
     physical_device: vk::PhysicalDevice,
     surface: SurfaceInfo,
-    instance: ash::Instance,
+    pub(crate) instance: ash::Instance,
     #[allow(dead_code)]
     // This field is never read, but we need to keep it alive longer than the instance
     entry: ash::Entry,
