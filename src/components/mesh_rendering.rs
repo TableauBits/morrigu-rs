@@ -1,4 +1,5 @@
 use ash::vk;
+use bevy_ecs::prelude::Component;
 use thiserror::Error;
 
 use crate::{
@@ -14,7 +15,7 @@ use crate::{
     utils::ThreadSafeRef,
 };
 
-#[derive(Debug, bevy_ecs::prelude::Component)]
+#[derive(Debug, Component)]
 pub struct MeshRendering<VertexType>
 where
     VertexType: Vertex,

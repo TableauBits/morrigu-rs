@@ -21,6 +21,12 @@ pub struct VertexInputDescription {
 
 pub trait Vertex: std::marker::Sync + std::marker::Send + 'static {
     fn vertex_input_description() -> VertexInputDescription;
+    fn position_index() -> usize {
+        0
+    }
+    fn position_offset() -> u32 {
+        0
+    }
 }
 
 #[allow(dead_code)] // We never "read" value from this struct, it's directly uploaded to the GPU withou any field access
