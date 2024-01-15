@@ -36,6 +36,8 @@ use winit::{event::KeyEvent, keyboard::KeyCode};
 
 use std::path::Path;
 
+use self::systems::gizmo_drawer;
+
 type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;
 type Mesh = morrigu::mesh::Mesh<Vertex>;
@@ -178,7 +180,7 @@ impl BuildableApplicationState<()> for MachaState {
             .ecs_manager
             .redefine_ui_systems_schedule(|schedule| {
                 schedule.add_systems(hierarchy_panel::draw_hierarchy_panel_stable);
-                // schedule.add_systems(gizmo_drawer::draw_gizmo);
+                schedule.add_systems(gizmo_drawer::draw_gizmo);
             });
 
         MachaState {

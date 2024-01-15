@@ -1,5 +1,5 @@
-use bevy_ecs::prelude::{Query, Res};
 use egui_gizmo::{Gizmo, GizmoVisuals};
+use morrigu::bevy_ecs::prelude::{Query, Res};
 use morrigu::{
     components::{camera::Camera, resource_wrapper::ResourceWrapper, transform::Transform},
     egui,
