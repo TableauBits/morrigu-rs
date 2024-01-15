@@ -116,20 +116,20 @@ impl<VertexType: Vertex> RTMeshRendering<VertexType> {
                 )
                 .build(renderer)?;
             let sb_info = vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer.handle);
-            let scratch_address = unsafe { renderer.device.get_buffer_device_address(&sb_info) };
+            let _scratch_address = unsafe { renderer.device.get_buffer_device_address(&sb_info) };
 
-            let acceleration_structure_create_info =
-                vk::AccelerationStructureCreateInfoKHR::builder().size();
+            // let acceleration_structure_create_info =
+            //     vk::AccelerationStructureCreateInfoKHR::builder().size();
 
-            let offset = vk::AccelerationStructureBuildRangeInfoKHR::builder()
-                .primitive_count(prim_count)
-                .primitive_offset(VertexType::position_offset());
-            renderer.immediate_command(|cmd_buffer| {
-                acceleration_structure_loader.cmd_build_acceleration_structures(
-                    *cmd_buffer,
-                    std::slice::from_ref(&geometry_info),
-                )
-            });
+            // let offset = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+            //     .primitive_count(prim_count)
+            //     .primitive_offset(VertexType::position_offset());
+            // renderer.immediate_command(|cmd_buffer| {
+            //     acceleration_structure_loader.cmd_build_acceleration_structures(
+            //         *cmd_buffer,
+            //         std::slice::from_ref(&geometry_info),
+            //     )
+            // });
         }
 
         Ok(ThreadSafeRef::new(Self { mesh_ref }))
