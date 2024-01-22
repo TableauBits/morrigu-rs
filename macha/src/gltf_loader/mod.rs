@@ -18,7 +18,7 @@ use morrigu::{
     shader::Shader,
     systems::mesh_renderer,
     utils::ThreadSafeRef,
-    winit,
+    winit, ash::vk,
 };
 
 use self::{
@@ -90,6 +90,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
         .expect("Failed to create skybox shader");
         let skybox_material: ThreadSafeRef<SkyboxMaterial> = Material::builder()
             .z_write(false)
+            .cull_mode(vk::CullModeFlags::FRONT)
             .build(
                 &skybox_shader,
                 DescriptorResources {
