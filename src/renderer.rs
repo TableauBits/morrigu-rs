@@ -104,10 +104,9 @@ struct SwapchainInfo {
     extent: vk::Extent2D,
 }
 
-#[allow(dead_code)]
-struct DebugMessengerInfo {
-    handle: vk::DebugUtilsMessengerEXT,
-    loader: DebugUtils,
+pub(crate) struct DebugMessengerInfo {
+    pub handle: vk::DebugUtilsMessengerEXT,
+    pub loader: DebugUtils,
 }
 
 struct SyncObjects {
@@ -132,8 +131,7 @@ pub struct Renderer {
     pub framebuffer_height: u32,
     next_image_index: u32,
 
-    #[allow(dead_code)]
-    debug_messenger: Option<DebugMessengerInfo>,
+    pub(crate) debug_messenger: Option<DebugMessengerInfo>,
 
     pub(crate) default_texture_ref: ThreadSafeRef<Texture>,
 

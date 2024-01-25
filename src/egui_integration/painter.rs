@@ -506,13 +506,17 @@ impl Painter {
                 texture.destroy(renderer);
             }
             None => {
-                self.textures.insert(
+                let previous = self.textures.insert(
                     tex_id,
                     TextureInfo {
                         handle: texture,
                         is_user: false,
                     },
                 );
+
+                if let Some(old_texture) = previous {
+                    old_texture.handle.lock().destroy(renderer);
+                }
             }
         }
     }
