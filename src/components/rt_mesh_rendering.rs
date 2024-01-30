@@ -7,7 +7,7 @@ use crate::{
     material::Vertex,
     mesh::Mesh,
     renderer::Renderer,
-    utils::ThreadSafeRef,
+    utils::{ImmediateCommandError, ThreadSafeRef},
 };
 
 #[derive(Debug, Component)]
@@ -29,8 +29,14 @@ pub enum RTMeshRenderingBuildError {
     #[error("Too many indices in the mesh, mesh.indices.len() / 3 must fit in a u32")]
     TooManyIndices,
 
-    #[error("Failed to build the scratch memory buffer: {0}.")]
-    ScratchBufferBuildFailed(#[from] BufferBuildError),
+    #[error("Failed to build buffer with error: {0}.")]
+    BufferBuildError(#[from] BufferBuildError),
+
+    #[error("Failed to create acceleration structure with error: {0}")]
+    AccelStructureCreationFailed(vk::Result),
+
+    #[error("BLAS building failed with error: {0}")]
+    BLASBuildingFailed(ImmediateCommandError),
 }
 
 impl<VertexType: Vertex> RTMeshRendering<VertexType> {
@@ -116,20 +122,44 @@ impl<VertexType: Vertex> RTMeshRendering<VertexType> {
                 )
                 .build(renderer)?;
             let sb_info = vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer.handle);
-            let _scratch_address = unsafe { renderer.device.get_buffer_device_address(&sb_info) };
+            let scratch_address = unsafe { renderer.device.get_buffer_device_address(&sb_info) };
 
-            // let acceleration_structure_create_info =
-            //     vk::AccelerationStructureCreateInfoKHR::builder().size();
+            let data_buffer = AllocatedBuffer::builder(necessary_size.acceleration_structure_size)
+                .with_usage(
+                    vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
+                        | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+                )
+                .build(renderer)?;
 
-            // let offset = vk::AccelerationStructureBuildRangeInfoKHR::builder()
-            //     .primitive_count(prim_count)
-            //     .primitive_offset(VertexType::position_offset());
-            // renderer.immediate_command(|cmd_buffer| {
-            //     acceleration_structure_loader.cmd_build_acceleration_structures(
-            //         *cmd_buffer,
-            //         std::slice::from_ref(&geometry_info),
-            //     )
-            // });
+            let acceleration_structure_create_info =
+                vk::AccelerationStructureCreateInfoKHR::builder()
+                    .size(necessary_size.acceleration_structure_size)
+                    .buffer(data_buffer.handle);
+
+            let acceleration_structure = unsafe {
+                acceleration_structure_loader
+                    .create_acceleration_structure(&acceleration_structure_create_info, None)
+                    .map_err(RTMeshRenderingBuildError::AccelStructureCreationFailed)?
+            };
+
+            let geometry_info = geometry_info
+                .dst_acceleration_structure(acceleration_structure)
+                .scratch_data(vk::DeviceOrHostAddressKHR {
+                    device_address: scratch_address,
+                });
+
+            let offset = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+                .primitive_count(prim_count)
+                .primitive_offset(VertexType::position_offset());
+            renderer
+                .immediate_command(|cmd_buffer| unsafe {
+                    acceleration_structure_loader.cmd_build_acceleration_structures(
+                        *cmd_buffer,
+                        std::slice::from_ref(&geometry_info),
+                        std::slice::from_ref(&std::slice::from_ref(&offset)),
+                    )
+                })
+                .map_err(RTMeshRenderingBuildError::BLASBuildingFailed)?;
         }
 
         Ok(ThreadSafeRef::new(Self { mesh_ref }))
