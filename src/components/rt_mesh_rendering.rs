@@ -118,7 +118,8 @@ impl<VertexType: Vertex> RTMeshRendering<VertexType> {
             let scratch_buffer = AllocatedBuffer::builder(necessary_size.build_scratch_size)
                 .with_usage(
                     vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
-                        | vk::BufferUsageFlags::STORAGE_BUFFER,
+                        | vk::BufferUsageFlags::STORAGE_BUFFER
+                        | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
                 )
                 .build(renderer)?;
             let sb_info = vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer.handle);
@@ -133,6 +134,7 @@ impl<VertexType: Vertex> RTMeshRendering<VertexType> {
 
             let acceleration_structure_create_info =
                 vk::AccelerationStructureCreateInfoKHR::builder()
+                    .ty(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
                     .size(necessary_size.acceleration_structure_size)
                     .buffer(data_buffer.handle);
 

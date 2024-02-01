@@ -1,13 +1,25 @@
 use morrigu::{
     application::{ApplicationState, BuildableApplicationState},
+    components::rt_mesh_rendering::RTMeshRendering,
+    utils::ThreadSafeRef,
+    vertices::simple::SimpleVertex,
     winit,
 };
 
-pub struct RayTracerState {}
+pub struct RayTracerState {
+    rt_mesh: ThreadSafeRef<RTMeshRendering<SimpleVertex>>,
+}
 
 impl BuildableApplicationState<()> for RayTracerState {
-    fn build(_context: &mut morrigu::application::StateContext, _: ()) -> Self {
-        Self {}
+    fn build(context: &mut morrigu::application::StateContext, _: ()) -> Self {
+        let mesh = SimpleVertex::load_model_from_path_obj(
+            std::path::Path::new("assets/meshes/monkey.obj"),
+            context.renderer,
+        )
+        .expect("Failed to load mesh");
+        let rt_mesh = RTMeshRendering::new(mesh, context.renderer)
+            .expect("Failed to convert Mesh to ray tracing mesh");
+        Self { rt_mesh }
     }
 }
 

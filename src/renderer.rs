@@ -130,6 +130,7 @@ pub struct Renderer {
     pub framebuffer_width: u32,
     pub framebuffer_height: u32,
     next_image_index: u32,
+    is_rt_ready: bool,
 
     pub(crate) debug_messenger: Option<DebugMessengerInfo>,
 
@@ -577,6 +578,7 @@ impl<'a> RendererBuilder<'a> {
     ) -> ash::Device {
         let mut raw_extensions_names = vec![Swapchain::name().as_ptr()];
         let features = vk::PhysicalDeviceFeatures::default();
+        let mut vk12features = vk::PhysicalDeviceVulkan12Features::default();
         let priorities = [1.0];
 
         if self.rt_requested {
@@ -587,6 +589,8 @@ impl<'a> RendererBuilder<'a> {
             // Required by RayTracingPipeline
             raw_extensions_names
                 .push(ash::extensions::khr::DeferredHostOperations::name().as_ptr());
+
+            vk12features.buffer_device_address = vk::TRUE;
         }
 
         let queue_info = vk::DeviceQueueCreateInfo::builder()
@@ -596,7 +600,8 @@ impl<'a> RendererBuilder<'a> {
         let mut device_create_info = vk::DeviceCreateInfo::builder()
             .enabled_features(&features)
             .enabled_extension_names(&raw_extensions_names)
-            .queue_create_infos(std::slice::from_ref(&queue_info));
+            .queue_create_infos(std::slice::from_ref(&queue_info))
+            .push_next(&mut vk12features);
 
         let mut as_features = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
             .acceleration_structure(true)
@@ -624,7 +629,7 @@ impl<'a> RendererBuilder<'a> {
             physical_device,
             device,
             debug_settings: Default::default(),
-            buffer_device_address: false,
+            buffer_device_address: self.rt_requested,
             allocation_sizes: AllocationSizes::default(),
         })
         .expect("Failed to create GPU allocator")
@@ -872,7 +877,7 @@ impl<'a> RendererBuilder<'a> {
         };
         let surface_loader = Surface::new(&entry, &instance);
 
-        let required_api_version = (1, 1, 0);
+        let required_api_version = (1, 2, 0);
         let (physical_device, queue_family_index) = self.select_physical_device(
             surface_handle,
             &instance,
@@ -987,6 +992,7 @@ impl<'a> RendererBuilder<'a> {
             framebuffer_width: self.width,
             framebuffer_height: self.height,
             next_image_index: 0,
+            is_rt_ready: self.rt_requested,
 
             debug_messenger,
 
@@ -1023,6 +1029,10 @@ impl Renderer {
 
     pub fn default_texture(&self) -> ThreadSafeRef<Texture> {
         self.default_texture_ref.clone()
+    }
+
+    pub fn is_rt_ready(&self) -> bool {
+        self.is_rt_ready
     }
 
     pub(crate) fn begin_frame(&mut self) -> bool {
