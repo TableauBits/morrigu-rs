@@ -1,3 +1,5 @@
+use std::fmt;
+
 use ash::vk;
 use bevy_ecs::prelude::Component;
 use thiserror::Error;
@@ -10,11 +12,22 @@ use crate::{
     utils::{ImmediateCommandError, ThreadSafeRef},
 };
 
-#[derive(Debug, Component)]
+#[derive(Component)]
 pub struct MeshRendering<VertexType: Vertex> {
     pub mesh_ref: ThreadSafeRef<Mesh<VertexType>>,
 
     blas: vk::AccelerationStructureKHR,
+    tlas_instance: vk::AccelerationStructureInstanceKHR,
+}
+
+impl<VertexType: Vertex> fmt::Debug for MeshRendering<VertexType> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "MeshRendering {{mesh_ref: {:?}, blas: {:?}}}",
+            self.mesh_ref, self.blas
+        )
+    }
 }
 
 #[derive(Error, Debug)]
@@ -51,6 +64,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Self>, RTMeshRenderingBuildError> {
         let blas;
+        let tlas_instance;
 
         {
             let mesh = mesh_ref.lock();
@@ -170,8 +184,29 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
                     )
                 })
                 .map_err(RTMeshRenderingBuildError::BLASBuildingFailed)?;
+
+            let blas_info = vk::AccelerationStructureDeviceAddressInfoKHR::builder()
+                .acceleration_structure(blas);
+            let blas_address = unsafe {
+                acceleration_structure_loader.get_acceleration_structure_device_address(&blas_info)
+            };
+
+            tlas_instance = vk::AccelerationStructureInstanceKHR {
+                transform: vk::TransformMatrixKHR {
+                    matrix: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                },
+                instance_custom_index_and_mask: vk::Packed24_8::new(0, 0xFF),
+                instance_shader_binding_table_record_offset_and_flags: vk::Packed24_8::new(0, 1),
+                acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
+                    device_handle: blas_address,
+                },
+            };
         }
 
-        Ok(ThreadSafeRef::new(Self { mesh_ref, blas }))
+        Ok(ThreadSafeRef::new(Self {
+            mesh_ref,
+            blas,
+            tlas_instance,
+        }))
     }
 }

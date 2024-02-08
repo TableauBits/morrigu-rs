@@ -19,7 +19,7 @@ pub struct VertexInputDescription {
     pub attributes: Vec<vk::VertexInputAttributeDescription>,
 }
 
-pub trait Vertex: std::marker::Sync + std::marker::Send + 'static {
+pub trait Vertex: std::marker::Sync + std::marker::Send + 'static + std::fmt::Debug {
     fn vertex_input_description() -> VertexInputDescription;
     fn position_index() -> usize {
         0
