@@ -1,13 +1,13 @@
 use morrigu::{
     application::{ApplicationState, BuildableApplicationState},
-    components::rt_mesh_rendering::RTMeshRendering,
+    components::ray_tracing::mesh_rendering::MeshRendering,
     utils::ThreadSafeRef,
     vertices::simple::SimpleVertex,
     winit,
 };
 
 pub struct RayTracerState {
-    rt_mesh: ThreadSafeRef<RTMeshRendering<SimpleVertex>>,
+    rt_mesh: ThreadSafeRef<MeshRendering<SimpleVertex>>,
 }
 
 impl BuildableApplicationState<()> for RayTracerState {
@@ -17,7 +17,7 @@ impl BuildableApplicationState<()> for RayTracerState {
             context.renderer,
         )
         .expect("Failed to load mesh");
-        let rt_mesh = RTMeshRendering::new(mesh, context.renderer)
+        let rt_mesh = MeshRendering::new(mesh, context.renderer)
             .expect("Failed to convert Mesh to ray tracing mesh");
         Self { rt_mesh }
     }

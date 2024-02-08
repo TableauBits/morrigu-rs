@@ -76,7 +76,6 @@ pub struct ApplicationBuilder<'a> {
     application_name: &'a str,
     version: (u32, u32, u32),
     preferred_present_mode: vk::PresentModeKHR,
-    request_rt: bool,
 }
 
 impl<'a> ApplicationBuilder<'a> {
@@ -88,7 +87,6 @@ impl<'a> ApplicationBuilder<'a> {
             application_name: "Morrigu application",
             version: (0, 0, 0),
             preferred_present_mode: vk::PresentModeKHR::MAILBOX,
-            request_rt: false,
         }
     }
 
@@ -118,11 +116,6 @@ impl<'a> ApplicationBuilder<'a> {
         self
     }
 
-    pub fn request_ray_tracing(mut self, request_ray_tracing: bool) -> Self {
-        self.request_rt = request_ray_tracing;
-        self
-    }
-
     fn setup_context(&self) -> ApplicationContext {
         let event_loop = EventLoop::new().expect("Failed to create program event loop");
 
@@ -138,7 +131,6 @@ impl<'a> ApplicationBuilder<'a> {
             .with_preferred_present_mode(self.preferred_present_mode)
             .with_name(self.application_name)
             .with_version(self.version.0, self.version.1, self.version.2)
-            .request_ray_tracing(self.request_rt)
             .build();
         let ecs_manager = ECSManager::new(
             &renderer_ref,

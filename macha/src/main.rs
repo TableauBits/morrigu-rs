@@ -36,6 +36,5 @@ fn main() {
         .with_dimensions(1280, 720)
         .with_application_name("Macha")
         .with_application_version(0, 1, 0)
-        .request_ray_tracing(true)
         .build_and_run_inplace::<RayTracerState, ()>(());
 }

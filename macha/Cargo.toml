@@ -13,7 +13,7 @@ profiling = { version = "1.0", features = ["profile-with-puffin"] }
 flexi_logger = "0.27"
 anyhow = "1.0"
 gltf = { git = "https://github.com/Ithyx/gltf", rev = "21aaddec4fc1411f0280d8345d1d04992b0f8994" }
-morrigu = { path = "../", features = ["egui"] }
-egui-gizmo = "0.14"
+morrigu = { path = "../", features = ["egui", "ray_tracing"] }
+egui-gizmo = "0.15"
 winit_input_helper = "0.15"
 bytemuck = "1.14"

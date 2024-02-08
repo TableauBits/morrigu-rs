@@ -92,7 +92,8 @@ where
 
     let mut buffer_usage_flags =
         vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER;
-    if renderer.is_rt_ready() {
+    #[cfg(feature = "ray_tracing")]
+    {
         buffer_usage_flags |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
         buffer_usage_flags |=
             vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR;
@@ -146,7 +147,8 @@ pub fn upload_index_buffer(
 
     let mut buffer_usage_flags =
         vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER;
-    if renderer.is_rt_ready() {
+    #[cfg(feature = "ray_tracing")]
+    {
         buffer_usage_flags |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
         buffer_usage_flags |=
             vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR;

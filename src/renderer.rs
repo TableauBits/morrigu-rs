@@ -130,7 +130,6 @@ pub struct Renderer {
     pub framebuffer_width: u32,
     pub framebuffer_height: u32,
     next_image_index: u32,
-    is_rt_ready: bool,
 
     pub(crate) debug_messenger: Option<DebugMessengerInfo>,
 
@@ -166,8 +165,6 @@ pub struct RendererBuilder<'a> {
     height: u32,
     preferred_present_mode: vk::PresentModeKHR,
     input_attachments: Vec<(vk::AttachmentDescription, vk::AttachmentReference)>,
-
-    rt_requested: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -475,7 +472,8 @@ impl<'a> RendererBuilder<'a> {
                     .expect("Failed to query surface compatibility");
 
                     let mut meets_rt_requirements = true;
-                    if self.rt_requested {
+                    #[cfg(feature = "ray_tracing")]
+                    {
                         let mut as_features =
                             vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default();
                         let mut rtp_features =
@@ -581,7 +579,8 @@ impl<'a> RendererBuilder<'a> {
         let mut vk12features = vk::PhysicalDeviceVulkan12Features::default();
         let priorities = [1.0];
 
-        if self.rt_requested {
+        #[cfg(feature = "ray_tracing")]
+        {
             // For rt acceleration structures
             raw_extensions_names.push(ash::extensions::khr::AccelerationStructure::name().as_ptr());
             // For vkCmdTraceRaysKHR
@@ -609,7 +608,8 @@ impl<'a> RendererBuilder<'a> {
         let mut rtp_features = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
             .ray_tracing_pipeline(true)
             .build();
-        if self.rt_requested {
+        #[cfg(feature = "ray_tracing")]
+        {
             device_create_info = device_create_info.push_next(&mut as_features);
             device_create_info = device_create_info.push_next(&mut rtp_features);
         }
@@ -629,7 +629,7 @@ impl<'a> RendererBuilder<'a> {
             physical_device,
             device,
             debug_settings: Default::default(),
-            buffer_device_address: self.rt_requested,
+            buffer_device_address: cfg!(feature = "ray_tracing"),
             allocation_sizes: AllocationSizes::default(),
         })
         .expect("Failed to create GPU allocator")
@@ -829,8 +829,6 @@ impl<'a> RendererBuilder<'a> {
             height: 720,
             preferred_present_mode: vk::PresentModeKHR::MAILBOX,
             input_attachments: vec![],
-
-            rt_requested: false,
         }
     }
 
@@ -852,11 +850,6 @@ impl<'a> RendererBuilder<'a> {
 
     pub fn with_version(mut self, major: u32, minor: u32, patch: u32) -> Self {
         self.application_version = vk::make_api_version(0, major, minor, patch);
-        self
-    }
-
-    pub fn request_ray_tracing(mut self, request_ray_tracing: bool) -> Self {
-        self.rt_requested = request_ray_tracing;
         self
     }
 
@@ -992,7 +985,6 @@ impl<'a> RendererBuilder<'a> {
             framebuffer_width: self.width,
             framebuffer_height: self.height,
             next_image_index: 0,
-            is_rt_ready: self.rt_requested,
 
             debug_messenger,
 
@@ -1029,10 +1021,6 @@ impl Renderer {
 
     pub fn default_texture(&self) -> ThreadSafeRef<Texture> {
         self.default_texture_ref.clone()
-    }
-
-    pub fn is_rt_ready(&self) -> bool {
-        self.is_rt_ready
     }
 
     pub(crate) fn begin_frame(&mut self) -> bool {

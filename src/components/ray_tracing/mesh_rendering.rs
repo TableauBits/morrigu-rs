@@ -11,8 +11,10 @@ use crate::{
 };
 
 #[derive(Debug, Component)]
-pub struct RTMeshRendering<VertexType: Vertex> {
+pub struct MeshRendering<VertexType: Vertex> {
     pub mesh_ref: ThreadSafeRef<Mesh<VertexType>>,
+
+    blas: vk::AccelerationStructureKHR,
 }
 
 #[derive(Error, Debug)]
@@ -39,11 +41,17 @@ pub enum RTMeshRenderingBuildError {
     BLASBuildingFailed(ImmediateCommandError),
 }
 
-impl<VertexType: Vertex> RTMeshRendering<VertexType> {
+impl<VertexType: Vertex> MeshRendering<VertexType> {
+    pub fn blas(&self) -> &vk::AccelerationStructureKHR {
+        &self.blas
+    }
+
     pub fn new(
         mesh_ref: ThreadSafeRef<Mesh<VertexType>>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Self>, RTMeshRenderingBuildError> {
+        let blas;
+
         {
             let mesh = mesh_ref.lock();
 
@@ -138,17 +146,17 @@ impl<VertexType: Vertex> RTMeshRendering<VertexType> {
                     .size(necessary_size.acceleration_structure_size)
                     .buffer(data_buffer.handle);
 
-            let acceleration_structure = unsafe {
+            blas = unsafe {
                 acceleration_structure_loader
                     .create_acceleration_structure(&acceleration_structure_create_info, None)
                     .map_err(RTMeshRenderingBuildError::AccelStructureCreationFailed)?
             };
 
-            let geometry_info = geometry_info
-                .dst_acceleration_structure(acceleration_structure)
-                .scratch_data(vk::DeviceOrHostAddressKHR {
+            let geometry_info = geometry_info.dst_acceleration_structure(blas).scratch_data(
+                vk::DeviceOrHostAddressKHR {
                     device_address: scratch_address,
-                });
+                },
+            );
 
             let offset = vk::AccelerationStructureBuildRangeInfoKHR::builder()
                 .primitive_count(prim_count)
@@ -164,6 +172,6 @@ impl<VertexType: Vertex> RTMeshRendering<VertexType> {
                 .map_err(RTMeshRenderingBuildError::BLASBuildingFailed)?;
         }
 
-        Ok(ThreadSafeRef::new(Self { mesh_ref }))
+        Ok(ThreadSafeRef::new(Self { mesh_ref, blas }))
     }
 }
