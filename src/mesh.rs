@@ -90,13 +90,16 @@ where
         std::ptr::copy_nonoverlapping(vertices.as_ptr(), vertex_staging_ptr, vertices.len());
     };
 
-    let mut buffer_usage = vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER;
+    let mut buffer_usage_flags =
+        vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER;
     if renderer.is_rt_ready() {
-        buffer_usage |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+        buffer_usage_flags |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+        buffer_usage_flags |=
+            vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR;
     }
 
     let vertex_buffer = AllocatedBuffer::builder(vertex_data_size)
-        .with_usage(buffer_usage)
+        .with_usage(buffer_usage_flags)
         .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
         .build(renderer)
         .map_err(UploadError::MainBufferCreationFailed)?;
@@ -145,6 +148,8 @@ pub fn upload_index_buffer(
         vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER;
     if renderer.is_rt_ready() {
         buffer_usage_flags |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+        buffer_usage_flags |=
+            vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR;
     }
 
     let index_buffer = AllocatedBuffer::builder(index_data_size)
