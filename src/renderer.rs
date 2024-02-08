@@ -472,8 +472,7 @@ impl<'a> RendererBuilder<'a> {
                     .expect("Failed to query surface compatibility");
 
                     let mut meets_rt_requirements = true;
-                    #[cfg(feature = "ray_tracing")]
-                    {
+                    if cfg!(feature = "ray_tracing") {
                         let mut as_features =
                             vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default();
                         let mut rtp_features =
@@ -579,8 +578,7 @@ impl<'a> RendererBuilder<'a> {
         let mut vk12features = vk::PhysicalDeviceVulkan12Features::default();
         let priorities = [1.0];
 
-        #[cfg(feature = "ray_tracing")]
-        {
+        if cfg!(feature = "ray_tracing") {
             // For rt acceleration structures
             raw_extensions_names.push(ash::extensions::khr::AccelerationStructure::name().as_ptr());
             // For vkCmdTraceRaysKHR
@@ -608,8 +606,7 @@ impl<'a> RendererBuilder<'a> {
         let mut rtp_features = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
             .ray_tracing_pipeline(true)
             .build();
-        #[cfg(feature = "ray_tracing")]
-        {
+        if cfg!(feature = "ray_tracing") {
             device_create_info = device_create_info.push_next(&mut as_features);
             device_create_info = device_create_info.push_next(&mut rtp_features);
         }
