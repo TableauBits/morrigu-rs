@@ -352,7 +352,7 @@ where
                 set: 2,
             })?
             .lock()
-            .upload_data(data)
+            .upload_pod(data)
             .map_err(|err| err.into())
     }
 

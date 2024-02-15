@@ -186,10 +186,10 @@ where
         Ok(old_buffer)
     }
 
-    pub fn update_uniform<T: bytemuck::Pod>(
+    pub fn update_uniform_pod<T: bytemuck::Pod>(
         &mut self,
         binding_slot: u32,
-        data: T,
+        pod: T,
     ) -> Result<(), UniformUpdateError> {
         self.descriptor_resources
             .uniform_buffers
@@ -199,7 +199,7 @@ where
                 set: 3,
             })?
             .lock()
-            .upload_data(data)
+            .upload_pod(pod)
             .map_err(|err| err.into())
     }
 

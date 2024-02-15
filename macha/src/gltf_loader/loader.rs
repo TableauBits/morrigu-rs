@@ -243,7 +243,7 @@ pub fn load_gltf(
                                     AllocatedBuffer::builder(
                                         std::mem::size_of::<PBRData>().try_into()?,
                                     )
-                                    .build_with_data(params, renderer)
+                                    .build_with_pod(params, renderer)
                                     .context("Failed to build PBRData buffer")?,
                                 ),
                             ),
@@ -253,7 +253,7 @@ pub fn load_gltf(
                                     AllocatedBuffer::builder(
                                         std::mem::size_of::<MapPresenceInfo>().try_into()?,
                                     )
-                                    .build_with_data(map_presence_info, renderer)
+                                    .build_with_pod(map_presence_info, renderer)
                                     .context("Failed to create map presence info buffer")?,
                                 ),
                             ),

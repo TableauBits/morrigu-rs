@@ -42,7 +42,7 @@ impl AllocatedBuffer {
         self.size
     }
 
-    pub fn upload_data<T: bytemuck::Pod>(&mut self, data: T) -> Result<(), BufferDataUploadError> {
+    pub fn upload_pod<T: bytemuck::Pod>(&mut self, pod: T) -> Result<(), BufferDataUploadError> {
         let allocation = self
             .allocation
             .as_mut()
@@ -59,11 +59,20 @@ impl AllocatedBuffer {
             });
         }
 
-        let raw_data = bytes_of(&data);
+        let raw_data = bytes_of(&pod);
+        self.upload_data(raw_data)
+    }
+
+    pub fn upload_data(&mut self, data: &[u8]) -> Result<(), BufferDataUploadError> {
+        let allocation = self
+            .allocation
+            .as_mut()
+            .ok_or(BufferDataUploadError::UseAfterFree)?;
+
         allocation
             .mapped_slice_mut()
-            .ok_or(BufferDataUploadError::MemoryMappingFailed)?[..raw_data.len()]
-            .copy_from_slice(raw_data);
+            .ok_or(BufferDataUploadError::MemoryMappingFailed)?[..data.len()]
+            .copy_from_slice(data);
 
         Ok(())
     }
@@ -141,9 +150,21 @@ impl AllocatedBufferBuilder {
         self.build_internal(&renderer.device, &mut renderer.allocator())
     }
 
-    pub fn build_with_data<T: bytemuck::Pod>(
+    pub fn build_with_pod<T: bytemuck::Pod>(
         self,
-        data: T,
+        pod: T,
+        renderer: &mut Renderer,
+    ) -> Result<AllocatedBuffer, BufferBuildWithDataError> {
+        let mut buffer = self.build(renderer)?;
+
+        buffer.upload_pod(pod)?;
+
+        Ok(buffer)
+    }
+
+    pub fn build_with_data(
+        self,
+        data: &[u8],
         renderer: &mut Renderer,
     ) -> Result<AllocatedBuffer, BufferBuildWithDataError> {
         let mut buffer = self.build(renderer)?;

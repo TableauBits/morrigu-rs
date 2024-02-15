@@ -16,8 +16,8 @@ use crate::{
 pub struct MeshRendering<VertexType: Vertex> {
     pub mesh_ref: ThreadSafeRef<Mesh<VertexType>>,
 
+    pub(crate) tlas_instance: vk::AccelerationStructureInstanceKHR,
     blas: vk::AccelerationStructureKHR,
-    tlas_instance: vk::AccelerationStructureInstanceKHR,
 }
 
 impl<VertexType: Vertex> fmt::Debug for MeshRendering<VertexType> {

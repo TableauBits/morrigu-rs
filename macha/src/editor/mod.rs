@@ -123,7 +123,7 @@ impl BuildableApplicationState<()> for MachaState {
                         4,
                         ThreadSafeRef::new(
                             AllocatedBuffer::builder(shader_options_size)
-                                .build_with_data(shader_options, context.renderer)
+                                .build_with_pod(shader_options, context.renderer)
                                 .unwrap(),
                         ),
                     ),
@@ -259,7 +259,7 @@ impl ApplicationState for MachaState {
             if ui.button("Apply changes").clicked() {
                 self.mesh_rendering_ref
                     .lock()
-                    .update_uniform(4, self.shader_options)
+                    .update_uniform_pod(4, self.shader_options)
                     .expect("Failed to upload flow settings");
             }
         });
