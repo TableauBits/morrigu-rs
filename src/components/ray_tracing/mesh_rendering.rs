@@ -16,7 +16,7 @@ use crate::{
 pub struct MeshRendering<VertexType: Vertex> {
     pub mesh_ref: ThreadSafeRef<Mesh<VertexType>>,
 
-    pub(crate) tlas_instance: vk::AccelerationStructureInstanceKHR,
+    tlas_instance: vk::AccelerationStructureInstanceKHR,
     blas: vk::AccelerationStructureKHR,
 }
 
@@ -57,6 +57,10 @@ pub enum RTMeshRenderingBuildError {
 impl<VertexType: Vertex> MeshRendering<VertexType> {
     pub fn blas(&self) -> &vk::AccelerationStructureKHR {
         &self.blas
+    }
+
+    pub fn tlas_instance(&self) -> &vk::AccelerationStructureInstanceKHR {
+        &self.tlas_instance
     }
 
     pub fn new(

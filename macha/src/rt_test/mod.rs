@@ -1,25 +1,48 @@
 use morrigu::{
     application::{ApplicationState, BuildableApplicationState},
-    components::ray_tracing::mesh_rendering::MeshRendering,
+    components::ray_tracing::{mesh_rendering::MeshRendering, tlas::TLAS},
     utils::ThreadSafeRef,
     vertices::simple::SimpleVertex,
     winit,
 };
 
 pub struct RayTracerState {
-    rt_mesh: ThreadSafeRef<MeshRendering<SimpleVertex>>,
+    monkey_mesh: ThreadSafeRef<MeshRendering<SimpleVertex>>,
+    rock_mesh: ThreadSafeRef<MeshRendering<SimpleVertex>>,
+    tlas: ThreadSafeRef<TLAS>,
 }
 
 impl BuildableApplicationState<()> for RayTracerState {
     fn build(context: &mut morrigu::application::StateContext, _: ()) -> Self {
-        let mesh = SimpleVertex::load_model_from_path_obj(
+        let monkey = SimpleVertex::load_model_from_path_obj(
             std::path::Path::new("assets/meshes/monkey.obj"),
             context.renderer,
         )
         .expect("Failed to load mesh");
-        let rt_mesh = MeshRendering::new(mesh, context.renderer)
+        let monkey_mesh = MeshRendering::new(monkey, context.renderer)
             .expect("Failed to convert Mesh to ray tracing mesh");
-        Self { rt_mesh }
+
+        let rock = SimpleVertex::load_model_from_path_obj(
+            std::path::Path::new("assets/meshes/monkey.obj"),
+            context.renderer,
+        )
+        .expect("Failed to load mesh");
+        let rock_mesh = MeshRendering::new(rock, context.renderer)
+            .expect("Failed to convert Mesh to ray tracing mesh");
+
+        let tlas = TLAS::new(
+            &[
+                *monkey_mesh.lock().tlas_instance(),
+                *rock_mesh.lock().tlas_instance(),
+            ],
+            context.renderer,
+        )
+        .expect("Failed to build TLAS");
+        Self {
+            monkey_mesh,
+            rock_mesh,
+            tlas,
+        }
     }
 }
 
