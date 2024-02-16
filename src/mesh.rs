@@ -67,6 +67,7 @@ where
 {
     let vertex_data_size: u64 = std::mem::size_of_val(vertices).try_into().unwrap();
     let mut vertex_staging_buffer = AllocatedBuffer::builder(vertex_data_size)
+        .with_name("Vertex staging")
         .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
         .build(renderer)
@@ -99,6 +100,7 @@ where
     }
 
     let vertex_buffer = AllocatedBuffer::builder(vertex_data_size)
+        .with_name("Vertex data")
         .with_usage(buffer_usage_flags)
         .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
         .build(renderer)
@@ -130,6 +132,7 @@ pub fn upload_index_buffer(
 ) -> Result<AllocatedBuffer, UploadError> {
     let index_data_size: u64 = std::mem::size_of_val(indices).try_into().unwrap();
     let mut index_staging_buffer = AllocatedBuffer::builder(index_data_size)
+        .with_name("Index staging")
         .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
         .build(renderer)
@@ -153,6 +156,7 @@ pub fn upload_index_buffer(
     }
 
     let index_buffer = AllocatedBuffer::builder(index_data_size)
+        .with_name("Index data")
         .with_usage(buffer_usage_flags)
         .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
         .build(renderer)

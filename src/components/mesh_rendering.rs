@@ -35,7 +35,11 @@ pub fn default_ubo_bindings(
     let size: u64 = std::mem::size_of::<Mat4>().try_into().unwrap();
     Ok((
         0,
-        ThreadSafeRef::new(AllocatedBuffer::builder(size).build(renderer)?),
+        ThreadSafeRef::new(
+            AllocatedBuffer::builder(size)
+                .with_name("Default UBO")
+                .build(renderer)?,
+        ),
     ))
 }
 pub fn default_descriptor_resources(

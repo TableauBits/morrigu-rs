@@ -123,6 +123,7 @@ impl BuildableApplicationState<()> for MachaState {
                         4,
                         ThreadSafeRef::new(
                             AllocatedBuffer::builder(shader_options_size)
+                                .with_name("Shader options")
                                 .build_with_pod(shader_options, context.renderer)
                                 .unwrap(),
                         ),

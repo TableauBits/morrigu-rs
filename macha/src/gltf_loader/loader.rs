@@ -233,6 +233,7 @@ pub fn load_gltf(
                                     AllocatedBuffer::builder(
                                         std::mem::size_of::<LightData>().try_into()?,
                                     )
+                                    .with_name("Light data")
                                     .build(renderer)
                                     .context("Failed to build LightData buffer")?,
                                 ),
@@ -243,6 +244,7 @@ pub fn load_gltf(
                                     AllocatedBuffer::builder(
                                         std::mem::size_of::<PBRData>().try_into()?,
                                     )
+                                    .with_name("PBR data")
                                     .build_with_pod(params, renderer)
                                     .context("Failed to build PBRData buffer")?,
                                 ),
@@ -253,6 +255,7 @@ pub fn load_gltf(
                                     AllocatedBuffer::builder(
                                         std::mem::size_of::<MapPresenceInfo>().try_into()?,
                                     )
+                                    .with_name("Map presence info")
                                     .build_with_pod(map_presence_info, renderer)
                                     .context("Failed to create map presence info buffer")?,
                                 ),

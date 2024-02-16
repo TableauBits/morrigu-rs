@@ -112,6 +112,8 @@ pub struct AllocatedBufferBuilder {
     pub size: u64,
     pub usage: vk::BufferUsageFlags,
     pub memory_location: gpu_allocator::MemoryLocation,
+
+    pub name: String,
 }
 
 impl AllocatedBufferBuilder {
@@ -125,6 +127,7 @@ impl AllocatedBufferBuilder {
             size,
             usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
             memory_location: gpu_allocator::MemoryLocation::CpuToGpu,
+            name: String::from("unnamed buffer"),
         }
     }
 
@@ -133,6 +136,7 @@ impl AllocatedBufferBuilder {
             size,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
             memory_location: gpu_allocator::MemoryLocation::CpuToGpu,
+            name: String::from("unnamed staging buffer"),
         }
     }
 
@@ -143,6 +147,11 @@ impl AllocatedBufferBuilder {
 
     pub fn with_memory_location(mut self, memory_location: gpu_allocator::MemoryLocation) -> Self {
         self.memory_location = memory_location;
+        self
+    }
+
+    pub fn with_name(mut self, name: &str) -> Self {
+        self.name = name.to_owned();
         self
     }
 
@@ -191,7 +200,7 @@ impl AllocatedBufferBuilder {
 
         let memory_req = unsafe { device.get_buffer_memory_requirements(handle) };
         let allocation = allocator.allocate(&AllocationCreateDesc {
-            name: "buffer",
+            name: &self.name,
             requirements: memory_req,
             location: self.memory_location,
             linear: true,

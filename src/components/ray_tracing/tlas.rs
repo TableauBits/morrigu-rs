@@ -57,6 +57,7 @@ impl TLAS {
                 .try_into()
                 .map_err(|_| TLASBuildError::InvalidBLASList)?,
         )
+        .with_name("TLAS instances")
         .with_usage(
             vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
@@ -101,6 +102,7 @@ impl TLAS {
         };
 
         let as_buffer = AllocatedBuffer::builder(build_sizes.acceleration_structure_size)
+            .with_name("TLAS data")
             .with_usage(
                 vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
                     | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
@@ -118,6 +120,7 @@ impl TLAS {
         .map_err(TLASBuildError::TLASCreationFailed)?;
 
         let scratch_buffer = AllocatedBuffer::builder(build_sizes.build_scratch_size)
+            .with_name("TLAS scratch")
             .with_usage(
                 vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
             )
