@@ -142,7 +142,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
             };
 
             let scratch_buffer = AllocatedBuffer::builder(necessary_size.build_scratch_size)
-                .with_name("BLAS scratch buffer")
+                .with_name("BLAS scratch")
                 .with_usage(
                     vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                         | vk::BufferUsageFlags::STORAGE_BUFFER
@@ -153,7 +153,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
             let scratch_address = unsafe { renderer.device.get_buffer_device_address(&sb_info) };
 
             let data_buffer = AllocatedBuffer::builder(necessary_size.acceleration_structure_size)
-                .with_name("BLAS data buffer")
+                .with_name("BLAS data")
                 .with_usage(
                     vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
                         | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
