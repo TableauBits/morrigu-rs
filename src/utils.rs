@@ -7,8 +7,8 @@ use thiserror::Error;
 
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
-pub struct PodWrapper<T: Copy + Clone>(pub T);
-unsafe impl<T: Copy> Zeroable for PodWrapper<T> {
+pub struct PodWrapper<T: Copy + 'static>(pub T);
+unsafe impl<T: Copy + 'static> Zeroable for PodWrapper<T> {
     fn zeroed() -> Self {
         unsafe { core::mem::zeroed() }
     }
