@@ -22,9 +22,9 @@ impl ECSManager {
         let renderer_ref = ThreadSafeRef::clone(renderer_ref);
 
         let mut world = World::new();
-        let systems_schedule = bevy_ecs::schedule::Schedule::default();
+        let systems_schedule = Schedule::default();
         #[cfg(feature = "egui")]
-        let ui_systems_schedule = bevy_ecs::schedule::Schedule::default();
+        let ui_systems_schedule = Schedule::default();
 
         world.insert_resource(camera);
         world.insert_resource(ResourceWrapper::new(Instant::now()));

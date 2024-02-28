@@ -41,7 +41,7 @@ use self::systems::gizmo_drawer;
 type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;
 type Mesh = morrigu::mesh::Mesh<Vertex>;
-type MeshRendering = morrigu::components::mesh_rendering::MeshRendering<Vertex>;
+type MeshRendering = mesh_rendering::MeshRendering<Vertex>;
 
 pub struct MachaState {
     camera: MachaEditorCamera,
@@ -216,7 +216,7 @@ impl ApplicationState for MachaState {
 
         let egui_texture = Texture::builder()
             .build_from_path(
-                std::path::Path::new("assets/textures/jupiter_base.png"),
+                Path::new("assets/textures/jupiter_base.png"),
                 context.renderer,
             )
             .expect("Failed to build egui texture");
@@ -310,11 +310,11 @@ impl ApplicationState for MachaState {
     fn on_event(&mut self, event: Event<()>, context: &mut StateContext) {
         #[allow(clippy::single_match)] // Temporary
         match event {
-            morrigu::application::Event::WindowEvent {
+            Event::WindowEvent {
                 event: winit::event::WindowEvent::KeyboardInput { event, .. },
                 ..
             } => self.on_keyboard_input(event, context),
-            morrigu::application::Event::WindowEvent {
+            Event::WindowEvent {
                 event:
                     winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize {
                         width, height, ..
@@ -331,7 +331,7 @@ impl ApplicationState for MachaState {
         if let Some(texture) = context
             .egui
             .painter
-            .retreive_user_texture(self.egui_texture_id)
+            .retrieve_user_texture(self.egui_texture_id)
         {
             texture.lock().destroy(context.renderer);
         }

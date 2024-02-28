@@ -151,10 +151,10 @@ pub struct Renderer {
     pub device_properties: vk::PhysicalDeviceProperties,
     physical_device: vk::PhysicalDevice,
     surface: SurfaceInfo,
-    pub(crate) instance: ash::Instance,
+    pub(crate) instance: Instance,
     #[allow(dead_code)]
     // This field is never read, but we need to keep it alive longer than the instance
-    entry: ash::Entry,
+    entry: Entry,
 }
 
 pub struct RendererBuilder<'a> {
@@ -172,7 +172,7 @@ fn create_swapchain(
     mut width: u32,
     mut height: u32,
     preferred_present_mode: vk::PresentModeKHR,
-    instance: &ash::Instance,
+    instance: &Instance,
     physical_device: vk::PhysicalDevice,
     device: &ash::Device,
     surface: &SurfaceInfo,
@@ -190,7 +190,7 @@ fn create_swapchain(
     }
 
     let surface_extent = match capabilities.current_extent.width {
-        std::u32::MAX => vk::Extent2D { width, height },
+        u32::MAX => vk::Extent2D { width, height },
         _ => {
             width = capabilities.current_extent.width;
             height = capabilities.current_extent.height;
@@ -249,7 +249,7 @@ fn create_swapchain(
             })
             .image(image);
         unsafe { device.create_image_view(&create_view_info, None) }
-            .expect("Failed to ceate swapchain image views")
+            .expect("Failed to create swapchain image views")
     };
 
     let swapchain_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }
@@ -358,7 +358,7 @@ fn create_framebuffers(
 }
 
 impl<'a> RendererBuilder<'a> {
-    fn create_instance(&self, entry: &ash::Entry) -> Instance {
+    fn create_instance(&self, entry: &Entry) -> Instance {
         let engine_name = CString::new("Morrigu").unwrap();
         let app_info = vk::ApplicationInfo::builder()
             .application_name(self.application_name.as_c_str())
@@ -382,7 +382,7 @@ impl<'a> RendererBuilder<'a> {
                 [CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap()];
             raw_layer_names = layer_names.iter().map(|layer| layer.as_ptr()).collect();
 
-            required_extensions.push(ash::extensions::ext::DebugUtils::name().as_ptr());
+            required_extensions.push(DebugUtils::name().as_ptr());
         }
 
         let instance_info = vk::InstanceCreateInfo::builder()
@@ -398,8 +398,8 @@ impl<'a> RendererBuilder<'a> {
 
     fn create_debug_messenger(
         &self,
-        _entry: &ash::Entry,
-        _instance: &ash::Instance,
+        _entry: &Entry,
+        _instance: &Instance,
     ) -> Option<DebugMessengerInfo> {
         #[allow(unused_assignments)]
         #[allow(unused_mut)]
@@ -437,7 +437,7 @@ impl<'a> RendererBuilder<'a> {
     fn select_physical_device(
         &self,
         surface: vk::SurfaceKHR,
-        instance: &ash::Instance,
+        instance: &Instance,
         surface_loader: &Surface,
         required_version: u32,
     ) -> (vk::PhysicalDevice, u32) {
@@ -515,13 +515,13 @@ impl<'a> RendererBuilder<'a> {
             let device_b_info = unsafe { instance.get_physical_device_properties(*b) };
 
             let mut ordering = Ordering::Equal;
-            if device_a_info.device_type == vk::PhysicalDeviceType::DISCRETE_GPU
-                && device_b_info.device_type != vk::PhysicalDeviceType::DISCRETE_GPU
+            if device_a_info.device_type == PhysicalDeviceType::DISCRETE_GPU
+                && device_b_info.device_type != PhysicalDeviceType::DISCRETE_GPU
             {
                 ordering = Ordering::Less;
             }
-            if device_b_info.device_type == vk::PhysicalDeviceType::DISCRETE_GPU
-                && device_a_info.device_type != vk::PhysicalDeviceType::DISCRETE_GPU
+            if device_b_info.device_type == PhysicalDeviceType::DISCRETE_GPU
+                && device_a_info.device_type != PhysicalDeviceType::DISCRETE_GPU
             {
                 ordering = Ordering::Greater;
             }
@@ -569,7 +569,7 @@ impl<'a> RendererBuilder<'a> {
 
     fn create_device(
         &self,
-        instance: &ash::Instance,
+        instance: &Instance,
         physical_device: vk::PhysicalDevice,
         queue_family_index: u32,
     ) -> ash::Device {
@@ -612,12 +612,12 @@ impl<'a> RendererBuilder<'a> {
         }
 
         unsafe { instance.create_device(physical_device, &device_create_info, None) }
-            .expect("Failed to create logial device")
+            .expect("Failed to create logical device")
     }
 
     fn create_allocator(
         &self,
-        instance: ash::Instance,
+        instance: Instance,
         physical_device: vk::PhysicalDevice,
         device: ash::Device,
     ) -> Allocator {
@@ -1167,7 +1167,7 @@ impl Renderer {
         }
 
         //    - the depth image
-        let mut swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
+        let mut swapchain_depth_image = mem::take(&mut self.swapchain.depth_image);
         swapchain_depth_image.destroy(self);
 
         //    - the swapchain image views
@@ -1255,7 +1255,7 @@ impl Drop for Renderer {
             self.device
                 .destroy_render_pass(self.primary_render_pass, None);
 
-            let mut swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
+            let mut swapchain_depth_image = mem::take(&mut self.swapchain.depth_image);
             swapchain_depth_image.destroy(self);
 
             for image_view in &self.swapchain.image_views {
@@ -1270,7 +1270,7 @@ impl Drop for Renderer {
                 drop(allocator);
             }
 
-            let command_uploader = std::mem::take(&mut self.command_uploader);
+            let command_uploader = mem::take(&mut self.command_uploader);
             command_uploader.destroy(&self.device);
 
             self.device.destroy_device(None);

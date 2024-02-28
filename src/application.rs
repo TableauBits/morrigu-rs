@@ -150,7 +150,7 @@ impl<'a> ApplicationBuilder<'a> {
         {
             let mut renderer = renderer_ref.lock();
             let egui = crate::egui_integration::EguiIntegration::new(&window, &mut renderer)
-                .expect("Failed to create Egui intergration");
+                .expect("Failed to create Egui integration");
             drop(renderer);
 
             ApplicationContext {
@@ -311,7 +311,7 @@ impl<'a> ApplicationBuilder<'a> {
     where
         StateType: BuildableApplicationState<UserData>,
     {
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         let mut context = self.setup_context();
         let engine_init_time = instant.elapsed();
         log::debug!("Engine startup time: {}ms", engine_init_time.as_millis());
@@ -326,7 +326,7 @@ impl<'a> ApplicationBuilder<'a> {
             window_input_state: &context.window_input_state,
         };
 
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         let mut state = StateType::build(&mut state_context, data);
         let engine_init_time = instant.elapsed();
         log::debug!(
@@ -334,7 +334,7 @@ impl<'a> ApplicationBuilder<'a> {
             engine_init_time.as_millis()
         );
 
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         state.on_attach(&mut state_context);
         let engine_init_time = instant.elapsed();
         log::debug!(
@@ -346,7 +346,7 @@ impl<'a> ApplicationBuilder<'a> {
 
         self.main_loop(&mut context, &mut state);
 
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         self.exit(&mut context, &mut state);
         let engine_shut_down_time = instant.elapsed();
         log::debug!(
@@ -357,7 +357,7 @@ impl<'a> ApplicationBuilder<'a> {
     }
 
     pub fn build_and_run(self, state: &mut impl ApplicationState) {
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         let mut context = self.setup_context();
         let engine_init_time = instant.elapsed();
         log::debug!("Engine startup time: {}ms", engine_init_time.as_millis());
@@ -372,7 +372,7 @@ impl<'a> ApplicationBuilder<'a> {
             window_input_state: &context.window_input_state,
         };
 
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         state.on_attach(&mut state_context);
         let engine_init_time = instant.elapsed();
         log::debug!(
@@ -384,7 +384,7 @@ impl<'a> ApplicationBuilder<'a> {
 
         self.main_loop(&mut context, state);
 
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         self.exit(&mut context, state);
         let engine_shut_down_time = instant.elapsed();
         log::debug!(

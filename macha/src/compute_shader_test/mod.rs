@@ -21,7 +21,7 @@ use morrigu::{
 
 type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;
-type MeshRendering = morrigu::components::mesh_rendering::MeshRendering<Vertex>;
+type MeshRendering = mesh_rendering::MeshRendering<Vertex>;
 
 pub struct CSTState {
     input_texture: ThreadSafeRef<Texture>,

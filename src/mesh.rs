@@ -74,7 +74,7 @@ where
         .map_err(UploadError::StagingBufferCreationFailed)?;
 
     // We cannot cast this vertex slice using bytemuck because we don't want to enforce that a vertex types doesn't have padding.
-    // Padding issues are not a problem because of the way input bindings are setup (using offsets into a struct).
+    // Padding issues are not a problem because of the way input bindings are set up (using offsets into a struct).
     // So instead, we swallow our pride, pray for forgiveness for our sins, and go to unsafe land. One more time can't hurt, right ?
     // Well I'm pretty sure it can. I've looked at this a bunch of time, and while I know for sure there's a problem in there,
     // I can't find it, so it will have to do for now.

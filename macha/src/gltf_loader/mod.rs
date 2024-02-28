@@ -199,7 +199,7 @@ impl ApplicationState for GLTFViewerState {
             .ecs_manager
             .world
             .get_entity_mut(self.skybox_entity_ref)
-            .expect("Failed to retreive skybox entity");
+            .expect("Failed to retrieve skybox entity");
         if let Some(mut transform) = entity_ref.get_mut::<Transform>() {
             transform.set_translation(cam_pos);
         }
@@ -220,7 +220,7 @@ impl ApplicationState for GLTFViewerState {
     fn on_event(&mut self, event: Event<()>, _context: &mut morrigu::application::StateContext) {
         #[allow(clippy::single_match)] // Temporary
         match event {
-            morrigu::application::Event::WindowEvent {
+            Event::WindowEvent {
                 event:
                     winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize {
                         width, height, ..

@@ -46,7 +46,7 @@ pub enum ComputeShaderBuildError {
         error: std::io::Error,
     },
 
-    #[error("SPRIV decoding failed with error: {0}.")]
+    #[error("SPIRV decoding failed with error: {0}.")]
     SPIRVDecodingFailed(std::io::Error),
 
     #[error("Vulkan creation of shader module failed with result: {0}.")]

@@ -26,7 +26,7 @@ unsafe impl Zeroable for EguiVertex {}
 unsafe impl Pod for EguiVertex {}
 
 impl Vertex for EguiVertex {
-    fn vertex_input_description() -> crate::material::VertexInputDescription {
+    fn vertex_input_description() -> VertexInputDescription {
         let main_binding = vk::VertexInputBindingDescription::builder()
             .binding(0)
             .stride(
@@ -542,7 +542,7 @@ impl Painter {
         id
     }
 
-    pub fn retreive_user_texture(
+    pub fn retrieve_user_texture(
         &mut self,
         tex_id: egui::TextureId,
     ) -> Option<ThreadSafeRef<Texture>> {

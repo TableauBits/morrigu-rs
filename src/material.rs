@@ -19,7 +19,7 @@ pub struct VertexInputDescription {
     pub attributes: Vec<vk::VertexInputAttributeDescription>,
 }
 
-pub trait Vertex: std::marker::Sync + std::marker::Send + 'static + std::fmt::Debug {
+pub trait Vertex: Sync + Send + 'static + std::fmt::Debug {
     fn vertex_input_description() -> VertexInputDescription;
     fn position_index() -> usize {
         0
@@ -29,7 +29,7 @@ pub trait Vertex: std::marker::Sync + std::marker::Send + 'static + std::fmt::De
     }
 }
 
-#[allow(dead_code)] // We never "read" value from this struct, it's directly uploaded to the GPU withou any field access
+#[allow(dead_code)] // We never "read" value from this struct, it's directly uploaded to the GPU without any field access
 struct CameraData {
     view_projection_matrix: Mat4,
     world_position: Vec4,

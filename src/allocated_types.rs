@@ -276,7 +276,7 @@ impl AllocatedImage {
             .ok_or(ImageDataUploadError::UseAfterFree)?
             .mapped_slice_mut()
             .ok_or(ImageDataUploadError::MemoryMappingFailed)?;
-        // copy_from_slice panics if slices are of diffrent lengths, so we have to set a limit
+        // copy_from_slice panics if slices are of different lengths, so we have to set a limit
         // just in case the allocation decides to allocate more
         slice[..data.len()].copy_from_slice(data);
 
@@ -366,7 +366,7 @@ impl AllocatedImage {
     pub(crate) fn destroy_internal(
         &mut self,
         device: &ash::Device,
-        allocator: &mut gpu_allocator::vulkan::Allocator,
+        allocator: &mut Allocator,
     ) {
         if let Some(allocation) = self.allocation.take() {
             unsafe { device.destroy_image_view(self.view, None) };

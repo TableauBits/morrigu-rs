@@ -24,10 +24,7 @@ impl<T> ThreadSafeRef<T> {
     }
 
     pub fn lock(&self) -> MutexGuard<T> {
-        match self.0.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        }
+        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
