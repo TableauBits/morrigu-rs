@@ -1,11 +1,12 @@
 use std::time::Duration;
 
+use morrigu::winit::event::MouseButton;
 use morrigu::winit::keyboard::KeyCode;
+use morrigu::winit_input_helper::WinitInputHelper;
 use morrigu::{
     components::camera::Camera,
     math_types::{Vec2, Vec3},
 };
-use winit_input_helper::WinitInputHelper;
 
 pub struct ViewerCamera {
     pub mrg_camera: Camera,
@@ -67,19 +68,13 @@ impl ViewerCamera {
         let diff = input.mouse_diff();
         let mouse_delta = Vec2::new(diff.0, -diff.1) * self.mouse_input_factor;
 
-        #[repr(usize)]
-        enum MouseButton {
-            Left = 0,
-            Right = 1,
-            Middle = 2,
-        }
-        if input.mouse_held(MouseButton::Left as usize) {
+        if input.mouse_held(MouseButton::Left) {
             self.mouse_rotate(&mouse_delta);
         }
-        if input.mouse_held(MouseButton::Right as usize) {
+        if input.mouse_held(MouseButton::Right) {
             self.mouse_zoom(mouse_delta.y * 5.0);
         }
-        if input.mouse_held(MouseButton::Middle as usize) {
+        if input.mouse_held(MouseButton::Middle) {
             self.mouse_pan(&mouse_delta);
         }
 

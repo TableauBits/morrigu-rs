@@ -1,11 +1,11 @@
 use egui_gizmo::{Gizmo, GizmoVisuals};
 use morrigu::bevy_ecs::prelude::{Query, Res};
+use morrigu::winit_input_helper::WinitInputHelper;
 use morrigu::{
     components::{camera::Camera, resource_wrapper::ResourceWrapper, transform::Transform},
     egui,
     math_types::Mat4,
 };
-use winit_input_helper::WinitInputHelper;
 
 use egui::LayerId;
 

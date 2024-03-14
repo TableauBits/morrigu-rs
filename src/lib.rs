@@ -26,6 +26,7 @@ mod pipeline_builder;
 pub use ash;
 pub use bevy_ecs;
 pub use winit;
+pub use winit_input_helper;
 
 #[cfg(feature = "egui")]
 pub use egui;
