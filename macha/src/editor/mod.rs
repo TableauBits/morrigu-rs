@@ -283,7 +283,8 @@ impl ApplicationState for MachaState {
                         .ecs_manager
                         .world
                         .query::<(Entity, &SelectedEntity)>()
-                        .for_each(&context.ecs_manager.world, |(entity, _)| {
+                        .iter(&context.ecs_manager.world)
+                        .for_each(|(entity, _)| {
                             old_selected = Some(entity);
                         });
                     if let Some(old_selected_entity) = old_selected {
