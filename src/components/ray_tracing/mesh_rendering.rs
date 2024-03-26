@@ -16,6 +16,7 @@ use crate::{
 pub struct MeshRendering<VertexType: Vertex> {
     pub mesh_ref: ThreadSafeRef<Mesh<VertexType>>,
 
+    data_buffer: AllocatedBuffer,
     tlas_instance: vk::AccelerationStructureInstanceKHR,
     blas: vk::AccelerationStructureKHR,
 }
@@ -69,6 +70,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
     ) -> Result<ThreadSafeRef<Self>, RTMeshRenderingBuildError> {
         let blas;
         let tlas_instance;
+        let data_buffer;
 
         {
             let mesh = mesh_ref.lock();
@@ -141,7 +143,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
                 )
             };
 
-            let scratch_buffer = AllocatedBuffer::builder(necessary_size.build_scratch_size)
+            let mut scratch_buffer = AllocatedBuffer::builder(necessary_size.build_scratch_size)
                 .with_name("BLAS scratch")
                 .with_usage(
                     vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
@@ -152,7 +154,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
             let sb_info = vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer.handle);
             let scratch_address = unsafe { renderer.device.get_buffer_device_address(&sb_info) };
 
-            let data_buffer = AllocatedBuffer::builder(necessary_size.acceleration_structure_size)
+            data_buffer = AllocatedBuffer::builder(necessary_size.acceleration_structure_size)
                 .with_name("BLAS data")
                 .with_usage(
                     vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
@@ -207,12 +209,26 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
                     device_handle: blas_address,
                 },
             };
+
+            scratch_buffer.destroy(&renderer.device, &mut renderer.allocator());
         }
 
         Ok(ThreadSafeRef::new(Self {
+            data_buffer,
             mesh_ref,
             blas,
             tlas_instance,
         }))
+    }
+
+    pub fn destroy(&mut self, renderer: &mut Renderer) {
+        let acceleration_structure_loader =
+            ash::extensions::khr::AccelerationStructure::new(&renderer.instance, &renderer.device);
+        unsafe {
+            acceleration_structure_loader.destroy_acceleration_structure(self.blas, None);
+        }
+
+        self.data_buffer
+            .destroy(&renderer.device, &mut renderer.allocator())
     }
 }

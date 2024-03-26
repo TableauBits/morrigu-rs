@@ -7,8 +7,8 @@ use morrigu::{
 };
 
 pub struct RayTracerState {
-    monkey_mesh: ThreadSafeRef<MeshRendering<SimpleVertex>>,
-    rock_mesh: ThreadSafeRef<MeshRendering<SimpleVertex>>,
+    monkey_mr: ThreadSafeRef<MeshRendering<SimpleVertex>>,
+    rock_mr: ThreadSafeRef<MeshRendering<SimpleVertex>>,
     tlas: ThreadSafeRef<TLAS>,
 }
 
@@ -39,8 +39,8 @@ impl BuildableApplicationState<()> for RayTracerState {
         )
         .expect("Failed to build TLAS");
         Self {
-            monkey_mesh,
-            rock_mesh,
+            monkey_mr: monkey_mesh,
+            rock_mr: rock_mesh,
             tlas,
         }
     }
@@ -84,5 +84,20 @@ impl ApplicationState for RayTracerState {
     ) {
     }
 
-    fn on_drop(&mut self, _context: &mut morrigu::application::StateContext) {}
+    fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
+        self.tlas.lock().destroy(context.renderer);
+        self.rock_mr.lock().destroy(context.renderer);
+        self.monkey_mr.lock().destroy(context.renderer);
+
+        self.rock_mr
+            .lock()
+            .mesh_ref
+            .lock()
+            .destroy(context.renderer);
+        self.monkey_mr
+            .lock()
+            .mesh_ref
+            .lock()
+            .destroy(context.renderer);
+    }
 }

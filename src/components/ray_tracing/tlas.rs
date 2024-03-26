@@ -36,6 +36,8 @@ pub enum TLASBuildError {
 // Not tested with multiple TLAS yet, so it stays as a Resource instead of a Component for now
 #[derive(Resource)]
 pub struct TLAS {
+    data_buffer: AllocatedBuffer,
+    instances_buffer: AllocatedBuffer,
     tlas: vk::AccelerationStructureKHR,
 }
 
@@ -101,7 +103,7 @@ impl TLAS {
             )
         };
 
-        let as_buffer = AllocatedBuffer::builder(build_sizes.acceleration_structure_size)
+        let data_buffer = AllocatedBuffer::builder(build_sizes.acceleration_structure_size)
             .with_name("TLAS data")
             .with_usage(
                 vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
@@ -112,14 +114,14 @@ impl TLAS {
         let create_info = vk::AccelerationStructureCreateInfoKHR::builder()
             .ty(vk::AccelerationStructureTypeKHR::TOP_LEVEL)
             .size(build_sizes.acceleration_structure_size)
-            .buffer(as_buffer.handle);
+            .buffer(data_buffer.handle);
 
         let tlas = unsafe {
             acceleration_structure_loader.create_acceleration_structure(&create_info, None)
         }
         .map_err(TLASBuildError::TLASCreationFailed)?;
 
-        let scratch_buffer = AllocatedBuffer::builder(build_sizes.build_scratch_size)
+        let mut scratch_buffer = AllocatedBuffer::builder(build_sizes.build_scratch_size)
             .with_name("TLAS scratch")
             .with_usage(
                 vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
@@ -165,7 +167,13 @@ impl TLAS {
             };
         })?;
 
-        Ok(ThreadSafeRef::new(Self { tlas }))
+        scratch_buffer.destroy(&renderer.device, &mut renderer.allocator());
+
+        Ok(ThreadSafeRef::new(Self {
+            data_buffer,
+            instances_buffer,
+            tlas,
+        }))
     }
 
     pub fn update(&mut self) {
@@ -174,5 +182,19 @@ impl TLAS {
 
     pub fn rebuild(self) -> Self {
         todo!()
+    }
+
+    pub fn destroy(&mut self, renderer: &mut Renderer) {
+        let acceleration_structure_loader =
+            ash::extensions::khr::AccelerationStructure::new(&renderer.instance, &renderer.device);
+        unsafe {
+            acceleration_structure_loader.destroy_acceleration_structure(self.tlas, None);
+        }
+
+        self.data_buffer
+            .destroy(&renderer.device, &mut renderer.allocator());
+
+        self.instances_buffer
+            .destroy(&renderer.device, &mut renderer.allocator());
     }
 }
