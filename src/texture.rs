@@ -1,10 +1,10 @@
 use crate::{
     allocated_types::{AllocatedImage, ImageBuildError, ImageDataUploadError},
     renderer::Renderer,
-    utils::{debug_name_vk_object, CommandUploader, ImmediateCommandError, ThreadSafeRef},
+    utils::{CommandUploader, ImmediateCommandError, ThreadSafeRef},
 };
 
-use ash::vk::{self, Handle};
+use ash::vk;
 use image::{self, EncodableLayout};
 use thiserror::Error;
 
@@ -118,6 +118,8 @@ impl TextureBuilder {
 
         #[cfg(debug_assertions)]
         {
+            use ash::vk::Handle;
+
             let ffi_string = std::ffi::CString::new(path_str.clone())
                 .map_err(|_| TextureBuildError::InvalidPathConversion(path_str))?;
             let temp_new_texture = new_texture.lock();
@@ -128,7 +130,7 @@ impl TextureBuilder {
                 .object_name(ffi_string.as_c_str());
 
             unsafe {
-                debug_name_vk_object(renderer, &name_info)
+                crate::utils::debug_name_vk_object(renderer, &name_info)
                     .map_err(TextureBuildError::VulkanObjectNameAssignationFailed)?
             };
 
@@ -137,7 +139,7 @@ impl TextureBuilder {
                 .object_type(vk::ObjectType::IMAGE_VIEW);
 
             unsafe {
-                debug_name_vk_object(renderer, &name_info)
+                crate::utils::debug_name_vk_object(renderer, &name_info)
                     .map_err(TextureBuildError::VulkanObjectNameAssignationFailed)?
             };
 
@@ -146,7 +148,7 @@ impl TextureBuilder {
                 .object_type(vk::ObjectType::SAMPLER);
 
             unsafe {
-                debug_name_vk_object(renderer, &name_info)
+                crate::utils::debug_name_vk_object(renderer, &name_info)
                     .map_err(TextureBuildError::VulkanObjectNameAssignationFailed)?
             };
         }

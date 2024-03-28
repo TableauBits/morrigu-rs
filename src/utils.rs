@@ -1,14 +1,9 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use ash::{
-    prelude::VkResult,
-    vk::{self, CommandBufferResetFlags},
-};
+use ash::vk::{self, CommandBufferResetFlags};
 use bevy_ecs::{prelude::Component, system::Resource};
 use bytemuck::Zeroable;
 use thiserror::Error;
-
-use crate::renderer::Renderer;
 
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
@@ -176,9 +171,9 @@ impl CommandUploader {
 /// This is safe if and only if name info data is still in scope when this function is called.
 #[cfg(debug_assertions)]
 pub unsafe fn debug_name_vk_object(
-    renderer: &mut Renderer,
+    renderer: &mut crate::renderer::Renderer,
     name_info: &vk::DebugUtilsObjectNameInfoEXT,
-) -> VkResult<()> {
+) -> ash::prelude::VkResult<()> {
     renderer
         .debug_messenger
         .as_ref()

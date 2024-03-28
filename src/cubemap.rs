@@ -2,10 +2,10 @@ use crate::{
     allocated_types::{AllocatedImage, ImageBuildError},
     renderer::Renderer,
     texture::TextureFormat,
-    utils::{debug_name_vk_object, ThreadSafeRef},
+    utils::ThreadSafeRef,
 };
 
-use ash::vk::{self, Handle};
+use ash::vk;
 use image::{self, EncodableLayout};
 use thiserror::Error;
 
@@ -107,6 +107,8 @@ impl Cubemap {
 
         #[cfg(debug_assertions)]
         {
+            use ash::vk::Handle;
+
             let ffi_string = std::ffi::CString::new(folder_path.clone())
                 .map_err(|_| CubemapBuildError::InvalidPathConversion(folder_path.clone()))?;
             let name_info = vk::DebugUtilsObjectNameInfoEXT::builder()
@@ -115,7 +117,7 @@ impl Cubemap {
                 .object_name(ffi_string.as_c_str());
 
             unsafe {
-                debug_name_vk_object(renderer, &name_info)
+                crate::utils::debug_name_vk_object(renderer, &name_info)
                     .map_err(CubemapBuildError::VulkanObjectNameAssignationFailed)?
             };
 
@@ -124,7 +126,7 @@ impl Cubemap {
                 .object_type(vk::ObjectType::IMAGE_VIEW);
 
             unsafe {
-                debug_name_vk_object(renderer, &name_info)
+                crate::utils::debug_name_vk_object(renderer, &name_info)
                     .map_err(CubemapBuildError::VulkanObjectNameAssignationFailed)?
             };
 
@@ -133,7 +135,7 @@ impl Cubemap {
                 .object_type(vk::ObjectType::SAMPLER);
 
             unsafe {
-                debug_name_vk_object(renderer, &name_info)
+                crate::utils::debug_name_vk_object(renderer, &name_info)
                     .map_err(CubemapBuildError::VulkanObjectNameAssignationFailed)?
             };
         }
