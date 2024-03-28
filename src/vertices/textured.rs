@@ -181,8 +181,7 @@ impl TexturedVertex {
 
         let vertex_buffer = upload_vertex_buffer(&vertices, renderer)?;
 
-        let mut indices = vec![];
-        indices.reserve(faces.len() * 3);
+        let mut indices = Vec::with_capacity(faces.len() * 3);
         for face in faces {
             indices.extend(face.indices.iter());
         }

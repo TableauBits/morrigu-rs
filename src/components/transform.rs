@@ -58,9 +58,9 @@ impl From<Transform> for Mat4 {
 impl Clone for Transform {
     fn clone(&self) -> Self {
         Self {
-            translation: self.translation.clone(),
-            rotation: self.rotation.clone(),
-            scale: self.scale.clone(),
+            translation: self.translation,
+            rotation: self.rotation,
+            scale: self.scale,
             cache: ThreadSafeRef::new(CacheData {
                 is_outdated: true,
                 matrix: self.cache.lock().matrix,
