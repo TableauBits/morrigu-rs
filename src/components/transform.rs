@@ -11,7 +11,7 @@ struct CacheData {
     matrix: Mat4,
 }
 
-#[derive(Debug, Clone, bevy_ecs::component::Component)]
+#[derive(Debug, bevy_ecs::component::Component)]
 pub struct Transform {
     translation: Vec3,
     rotation: Quat,
@@ -52,6 +52,20 @@ impl From<Mat4> for Transform {
 impl From<Transform> for Mat4 {
     fn from(value: Transform) -> Self {
         value.cache.lock().matrix
+    }
+}
+
+impl Clone for Transform {
+    fn clone(&self) -> Self {
+        Self {
+            translation: self.translation.clone(),
+            rotation: self.rotation.clone(),
+            scale: self.scale.clone(),
+            cache: ThreadSafeRef::new(CacheData {
+                is_outdated: true,
+                matrix: self.cache.lock().matrix,
+            }),
+        }
     }
 }
 

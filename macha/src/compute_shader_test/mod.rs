@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use morrigu::ash::vk;
+use morrigu::material::CullModeFlags;
 use morrigu::{
     application::{ApplicationState, BuildableApplicationState, EguiUpdateContext},
     components::{
@@ -67,6 +68,7 @@ impl BuildableApplicationState<()> for CSTState {
         .expect("Failed to create shader");
 
         let material_ref = Material::builder()
+            .cull_mode(CullModeFlags::NONE)
             .build::<Vertex>(&shader_ref, DescriptorResources::empty(), context.renderer)
             .expect("Failed to create material");
 
