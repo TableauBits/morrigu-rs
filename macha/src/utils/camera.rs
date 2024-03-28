@@ -8,7 +8,7 @@ use morrigu::{
     math_types::{Vec2, Vec3},
 };
 
-pub struct MachaEditorCamera {
+pub struct MachaCamera {
     pub mrg_camera: Camera,
     pub move_speed: f32,
     pub distance: f32,
@@ -17,7 +17,7 @@ pub struct MachaEditorCamera {
     focal_point: Vec3,
 }
 
-impl MachaEditorCamera {
+impl MachaCamera {
     pub fn new(mrg_camera: Camera) -> Self {
         let focal_point = Default::default();
 
@@ -32,6 +32,19 @@ impl MachaEditorCamera {
         new_camera.set_focal_point(&focal_point);
 
         new_camera
+    }
+
+    #[allow(unused)]
+    #[profiling::skip]
+    pub fn distance(&self) -> &f32 {
+        &self.distance
+    }
+
+    pub fn set_distance(&mut self, new_distance: f32) {
+        self.distance = new_distance.clamp(0.5, 100.0);
+        let forward = self.mrg_camera.forward_vector();
+        let new_position = self.focal_point - forward * self.distance;
+        self.mrg_camera.set_position(&new_position);
     }
 
     pub fn focal_point(&self) -> &Vec3 {
@@ -50,19 +63,17 @@ impl MachaEditorCamera {
     }
 
     pub fn on_update(&mut self, dt: Duration, input: &WinitInputHelper) {
-        if input.held_alt() {
-            let diff = input.mouse_diff();
-            let mouse_delta = Vec2::new(diff.0, -diff.1) * self.mouse_input_factor;
+        let diff = input.mouse_diff();
+        let mouse_delta = Vec2::new(diff.0, -diff.1) * self.mouse_input_factor;
 
-            if input.mouse_held(MouseButton::Left) {
-                self.mouse_rotate(&mouse_delta);
-            }
-            if input.mouse_held(MouseButton::Right) {
-                self.mouse_zoom(mouse_delta.y * 5.0);
-            }
-            if input.mouse_held(MouseButton::Middle) {
-                self.mouse_pan(&mouse_delta);
-            }
+        if input.mouse_held(MouseButton::Left) {
+            self.mouse_rotate(&mouse_delta);
+        }
+        if input.mouse_held(MouseButton::Right) {
+            self.mouse_zoom(mouse_delta.y * 5.0);
+        }
+        if input.mouse_held(MouseButton::Middle) {
+            self.mouse_pan(&mouse_delta);
         }
 
         let scroll = input.scroll_diff().1;
@@ -93,6 +104,18 @@ impl MachaEditorCamera {
         if input.key_held(KeyCode::KeyD) {
             let right = self.mrg_camera.right_vector();
             let new_focal_point = *self.focal_point() - right * dt.as_secs_f32() * self.move_speed;
+            self.set_focal_point(&new_focal_point);
+        }
+
+        if input.key_held(KeyCode::KeyQ) {
+            let up = self.mrg_camera.up_vector();
+            let new_focal_point = *self.focal_point() + up * dt.as_secs_f32() * self.move_speed;
+            self.set_focal_point(&new_focal_point);
+        }
+
+        if input.key_held(KeyCode::KeyE) {
+            let up = self.mrg_camera.up_vector();
+            let new_focal_point = *self.focal_point() - up * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
     }

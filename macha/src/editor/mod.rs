@@ -1,10 +1,9 @@
-mod camera;
 mod components;
 mod ecs_buffer;
 mod systems;
 
+use super::utils::camera::MachaCamera;
 use bevy_ecs::prelude::Entity;
-use camera::MachaEditorCamera;
 use components::{
     macha_options::{MachaEntityOptions, MachaGlobalOptions},
     selected_entity::SelectedEntity,
@@ -45,7 +44,7 @@ type Mesh = morrigu::mesh::Mesh<Vertex>;
 type MeshRendering = mesh_rendering::MeshRendering<Vertex>;
 
 pub struct MachaState {
-    camera: MachaEditorCamera,
+    camera: MachaCamera,
 
     shader_ref: ThreadSafeRef<Shader>,
     material_ref: ThreadSafeRef<Material>,
@@ -73,7 +72,7 @@ impl BuildableApplicationState<()> for MachaState {
             }),
             &Vec2::new(1280.0, 720.0),
         );
-        let mut camera = MachaEditorCamera::new(camera);
+        let mut camera = MachaCamera::new(camera);
 
         let shader_ref = Shader::from_spirv_u8(
             include_bytes!("shaders/gen/test/test.vert"),

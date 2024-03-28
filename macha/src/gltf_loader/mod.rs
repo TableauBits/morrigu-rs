@@ -1,4 +1,3 @@
-mod camera;
 mod loader;
 mod scene;
 
@@ -22,15 +21,16 @@ use morrigu::{
     winit,
 };
 
+use crate::utils::camera::MachaCamera;
+
 use self::{
-    camera::ViewerCamera,
     loader::LightData,
     scene::{Material, Scene, Vertex},
 };
 
 pub struct GLTFViewerState {
     light_data: LightData,
-    camera: ViewerCamera,
+    camera: MachaCamera,
     scene: Scene,
     skybox_entity_ref: bevy_ecs::entity::Entity,
     skybox: ThreadSafeRef<SkyboxMeshRendering>,
@@ -52,7 +52,9 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             &Vec2::new(1280.0, 720.0),
         );
 
-        let mut camera = ViewerCamera::new(camera);
+        let mut camera = MachaCamera::new(camera);
+        camera.move_speed = 1.0;
+        camera.mouse_input_factor = 0.003;
         camera.set_distance(0.0);
 
         let pbr_shader = Shader::from_spirv_u8(
