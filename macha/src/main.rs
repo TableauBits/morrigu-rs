@@ -3,10 +3,14 @@ mod editor;
 mod gltf_loader;
 mod rt_test;
 
-// use compute_shader_test::CSTState;
-// use editor::MachaState;
+#[allow(unused_imports)]
+use compute_shader_test::CSTState;
+#[allow(unused_imports)]
+use editor::MachaState;
+#[allow(unused_imports)]
 use gltf_loader::GLTFViewerState;
-// use rt_test::RayTracerState;
+#[allow(unused_imports)]
+use rt_test::RayTracerState;
 
 use morrigu::application::ApplicationBuilder;
 
