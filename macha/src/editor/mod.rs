@@ -73,6 +73,8 @@ impl BuildableApplicationState<()> for MachaState {
             &Vec2::new(1280.0, 720.0),
         );
         let mut camera = MachaCamera::new(camera);
+        camera.move_speed = 4.0;
+        camera.set_distance(7.0);
 
         let shader_ref = Shader::from_spirv_u8(
             include_bytes!("shaders/gen/test/test.vert"),

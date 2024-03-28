@@ -11,9 +11,9 @@ use morrigu::{
 pub struct MachaCamera {
     pub mrg_camera: Camera,
     pub move_speed: f32,
-    pub distance: f32,
     pub mouse_input_factor: f32,
 
+    distance: f32,
     focal_point: Vec3,
 }
 
@@ -23,8 +23,8 @@ impl MachaCamera {
 
         let mut new_camera = Self {
             mrg_camera,
-            move_speed: 4.0,
-            distance: 7.0,
+            move_speed: 1.0,
+            distance: 1.0,
             mouse_input_factor: 0.003,
             focal_point,
         };

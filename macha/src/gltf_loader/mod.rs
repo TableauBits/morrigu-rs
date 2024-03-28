@@ -53,8 +53,6 @@ impl BuildableApplicationState<()> for GLTFViewerState {
         );
 
         let mut camera = MachaCamera::new(camera);
-        camera.move_speed = 1.0;
-        camera.mouse_input_factor = 0.003;
         camera.set_distance(0.0);
 
         let pbr_shader = Shader::from_spirv_u8(
