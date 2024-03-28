@@ -1,7 +1,7 @@
 use crate::{
     allocated_types::{AllocatedImage, ImageBuildError, ImageDataUploadError},
     renderer::Renderer,
-    utils::{CommandUploader, ImmediateCommandError, ThreadSafeRef},
+    utils::{debug_name_vk_object, CommandUploader, ImmediateCommandError, ThreadSafeRef},
 };
 
 use ash::vk::{self, Handle};
@@ -128,12 +128,7 @@ impl TextureBuilder {
                 .object_name(ffi_string.as_c_str());
 
             unsafe {
-                renderer
-                    .debug_messenger
-                    .as_ref()
-                    .unwrap()
-                    .loader
-                    .set_debug_utils_object_name(renderer.device.handle(), &name_info)
+                debug_name_vk_object(renderer, &name_info)
                     .map_err(TextureBuildError::VulkanObjectNameAssignationFailed)?
             };
 
@@ -142,12 +137,7 @@ impl TextureBuilder {
                 .object_type(vk::ObjectType::IMAGE_VIEW);
 
             unsafe {
-                renderer
-                    .debug_messenger
-                    .as_ref()
-                    .unwrap()
-                    .loader
-                    .set_debug_utils_object_name(renderer.device.handle(), &name_info)
+                debug_name_vk_object(renderer, &name_info)
                     .map_err(TextureBuildError::VulkanObjectNameAssignationFailed)?
             };
 
@@ -156,12 +146,7 @@ impl TextureBuilder {
                 .object_type(vk::ObjectType::SAMPLER);
 
             unsafe {
-                renderer
-                    .debug_messenger
-                    .as_ref()
-                    .unwrap()
-                    .loader
-                    .set_debug_utils_object_name(renderer.device.handle(), &name_info)
+                debug_name_vk_object(renderer, &name_info)
                     .map_err(TextureBuildError::VulkanObjectNameAssignationFailed)?
             };
         }

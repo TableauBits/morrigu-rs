@@ -1,9 +1,14 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use ash::vk::{self, CommandBufferResetFlags};
+use ash::{
+    prelude::VkResult,
+    vk::{self, CommandBufferResetFlags},
+};
 use bevy_ecs::{prelude::Component, system::Resource};
 use bytemuck::Zeroable;
 use thiserror::Error;
+
+use crate::renderer::Renderer;
 
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
@@ -24,7 +29,9 @@ impl<T> ThreadSafeRef<T> {
     }
 
     pub fn lock(&self) -> MutexGuard<T> {
-        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -155,4 +162,27 @@ impl CommandUploader {
 
         Ok(())
     }
+}
+
+/// Attempts to name a vulkan object using the `VK_EXT_debug_utils` extension.
+///
+/// # Panics
+/// Panics if a debug messenger is not present in the renderer.
+///
+/// # Errors
+/// This function will return an error if the naming operation fails from the driver.
+///
+/// # Safety
+/// This is safe if and only if name info data is still in scope when this function is called.
+#[cfg(debug_assertions)]
+pub unsafe fn debug_name_vk_object(
+    renderer: &mut Renderer,
+    name_info: &vk::DebugUtilsObjectNameInfoEXT,
+) -> VkResult<()> {
+    renderer
+        .debug_messenger
+        .as_ref()
+        .unwrap()
+        .loader
+        .set_debug_utils_object_name(renderer.device.handle(), name_info)
 }

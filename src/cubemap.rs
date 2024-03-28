@@ -2,7 +2,7 @@ use crate::{
     allocated_types::{AllocatedImage, ImageBuildError},
     renderer::Renderer,
     texture::TextureFormat,
-    utils::ThreadSafeRef,
+    utils::{debug_name_vk_object, ThreadSafeRef},
 };
 
 use ash::vk::{self, Handle};
@@ -115,12 +115,7 @@ impl Cubemap {
                 .object_name(ffi_string.as_c_str());
 
             unsafe {
-                renderer
-                    .debug_messenger
-                    .as_ref()
-                    .unwrap()
-                    .loader
-                    .set_debug_utils_object_name(renderer.device.handle(), &name_info)
+                debug_name_vk_object(renderer, &name_info)
                     .map_err(CubemapBuildError::VulkanObjectNameAssignationFailed)?
             };
 
@@ -129,12 +124,7 @@ impl Cubemap {
                 .object_type(vk::ObjectType::IMAGE_VIEW);
 
             unsafe {
-                renderer
-                    .debug_messenger
-                    .as_ref()
-                    .unwrap()
-                    .loader
-                    .set_debug_utils_object_name(renderer.device.handle(), &name_info)
+                debug_name_vk_object(renderer, &name_info)
                     .map_err(CubemapBuildError::VulkanObjectNameAssignationFailed)?
             };
 
@@ -143,12 +133,7 @@ impl Cubemap {
                 .object_type(vk::ObjectType::SAMPLER);
 
             unsafe {
-                renderer
-                    .debug_messenger
-                    .as_ref()
-                    .unwrap()
-                    .loader
-                    .set_debug_utils_object_name(renderer.device.handle(), &name_info)
+                debug_name_vk_object(renderer, &name_info)
                     .map_err(CubemapBuildError::VulkanObjectNameAssignationFailed)?
             };
         }
