@@ -10,6 +10,7 @@ use components::{
     selected_entity::SelectedEntity,
 };
 use ecs_buffer::ECSBuffer;
+use egui_gizmo::GizmoMode;
 use morrigu::{
     allocated_types::AllocatedBuffer,
     application::{
@@ -365,34 +366,22 @@ impl ApplicationState for MachaState {
     }
 }
 
+fn set_gizmo(context: &mut StateContext, new_gizmo: GizmoMode) {
+    context
+        .ecs_manager
+        .world
+        .get_resource_mut::<MachaGlobalOptions>()
+        .unwrap()
+        .preferred_gizmo = new_gizmo;
+}
+
 impl MachaState {
     fn on_keyboard_input(&mut self, input: KeyEvent, context: &mut StateContext) {
         if let winit::keyboard::PhysicalKey::Code(keycode) = input.physical_key {
             match keycode {
-                KeyCode::KeyQ => {
-                    context
-                        .ecs_manager
-                        .world
-                        .get_resource_mut::<MachaGlobalOptions>()
-                        .unwrap()
-                        .preferred_gizmo = egui_gizmo::GizmoMode::Translate
-                }
-                KeyCode::KeyE => {
-                    context
-                        .ecs_manager
-                        .world
-                        .get_resource_mut::<MachaGlobalOptions>()
-                        .unwrap()
-                        .preferred_gizmo = egui_gizmo::GizmoMode::Rotate
-                }
-                KeyCode::KeyR => {
-                    context
-                        .ecs_manager
-                        .world
-                        .get_resource_mut::<MachaGlobalOptions>()
-                        .unwrap()
-                        .preferred_gizmo = egui_gizmo::GizmoMode::Scale
-                }
+                KeyCode::KeyQ => set_gizmo(context, GizmoMode::Translate),
+                KeyCode::KeyE => set_gizmo(context, GizmoMode::Rotate),
+                KeyCode::KeyR => set_gizmo(context, GizmoMode::Scale),
 
                 _ => (),
             }
