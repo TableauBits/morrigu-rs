@@ -5,7 +5,7 @@ mod scene;
 use std::{iter::zip, path::Path};
 
 use morrigu::{
-    application::{ApplicationState, BuildableApplicationState, EguiUpdateContext, Event},
+    application::{ApplicationState, BuildableApplicationState, Event},
     ash::vk,
     bevy_ecs,
     components::{
@@ -232,8 +232,6 @@ impl ApplicationState for GLTFViewerState {
             _ => (),
         }
     }
-
-    fn on_update_egui(&mut self, _dt: std::time::Duration, _context: &mut EguiUpdateContext) {}
 
     fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
         let mut skybox = self.skybox.lock();
