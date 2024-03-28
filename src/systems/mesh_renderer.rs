@@ -62,7 +62,7 @@ pub fn render_meshes<VertexType>(
     for (transform, mesh_rendering_ref) in query.iter() {
         let mut mesh_rendering = mesh_rendering_ref.lock();
         if mesh_rendering
-            .update_uniform(0, transform.matrix())
+            .update_uniform_pod(0, transform.matrix())
             .is_err()
         {
             log::warn!("Failed to upload model data to slot 0");

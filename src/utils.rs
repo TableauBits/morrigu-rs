@@ -2,7 +2,18 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use ash::vk::{self, CommandBufferResetFlags};
 use bevy_ecs::{prelude::Component, system::Resource};
+use bytemuck::Zeroable;
 use thiserror::Error;
+
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct PodWrapper<T: Copy + 'static>(pub T);
+unsafe impl<T: Copy + 'static> Zeroable for PodWrapper<T> {
+    fn zeroed() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+unsafe impl<T: Copy + 'static> bytemuck::Pod for PodWrapper<T> {}
 
 #[derive(Debug, Component, Resource)]
 pub struct ThreadSafeRef<T>(Arc<Mutex<T>>);
@@ -13,10 +24,7 @@ impl<T> ThreadSafeRef<T> {
     }
 
     pub fn lock(&self) -> MutexGuard<T> {
-        match self.0.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        }
+        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 

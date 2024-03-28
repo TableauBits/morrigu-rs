@@ -42,7 +42,7 @@ impl AllocatedBuffer {
         self.size
     }
 
-    pub fn upload_data<T: bytemuck::Pod>(&mut self, data: T) -> Result<(), BufferDataUploadError> {
+    pub fn upload_pod<T: bytemuck::Pod>(&mut self, pod: T) -> Result<(), BufferDataUploadError> {
         let allocation = self
             .allocation
             .as_mut()
@@ -59,11 +59,20 @@ impl AllocatedBuffer {
             });
         }
 
-        let raw_data = bytes_of(&data);
+        let raw_data = bytes_of(&pod);
+        self.upload_data(raw_data)
+    }
+
+    pub fn upload_data(&mut self, data: &[u8]) -> Result<(), BufferDataUploadError> {
+        let allocation = self
+            .allocation
+            .as_mut()
+            .ok_or(BufferDataUploadError::UseAfterFree)?;
+
         allocation
             .mapped_slice_mut()
-            .ok_or(BufferDataUploadError::MemoryMappingFailed)?[..raw_data.len()]
-            .copy_from_slice(raw_data);
+            .ok_or(BufferDataUploadError::MemoryMappingFailed)?[..data.len()]
+            .copy_from_slice(data);
 
         Ok(())
     }
@@ -103,6 +112,8 @@ pub struct AllocatedBufferBuilder {
     pub size: u64,
     pub usage: vk::BufferUsageFlags,
     pub memory_location: gpu_allocator::MemoryLocation,
+
+    pub name: String,
 }
 
 impl AllocatedBufferBuilder {
@@ -116,6 +127,7 @@ impl AllocatedBufferBuilder {
             size,
             usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
             memory_location: gpu_allocator::MemoryLocation::CpuToGpu,
+            name: String::from("unnamed buffer"),
         }
     }
 
@@ -124,6 +136,7 @@ impl AllocatedBufferBuilder {
             size,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
             memory_location: gpu_allocator::MemoryLocation::CpuToGpu,
+            name: String::from("unnamed staging buffer"),
         }
     }
 
@@ -137,13 +150,30 @@ impl AllocatedBufferBuilder {
         self
     }
 
+    pub fn with_name(mut self, name: &str) -> Self {
+        self.name = name.to_owned();
+        self
+    }
+
     pub fn build(self, renderer: &mut Renderer) -> Result<AllocatedBuffer, BufferBuildError> {
         self.build_internal(&renderer.device, &mut renderer.allocator())
     }
 
-    pub fn build_with_data<T: bytemuck::Pod>(
+    pub fn build_with_pod<T: bytemuck::Pod>(
         self,
-        data: T,
+        pod: T,
+        renderer: &mut Renderer,
+    ) -> Result<AllocatedBuffer, BufferBuildWithDataError> {
+        let mut buffer = self.build(renderer)?;
+
+        buffer.upload_pod(pod)?;
+
+        Ok(buffer)
+    }
+
+    pub fn build_with_data(
+        self,
+        data: &[u8],
         renderer: &mut Renderer,
     ) -> Result<AllocatedBuffer, BufferBuildWithDataError> {
         let mut buffer = self.build(renderer)?;
@@ -170,7 +200,7 @@ impl AllocatedBufferBuilder {
 
         let memory_req = unsafe { device.get_buffer_memory_requirements(handle) };
         let allocation = allocator.allocate(&AllocationCreateDesc {
-            name: "buffer",
+            name: &self.name,
             requirements: memory_req,
             location: self.memory_location,
             linear: true,
@@ -246,7 +276,7 @@ impl AllocatedImage {
             .ok_or(ImageDataUploadError::UseAfterFree)?
             .mapped_slice_mut()
             .ok_or(ImageDataUploadError::MemoryMappingFailed)?;
-        // copy_from_slice panics if slices are of diffrent lengths, so we have to set a limit
+        // copy_from_slice panics if slices are of different lengths, so we have to set a limit
         // just in case the allocation decides to allocate more
         slice[..data.len()].copy_from_slice(data);
 
@@ -336,7 +366,7 @@ impl AllocatedImage {
     pub(crate) fn destroy_internal(
         &mut self,
         device: &ash::Device,
-        allocator: &mut gpu_allocator::vulkan::Allocator,
+        allocator: &mut Allocator,
     ) {
         if let Some(allocation) = self.allocation.take() {
             unsafe { device.destroy_image_view(self.view, None) };

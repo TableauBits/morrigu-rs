@@ -1,6 +1,7 @@
-use bevy_ecs::prelude::{Entity, Query, Res, ResMut};
+use morrigu::bevy_ecs::prelude::{Entity, Query, Res, ResMut};
+use morrigu::{components::resource_wrapper::ResourceWrapper, egui};
+
 use egui::collapsing_header::CollapsingState;
-use morrigu::components::resource_wrapper::ResourceWrapper;
 
 use crate::editor::{
     components::{macha_options::MachaEntityOptions, selected_entity::SelectedEntity},

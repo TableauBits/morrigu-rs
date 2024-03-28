@@ -1,4 +1,4 @@
-use bevy_ecs::{prelude::Component, system::Resource};
+use morrigu::bevy_ecs::{self, prelude::Component, system::Resource};
 
 #[derive(Component)]
 pub struct MachaEntityOptions {

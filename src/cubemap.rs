@@ -5,7 +5,7 @@ use crate::{
     utils::ThreadSafeRef,
 };
 
-use ash::vk;
+use ash::vk::{self, Handle};
 use image::{self, EncodableLayout};
 use thiserror::Error;
 
@@ -19,6 +19,14 @@ pub enum CubemapBuildError {
 
     #[error("Vulkan creation of texture sampler failed with result: {0}.")]
     VulkanSamplerCreationFailed(vk::Result),
+
+    #[cfg(debug_assertions)]
+    #[error("Could not convert cubemap folder \"{0}\" to an FFI string")]
+    InvalidPathConversion(String),
+
+    #[cfg(debug_assertions)]
+    #[error("Failed to set cubemap handle name to handle with result: {0}")]
+    VulkanObjectNameAssignationFailed(vk::Result),
 }
 
 #[derive(Debug)]
@@ -95,10 +103,60 @@ impl Cubemap {
         let sampler = unsafe { renderer.device.create_sampler(&sampler_info, None) }
             .map_err(CubemapBuildError::VulkanSamplerCreationFailed)?;
 
+        let folder_path = folder_path.to_owned();
+
+        #[cfg(debug_assertions)]
+        {
+            let ffi_string = std::ffi::CString::new(folder_path.clone())
+                .map_err(|_| CubemapBuildError::InvalidPathConversion(folder_path.clone()))?;
+            let name_info = vk::DebugUtilsObjectNameInfoEXT::builder()
+                .object_handle(final_image.handle.as_raw())
+                .object_type(vk::ObjectType::IMAGE)
+                .object_name(ffi_string.as_c_str());
+
+            unsafe {
+                renderer
+                    .debug_messenger
+                    .as_ref()
+                    .unwrap()
+                    .loader
+                    .set_debug_utils_object_name(renderer.device.handle(), &name_info)
+                    .map_err(CubemapBuildError::VulkanObjectNameAssignationFailed)?
+            };
+
+            let name_info = name_info
+                .object_handle(final_image.view.as_raw())
+                .object_type(vk::ObjectType::IMAGE_VIEW);
+
+            unsafe {
+                renderer
+                    .debug_messenger
+                    .as_ref()
+                    .unwrap()
+                    .loader
+                    .set_debug_utils_object_name(renderer.device.handle(), &name_info)
+                    .map_err(CubemapBuildError::VulkanObjectNameAssignationFailed)?
+            };
+
+            let name_info = name_info
+                .object_handle(sampler.as_raw())
+                .object_type(vk::ObjectType::SAMPLER);
+
+            unsafe {
+                renderer
+                    .debug_messenger
+                    .as_ref()
+                    .unwrap()
+                    .loader
+                    .set_debug_utils_object_name(renderer.device.handle(), &name_info)
+                    .map_err(CubemapBuildError::VulkanObjectNameAssignationFailed)?
+            };
+        }
+
         Ok(ThreadSafeRef::new(Cubemap {
             image_ref: ThreadSafeRef::new(final_image),
             sampler,
-            path: Some(folder_path.to_owned()),
+            path: Some(folder_path),
         }))
     }
 

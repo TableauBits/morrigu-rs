@@ -8,3 +8,4 @@ Cargo.lock
 
 src/egui/shaders/gen/**
 macha/assets/gen/**
+.idea

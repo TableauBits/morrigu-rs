@@ -14,7 +14,7 @@ pub enum VertexModelLoadingError {
     OBJLoadError(#[from] tobj::LoadError),
 
     #[error("Uploading of the mesh data failed with error: {0}.")]
-    MeshDatauploadFailed(#[from] MeshDataUploadError),
+    MeshDataUploadFailed(#[from] MeshDataUploadError),
 
     #[error("Reading of model file failed with error: {0}.")]
     FileReadingError(#[from] std::io::Error),

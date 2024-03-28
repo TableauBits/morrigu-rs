@@ -1,11 +1,12 @@
 use std::time::Duration;
 
+use morrigu::winit::event::MouseButton;
+use morrigu::winit::keyboard::KeyCode;
+use morrigu::winit_input_helper::WinitInputHelper;
 use morrigu::{
     components::camera::Camera,
     math_types::{Vec2, Vec3},
 };
-use winit::event::VirtualKeyCode;
-use winit_input_helper::WinitInputHelper;
 
 pub struct ViewerCamera {
     pub mrg_camera: Camera,
@@ -67,60 +68,54 @@ impl ViewerCamera {
         let diff = input.mouse_diff();
         let mouse_delta = Vec2::new(diff.0, -diff.1) * self.mouse_input_factor;
 
-        #[repr(usize)]
-        enum MouseButton {
-            Left = 0,
-            Right = 1,
-            Middle = 2,
-        }
-        if input.mouse_held(MouseButton::Left as usize) {
+        if input.mouse_held(MouseButton::Left) {
             self.mouse_rotate(&mouse_delta);
         }
-        if input.mouse_held(MouseButton::Right as usize) {
+        if input.mouse_held(MouseButton::Right) {
             self.mouse_zoom(mouse_delta.y * 5.0);
         }
-        if input.mouse_held(MouseButton::Middle as usize) {
+        if input.mouse_held(MouseButton::Middle) {
             self.mouse_pan(&mouse_delta);
         }
 
-        let scroll = input.scroll_diff();
+        let scroll = input.scroll_diff().1;
         if scroll != 0.0 {
-            self.mouse_zoom(input.scroll_diff() * 0.4);
+            self.mouse_zoom(scroll * 0.4);
         }
 
-        if input.key_held(VirtualKeyCode::W) {
+        if input.key_held(KeyCode::KeyW) {
             let forward = self.mrg_camera.forward_vector();
             let new_focal_point =
                 *self.focal_point() + forward * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::S) {
+        if input.key_held(KeyCode::KeyS) {
             let forward = self.mrg_camera.forward_vector();
             let new_focal_point =
                 *self.focal_point() - forward * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::A) {
+        if input.key_held(KeyCode::KeyA) {
             let right = self.mrg_camera.right_vector();
             let new_focal_point = *self.focal_point() + right * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::D) {
+        if input.key_held(KeyCode::KeyD) {
             let right = self.mrg_camera.right_vector();
             let new_focal_point = *self.focal_point() - right * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::Q) {
+        if input.key_held(KeyCode::KeyQ) {
             let up = self.mrg_camera.up_vector();
             let new_focal_point = *self.focal_point() + up * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::E) {
+        if input.key_held(KeyCode::KeyE) {
             let up = self.mrg_camera.up_vector();
             let new_focal_point = *self.focal_point() - up * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);

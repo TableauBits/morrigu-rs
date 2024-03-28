@@ -1,10 +1,13 @@
 mod compute_shader_test;
 mod editor;
 mod gltf_loader;
+mod rt_test;
 
 // use compute_shader_test::CSTState;
 // use editor::MachaState;
 use gltf_loader::GLTFViewerState;
+// use rt_test::RayTracerState;
+
 use morrigu::application::ApplicationBuilder;
 
 fn init_logging() {
@@ -27,7 +30,6 @@ fn init_logging() {
 
 fn main() {
     init_logging();
-    puffin::set_scopes_on(true);
 
     ApplicationBuilder::new()
         .with_window_name("Macha editor")

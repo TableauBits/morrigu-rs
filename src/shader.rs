@@ -49,7 +49,7 @@ pub enum ShaderBuildError {
         error: std::io::Error,
     },
 
-    #[error("SPRIV decoding of stage {stage:?} failed with error: {error}.")]
+    #[error("SPIRV decoding of stage {stage:?} failed with error: {error}.")]
     SPIRVDecodingFailed {
         stage: vk::ShaderStageFlags,
         error: std::io::Error,

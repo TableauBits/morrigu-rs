@@ -1,4 +1,4 @@
-use bevy_ecs::prelude::Component;
+use morrigu::bevy_ecs::{self, prelude::Component};
 
 // Tag component
 #[derive(Component)]

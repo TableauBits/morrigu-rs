@@ -19,11 +19,17 @@ pub struct VertexInputDescription {
     pub attributes: Vec<vk::VertexInputAttributeDescription>,
 }
 
-pub trait Vertex: std::marker::Sync + std::marker::Send + 'static {
+pub trait Vertex: Sync + Send + 'static + std::fmt::Debug {
     fn vertex_input_description() -> VertexInputDescription;
+    fn position_index() -> usize {
+        0
+    }
+    fn position_offset() -> u32 {
+        0
+    }
 }
 
-#[allow(dead_code)] // We never "read" value from this struct, it's directly uploaded to the GPU withou any field access
+#[allow(dead_code)] // We never "read" value from this struct, it's directly uploaded to the GPU without any field access
 struct CameraData {
     view_projection_matrix: Mat4,
     world_position: Vec4,
@@ -299,8 +305,15 @@ where
         buffer_ref: ThreadSafeRef<AllocatedBuffer>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<AllocatedBuffer>, ResourceBindingError> {
-        let Some(old_buffer) = self.descriptor_resources.uniform_buffers.insert(binding_slot, buffer_ref.clone()) else {
-            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 2 });
+        let Some(old_buffer) = self
+            .descriptor_resources
+            .uniform_buffers
+            .insert(binding_slot, buffer_ref.clone())
+        else {
+            return Err(ResourceBindingError::InvalidBindingSlot {
+                slot: binding_slot,
+                set: 2,
+            });
         };
 
         let buffer = buffer_ref.lock();
@@ -339,7 +352,7 @@ where
                 set: 2,
             })?
             .lock()
-            .upload_data(data)
+            .upload_pod(data)
             .map_err(|err| err.into())
     }
 
@@ -349,8 +362,15 @@ where
         image_ref: ThreadSafeRef<AllocatedImage>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<AllocatedImage>, ResourceBindingError> {
-        let Some(old_image) = self.descriptor_resources.storage_images.insert(binding_slot, image_ref.clone()) else {
-            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 2 });
+        let Some(old_image) = self
+            .descriptor_resources
+            .storage_images
+            .insert(binding_slot, image_ref.clone())
+        else {
+            return Err(ResourceBindingError::InvalidBindingSlot {
+                slot: binding_slot,
+                set: 2,
+            });
         };
 
         let image = image_ref.lock();
@@ -381,8 +401,15 @@ where
         texture_ref: ThreadSafeRef<Texture>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Texture>, ResourceBindingError> {
-        let Some(old_texture) = self.descriptor_resources.sampled_images.insert(binding_slot, texture_ref.clone()) else {
-            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 2 });
+        let Some(old_texture) = self
+            .descriptor_resources
+            .sampled_images
+            .insert(binding_slot, texture_ref.clone())
+        else {
+            return Err(ResourceBindingError::InvalidBindingSlot {
+                slot: binding_slot,
+                set: 2,
+            });
         };
 
         let texture = texture_ref.lock();

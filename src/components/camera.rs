@@ -118,7 +118,7 @@ impl Camera {
     }
 
     fn compute_view(position: &Vec3, orientation: &Quat) -> Mat4 {
-        let view_inverse = glam::Mat4::from_rotation_translation(*orientation, *position);
+        let view_inverse = Mat4::from_rotation_translation(*orientation, *position);
         view_inverse.inverse()
     }
 
@@ -214,15 +214,15 @@ impl Camera {
     }
 
     pub fn forward_vector(&self) -> Vec3 {
-        Self::compute_orientation(self.pitch, self.yaw, self.roll).mul_vec3(glam::Vec3::NEG_Z)
+        Self::compute_orientation(self.pitch, self.yaw, self.roll).mul_vec3(Vec3::NEG_Z)
     }
 
     pub fn right_vector(&self) -> Vec3 {
-        Self::compute_orientation(self.pitch, self.yaw, self.roll).mul_vec3(glam::Vec3::NEG_X)
+        Self::compute_orientation(self.pitch, self.yaw, self.roll).mul_vec3(Vec3::NEG_X)
     }
 
     pub fn up_vector(&self) -> Vec3 {
-        Self::compute_orientation(self.pitch, self.yaw, self.roll).mul_vec3(glam::Vec3::NEG_Y)
+        Self::compute_orientation(self.pitch, self.yaw, self.roll).mul_vec3(Vec3::NEG_Y)
     }
 
     pub fn on_resize(&mut self, width: u32, height: u32) {
