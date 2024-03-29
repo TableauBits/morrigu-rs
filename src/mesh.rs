@@ -67,13 +67,14 @@ where
 {
     let vertex_data_size: u64 = std::mem::size_of_val(vertices).try_into().unwrap();
     let mut vertex_staging_buffer = AllocatedBuffer::builder(vertex_data_size)
+        .with_name("Vertex staging")
         .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
         .build(renderer)
         .map_err(UploadError::StagingBufferCreationFailed)?;
 
     // We cannot cast this vertex slice using bytemuck because we don't want to enforce that a vertex types doesn't have padding.
-    // Padding issues are not a problem because of the way input bindings are setup (using offsets into a struct).
+    // Padding issues are not a problem because of the way input bindings are set up (using offsets into a struct).
     // So instead, we swallow our pride, pray for forgiveness for our sins, and go to unsafe land. One more time can't hurt, right ?
     // Well I'm pretty sure it can. I've looked at this a bunch of time, and while I know for sure there's a problem in there,
     // I can't find it, so it will have to do for now.
@@ -90,8 +91,17 @@ where
         std::ptr::copy_nonoverlapping(vertices.as_ptr(), vertex_staging_ptr, vertices.len());
     };
 
+    let mut buffer_usage_flags =
+        vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER;
+    if cfg!(feature = "ray_tracing") {
+        buffer_usage_flags |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+        buffer_usage_flags |=
+            vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR;
+    }
+
     let vertex_buffer = AllocatedBuffer::builder(vertex_data_size)
-        .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER)
+        .with_name("Vertex data")
+        .with_usage(buffer_usage_flags)
         .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
         .build(renderer)
         .map_err(UploadError::MainBufferCreationFailed)?;
@@ -122,6 +132,7 @@ pub fn upload_index_buffer(
 ) -> Result<AllocatedBuffer, UploadError> {
     let index_data_size: u64 = std::mem::size_of_val(indices).try_into().unwrap();
     let mut index_staging_buffer = AllocatedBuffer::builder(index_data_size)
+        .with_name("Index staging")
         .with_usage(vk::BufferUsageFlags::TRANSFER_SRC)
         .with_memory_location(gpu_allocator::MemoryLocation::CpuToGpu)
         .build(renderer)
@@ -136,8 +147,17 @@ pub fn upload_index_buffer(
         .ok_or(UploadError::MemoryMappingFailed)?[..raw_indices.len()]
         .copy_from_slice(raw_indices);
 
+    let mut buffer_usage_flags =
+        vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER;
+    if cfg!(feature = "ray_tracing") {
+        buffer_usage_flags |= vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
+        buffer_usage_flags |=
+            vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR;
+    }
+
     let index_buffer = AllocatedBuffer::builder(index_data_size)
-        .with_usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)
+        .with_name("Index data")
+        .with_usage(buffer_usage_flags)
         .with_memory_location(gpu_allocator::MemoryLocation::GpuOnly)
         .build(renderer)
         .map_err(UploadError::MainBufferCreationFailed)?;

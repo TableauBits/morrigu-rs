@@ -1,13 +1,14 @@
 use std::time::Duration;
 
+use morrigu::winit::event::MouseButton;
+use morrigu::winit::keyboard::KeyCode;
+use morrigu::winit_input_helper::WinitInputHelper;
 use morrigu::{
     components::camera::Camera,
     math_types::{Vec2, Vec3},
 };
-use winit::event::VirtualKeyCode;
-use winit_input_helper::WinitInputHelper;
 
-pub struct ViewerCamera {
+pub struct MachaCamera {
     pub mrg_camera: Camera,
     pub move_speed: f32,
     pub mouse_input_factor: f32,
@@ -16,8 +17,7 @@ pub struct ViewerCamera {
     focal_point: Vec3,
 }
 
-#[profiling::all_functions]
-impl ViewerCamera {
+impl MachaCamera {
     pub fn new(mrg_camera: Camera) -> Self {
         let focal_point = Default::default();
 
@@ -34,18 +34,6 @@ impl ViewerCamera {
         new_camera
     }
 
-    #[profiling::skip]
-    pub fn focal_point(&self) -> &Vec3 {
-        &self.focal_point
-    }
-
-    pub fn set_focal_point(&mut self, new_focal_point: &Vec3) {
-        self.focal_point = *new_focal_point;
-        let forward = self.mrg_camera.forward_vector();
-        let new_position = self.focal_point - forward * self.distance;
-        self.mrg_camera.set_position(&new_position);
-    }
-
     #[allow(unused)]
     #[profiling::skip]
     pub fn distance(&self) -> &f32 {
@@ -59,6 +47,17 @@ impl ViewerCamera {
         self.mrg_camera.set_position(&new_position);
     }
 
+    pub fn focal_point(&self) -> &Vec3 {
+        &self.focal_point
+    }
+
+    pub fn set_focal_point(&mut self, new_focal_point: &Vec3) {
+        self.focal_point = *new_focal_point;
+        let forward = self.mrg_camera.forward_vector();
+        let new_position = self.focal_point - forward * self.distance;
+        self.mrg_camera.set_position(&new_position);
+    }
+
     pub fn on_resize(&mut self, width: u32, height: u32) {
         self.mrg_camera.on_resize(width, height);
     }
@@ -67,60 +66,54 @@ impl ViewerCamera {
         let diff = input.mouse_diff();
         let mouse_delta = Vec2::new(diff.0, -diff.1) * self.mouse_input_factor;
 
-        #[repr(usize)]
-        enum MouseButton {
-            Left = 0,
-            Right = 1,
-            Middle = 2,
-        }
-        if input.mouse_held(MouseButton::Left as usize) {
+        if input.mouse_held(MouseButton::Left) {
             self.mouse_rotate(&mouse_delta);
         }
-        if input.mouse_held(MouseButton::Right as usize) {
+        if input.mouse_held(MouseButton::Right) {
             self.mouse_zoom(mouse_delta.y * 5.0);
         }
-        if input.mouse_held(MouseButton::Middle as usize) {
+        if input.mouse_held(MouseButton::Middle) {
             self.mouse_pan(&mouse_delta);
         }
 
-        let scroll = input.scroll_diff();
+        let scroll = input.scroll_diff().1;
         if scroll != 0.0 {
-            self.mouse_zoom(input.scroll_diff() * 0.4);
+            self.mouse_zoom(scroll * 0.4);
         }
 
-        if input.key_held(VirtualKeyCode::W) {
+        if input.key_held(KeyCode::KeyW) {
             let forward = self.mrg_camera.forward_vector();
             let new_focal_point =
                 *self.focal_point() + forward * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::S) {
+        if input.key_held(KeyCode::KeyS) {
             let forward = self.mrg_camera.forward_vector();
             let new_focal_point =
                 *self.focal_point() - forward * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::A) {
+        if input.key_held(KeyCode::KeyA) {
             let right = self.mrg_camera.right_vector();
             let new_focal_point = *self.focal_point() + right * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::D) {
+        if input.key_held(KeyCode::KeyD) {
             let right = self.mrg_camera.right_vector();
             let new_focal_point = *self.focal_point() - right * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::Q) {
+        if input.key_held(KeyCode::KeyQ) {
             let up = self.mrg_camera.up_vector();
             let new_focal_point = *self.focal_point() + up * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);
         }
 
-        if input.key_held(VirtualKeyCode::E) {
+        if input.key_held(KeyCode::KeyE) {
             let up = self.mrg_camera.up_vector();
             let new_focal_point = *self.focal_point() - up * dt.as_secs_f32() * self.move_speed;
             self.set_focal_point(&new_focal_point);

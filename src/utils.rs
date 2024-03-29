@@ -2,7 +2,18 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use ash::vk::{self, CommandBufferResetFlags};
 use bevy_ecs::{prelude::Component, system::Resource};
+use bytemuck::Zeroable;
 use thiserror::Error;
+
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct PodWrapper<T: Copy + 'static>(pub T);
+unsafe impl<T: Copy + 'static> Zeroable for PodWrapper<T> {
+    fn zeroed() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+unsafe impl<T: Copy + 'static> bytemuck::Pod for PodWrapper<T> {}
 
 #[derive(Debug, Component, Resource)]
 pub struct ThreadSafeRef<T>(Arc<Mutex<T>>);
@@ -13,10 +24,9 @@ impl<T> ThreadSafeRef<T> {
     }
 
     pub fn lock(&self) -> MutexGuard<T> {
-        match self.0.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        }
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -147,4 +157,27 @@ impl CommandUploader {
 
         Ok(())
     }
+}
+
+/// Attempts to name a vulkan object using the `VK_EXT_debug_utils` extension.
+///
+/// # Panics
+/// Panics if a debug messenger is not present in the renderer.
+///
+/// # Errors
+/// This function will return an error if the naming operation fails from the driver.
+///
+/// # Safety
+/// This is safe if and only if name info data is still in scope when this function is called.
+#[cfg(debug_assertions)]
+pub unsafe fn debug_name_vk_object(
+    renderer: &mut crate::renderer::Renderer,
+    name_info: &vk::DebugUtilsObjectNameInfoEXT,
+) -> ash::prelude::VkResult<()> {
+    renderer
+        .debug_messenger
+        .as_ref()
+        .unwrap()
+        .loader
+        .set_debug_utils_object_name(renderer.device.handle(), name_info)
 }

@@ -1,4 +1,5 @@
 use ash::vk;
+use bevy_ecs::prelude::Component;
 use thiserror::Error;
 
 use crate::{
@@ -14,7 +15,7 @@ use crate::{
     utils::ThreadSafeRef,
 };
 
-#[derive(Debug, bevy_ecs::prelude::Component)]
+#[derive(Debug, Component)]
 pub struct MeshRendering<VertexType>
 where
     VertexType: Vertex,
@@ -34,7 +35,11 @@ pub fn default_ubo_bindings(
     let size: u64 = std::mem::size_of::<Mat4>().try_into().unwrap();
     Ok((
         0,
-        ThreadSafeRef::new(AllocatedBuffer::builder(size).build(renderer)?),
+        ThreadSafeRef::new(
+            AllocatedBuffer::builder(size)
+                .with_name("Default UBO")
+                .build(renderer)?,
+        ),
     ))
 }
 pub fn default_descriptor_resources(
@@ -151,8 +156,15 @@ where
         buffer_ref: ThreadSafeRef<AllocatedBuffer>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<AllocatedBuffer>, ResourceBindingError> {
-        let Some(old_buffer) = self.descriptor_resources.uniform_buffers.insert(binding_slot, buffer_ref.clone()) else {
-            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 3 });
+        let Some(old_buffer) = self
+            .descriptor_resources
+            .uniform_buffers
+            .insert(binding_slot, buffer_ref.clone())
+        else {
+            return Err(ResourceBindingError::InvalidBindingSlot {
+                slot: binding_slot,
+                set: 3,
+            });
         };
 
         let buffer = buffer_ref.lock();
@@ -178,10 +190,10 @@ where
         Ok(old_buffer)
     }
 
-    pub fn update_uniform<T: bytemuck::Pod>(
+    pub fn update_uniform_pod<T: bytemuck::Pod>(
         &mut self,
         binding_slot: u32,
-        data: T,
+        pod: T,
     ) -> Result<(), UniformUpdateError> {
         self.descriptor_resources
             .uniform_buffers
@@ -191,7 +203,7 @@ where
                 set: 3,
             })?
             .lock()
-            .upload_data(data)
+            .upload_pod(pod)
             .map_err(|err| err.into())
     }
 
@@ -201,8 +213,15 @@ where
         image_ref: ThreadSafeRef<AllocatedImage>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<AllocatedImage>, ResourceBindingError> {
-        let Some(old_image) = self.descriptor_resources.storage_images.insert(binding_slot, image_ref.clone()) else {
-            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 3 });
+        let Some(old_image) = self
+            .descriptor_resources
+            .storage_images
+            .insert(binding_slot, image_ref.clone())
+        else {
+            return Err(ResourceBindingError::InvalidBindingSlot {
+                slot: binding_slot,
+                set: 3,
+            });
         };
 
         let image = image_ref.lock();
@@ -233,8 +252,15 @@ where
         texture_ref: ThreadSafeRef<Texture>,
         renderer: &mut Renderer,
     ) -> Result<ThreadSafeRef<Texture>, ResourceBindingError> {
-        let Some(old_texture) = self.descriptor_resources.sampled_images.insert(binding_slot, texture_ref.clone()) else {
-            return Err(ResourceBindingError::InvalidBindingSlot { slot: binding_slot, set: 3 });
+        let Some(old_texture) = self
+            .descriptor_resources
+            .sampled_images
+            .insert(binding_slot, texture_ref.clone())
+        else {
+            return Err(ResourceBindingError::InvalidBindingSlot {
+                slot: binding_slot,
+                set: 3,
+            });
         };
 
         let texture = texture_ref.lock();

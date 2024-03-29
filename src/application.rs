@@ -15,7 +15,7 @@ use ash::vk;
 use winit::{
     dpi::PhysicalSize,
     event_loop::{ControlFlow, EventLoop},
-    platform::run_return::EventLoopExtRunReturn,
+    platform::run_on_demand::EventLoopExtRunOnDemand,
     window::WindowBuilder,
 };
 use winit_input_helper::WinitInputHelper;
@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 
 pub struct StateContext<'a> {
     #[cfg(feature = "egui")]
-    pub egui: &'a mut crate::egui::EguiIntegration,
+    pub egui: &'a mut crate::egui_integration::EguiIntegration,
 
     pub renderer: &'a mut Renderer,
     pub ecs_manager: &'a mut ECSManager,
@@ -60,7 +60,7 @@ pub trait BuildableApplicationState<UserData>: ApplicationState {
 
 struct ApplicationContext {
     #[cfg(feature = "egui")]
-    pub egui: crate::egui::EguiIntegration,
+    pub egui: crate::egui_integration::EguiIntegration,
 
     pub ecs_manager: ECSManager,
     pub renderer_ref: ThreadSafeRef<Renderer>,
@@ -76,7 +76,6 @@ pub struct ApplicationBuilder<'a> {
     application_name: &'a str,
     version: (u32, u32, u32),
     preferred_present_mode: vk::PresentModeKHR,
-    // input_attachments: Vec<(vk::AttachmentDescription, vk::AttachmentReference)>,
 }
 
 impl<'a> ApplicationBuilder<'a> {
@@ -88,7 +87,6 @@ impl<'a> ApplicationBuilder<'a> {
             application_name: "Morrigu application",
             version: (0, 0, 0),
             preferred_present_mode: vk::PresentModeKHR::MAILBOX,
-            // input_attachments: vec![],
         }
     }
 
@@ -118,19 +116,8 @@ impl<'a> ApplicationBuilder<'a> {
         self
     }
 
-    // NOT SUPPORTED YET
-    /*
-    pub fn with_input_attachments(
-        mut self,
-        input_attachments: Vec<(vk::AttachmentDescription, vk::AttachmentReference)>,
-    ) -> Self {
-        self.input_attachments = input_attachments;
-        self
-    }
-    */
-
     fn setup_context(&self) -> ApplicationContext {
-        let event_loop = EventLoop::new();
+        let event_loop = EventLoop::new().expect("Failed to create program event loop");
 
         let window = WindowBuilder::new()
             .with_title(self.window_name)
@@ -162,8 +149,8 @@ impl<'a> ApplicationBuilder<'a> {
         #[cfg(feature = "egui")]
         {
             let mut renderer = renderer_ref.lock();
-            let egui = crate::egui::EguiIntegration::new(&event_loop, &mut renderer)
-                .expect("Failed to create Egui intergration");
+            let egui = crate::egui_integration::EguiIntegration::new(&window, &mut renderer)
+                .expect("Failed to create Egui integration");
             drop(renderer);
 
             ApplicationContext {
@@ -191,58 +178,41 @@ impl<'a> ApplicationBuilder<'a> {
     fn main_loop(&self, context: &mut ApplicationContext, state: &mut dyn ApplicationState) {
         let mut prev_time = Instant::now();
 
-        context.event_loop.run_return(|event, _, control_flow| {
-            *control_flow = ControlFlow::Poll;
+        context.event_loop.set_control_flow(ControlFlow::Poll);
+        context
+            .event_loop
+            .run_on_demand(|event, target| {
+                let events_cleared = context.window_input_state.update(&event);
 
-            let events_cleared = context.window_input_state.update(&event);
-
-            #[cfg(feature = "egui")]
-            if context.egui.handle_event(&event) {
-                return;
-            }
-
-            if events_cleared {
-                if context.window_input_state.close_requested()
-                    || context.window_input_state.destroyed()
-                {
-                    control_flow.set_exit();
+                #[cfg(feature = "egui")]
+                if context.egui.handle_event(&context.window, &event) {
+                    return;
                 }
 
-                if let Some(PhysicalSize { width, height }) =
-                    context.window_input_state.window_resized()
-                {
-                    context.renderer_ref.lock().on_resize(width, height);
-                    context.ecs_manager.on_resize(width, height);
-                }
-
-                let delta = prev_time.elapsed();
-                prev_time = Instant::now();
-
-                let mut renderer = context.renderer_ref.lock();
-                if renderer.begin_frame() {
-                    profiling::scope!("main loop");
-
-                    #[cfg(feature = "egui")]
-                    context.egui.painter.cleanup_previous_frame(&mut renderer);
-
-                    let mut state_context = StateContext {
-                        #[cfg(feature = "egui")]
-                        egui: &mut context.egui,
-                        renderer: &mut renderer,
-                        ecs_manager: &mut context.ecs_manager,
-                        window: &context.window,
-                        window_input_state: &context.window_input_state,
-                    };
+                if events_cleared {
+                    if context.window_input_state.close_requested()
+                        || context.window_input_state.destroyed()
                     {
-                        profiling::scope!("on_update");
-                        state.on_update(delta, &mut state_context);
+                        target.exit();
                     }
-                    drop(renderer);
 
+                    if let Some(PhysicalSize { width, height }) =
+                        context.window_input_state.window_resized()
                     {
-                        profiling::scope!("ECS schedule");
-                        context.ecs_manager.run_schedule();
-                        let mut renderer = context.renderer_ref.lock();
+                        context.renderer_ref.lock().on_resize(width, height);
+                        context.ecs_manager.on_resize(width, height);
+                    }
+
+                    let delta = prev_time.elapsed();
+                    prev_time = Instant::now();
+
+                    let mut renderer = context.renderer_ref.lock();
+                    if renderer.begin_frame() {
+                        profiling::scope!("main loop");
+
+                        #[cfg(feature = "egui")]
+                        context.egui.painter.cleanup_previous_frame(&mut renderer);
+
                         let mut state_context = StateContext {
                             #[cfg(feature = "egui")]
                             egui: &mut context.egui,
@@ -251,49 +221,68 @@ impl<'a> ApplicationBuilder<'a> {
                             window: &context.window,
                             window_input_state: &context.window_input_state,
                         };
-                        state.after_systems(delta, &mut state_context);
+                        {
+                            profiling::scope!("on_update");
+                            state.on_update(delta, &mut state_context);
+                        }
                         drop(renderer);
-                    }
 
-                    #[cfg(feature = "egui")]
-                    {
-                        profiling::scope!("egui update");
-                        let mut renderer = context.renderer_ref.lock();
-                        context.egui.run(&context.window, |egui_context| {
-                            let mut egui_update_context = EguiUpdateContext {
-                                egui_context,
+                        {
+                            profiling::scope!("ECS schedule");
+                            context.ecs_manager.run_schedule();
+                            let mut renderer = context.renderer_ref.lock();
+                            let mut state_context = StateContext {
+                                #[cfg(feature = "egui")]
+                                egui: &mut context.egui,
                                 renderer: &mut renderer,
                                 ecs_manager: &mut context.ecs_manager,
                                 window: &context.window,
                                 window_input_state: &context.window_input_state,
                             };
-                            state.on_update_egui(delta, &mut egui_update_context);
-                            egui_update_context
-                                .ecs_manager
-                                .run_ui_schedule(egui_update_context.egui_context);
-                            state.after_ui_systems(delta, &mut egui_update_context);
-                        });
+                            state.after_systems(delta, &mut state_context);
+                            drop(renderer);
+                        }
 
-                        context.egui.paint(&mut renderer)
+                        #[cfg(feature = "egui")]
+                        {
+                            profiling::scope!("egui update");
+                            let mut renderer = context.renderer_ref.lock();
+                            context.egui.run(&context.window, |egui_context| {
+                                let mut egui_update_context = EguiUpdateContext {
+                                    egui_context,
+                                    renderer: &mut renderer,
+                                    ecs_manager: &mut context.ecs_manager,
+                                    window: &context.window,
+                                    window_input_state: &context.window_input_state,
+                                };
+                                state.on_update_egui(delta, &mut egui_update_context);
+                                egui_update_context
+                                    .ecs_manager
+                                    .run_ui_schedule(egui_update_context.egui_context);
+                                state.after_ui_systems(delta, &mut egui_update_context);
+                            });
+
+                            context.egui.paint(&mut renderer)
+                        }
+
+                        let mut renderer = context.renderer_ref.lock();
+                        renderer.end_frame();
+                        profiling::finish_frame!();
                     }
-
-                    let mut renderer = context.renderer_ref.lock();
-                    renderer.end_frame();
-                    profiling::finish_frame!();
                 }
-            }
 
-            let mut renderer = context.renderer_ref.lock();
-            let mut state_context = StateContext {
-                #[cfg(feature = "egui")]
-                egui: &mut context.egui,
-                renderer: &mut renderer,
-                ecs_manager: &mut context.ecs_manager,
-                window: &context.window,
-                window_input_state: &context.window_input_state,
-            };
-            state.on_event(event, &mut state_context);
-        });
+                let mut renderer = context.renderer_ref.lock();
+                let mut state_context = StateContext {
+                    #[cfg(feature = "egui")]
+                    egui: &mut context.egui,
+                    renderer: &mut renderer,
+                    ecs_manager: &mut context.ecs_manager,
+                    window: &context.window,
+                    window_input_state: &context.window_input_state,
+                };
+                state.on_event(event, &mut state_context);
+            })
+            .expect("Error encountered during main loop");
     }
 
     fn exit(&self, context: &mut ApplicationContext, state: &mut dyn ApplicationState) {
@@ -322,7 +311,7 @@ impl<'a> ApplicationBuilder<'a> {
     where
         StateType: BuildableApplicationState<UserData>,
     {
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         let mut context = self.setup_context();
         let engine_init_time = instant.elapsed();
         log::debug!("Engine startup time: {}ms", engine_init_time.as_millis());
@@ -337,7 +326,7 @@ impl<'a> ApplicationBuilder<'a> {
             window_input_state: &context.window_input_state,
         };
 
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         let mut state = StateType::build(&mut state_context, data);
         let engine_init_time = instant.elapsed();
         log::debug!(
@@ -345,7 +334,7 @@ impl<'a> ApplicationBuilder<'a> {
             engine_init_time.as_millis()
         );
 
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         state.on_attach(&mut state_context);
         let engine_init_time = instant.elapsed();
         log::debug!(
@@ -357,7 +346,7 @@ impl<'a> ApplicationBuilder<'a> {
 
         self.main_loop(&mut context, &mut state);
 
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         self.exit(&mut context, &mut state);
         let engine_shut_down_time = instant.elapsed();
         log::debug!(
@@ -368,7 +357,7 @@ impl<'a> ApplicationBuilder<'a> {
     }
 
     pub fn build_and_run(self, state: &mut impl ApplicationState) {
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         let mut context = self.setup_context();
         let engine_init_time = instant.elapsed();
         log::debug!("Engine startup time: {}ms", engine_init_time.as_millis());
@@ -383,7 +372,7 @@ impl<'a> ApplicationBuilder<'a> {
             window_input_state: &context.window_input_state,
         };
 
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         state.on_attach(&mut state_context);
         let engine_init_time = instant.elapsed();
         log::debug!(
@@ -395,7 +384,7 @@ impl<'a> ApplicationBuilder<'a> {
 
         self.main_loop(&mut context, state);
 
-        let instant = std::time::Instant::now();
+        let instant = Instant::now();
         self.exit(&mut context, state);
         let engine_shut_down_time = instant.elapsed();
         log::debug!(

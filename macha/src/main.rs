@@ -1,10 +1,19 @@
+mod utils;
+
 mod compute_shader_test;
 mod editor;
 mod gltf_loader;
+mod rt_test;
 
-// use compute_shader_test::CSTState;
-// use editor::MachaState;
+#[allow(unused_imports)]
+use compute_shader_test::CSTState;
+#[allow(unused_imports)]
+use editor::MachaState;
+#[allow(unused_imports)]
 use gltf_loader::GLTFViewerState;
+#[allow(unused_imports)]
+use rt_test::RayTracerState;
+
 use morrigu::application::ApplicationBuilder;
 
 fn init_logging() {
@@ -27,12 +36,11 @@ fn init_logging() {
 
 fn main() {
     init_logging();
-    puffin::set_scopes_on(true);
 
     ApplicationBuilder::new()
         .with_window_name("Macha editor")
         .with_dimensions(1280, 720)
         .with_application_name("Macha")
         .with_application_version(0, 1, 0)
-        .build_and_run_inplace::<GLTFViewerState, ()>(());
+        .build_and_run_inplace::<MachaState, ()>(());
 }

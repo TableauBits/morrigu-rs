@@ -104,10 +104,9 @@ struct SwapchainInfo {
     extent: vk::Extent2D,
 }
 
-#[allow(dead_code)]
-struct DebugMessengerInfo {
-    handle: vk::DebugUtilsMessengerEXT,
-    loader: DebugUtils,
+pub(crate) struct DebugMessengerInfo {
+    pub handle: vk::DebugUtilsMessengerEXT,
+    pub loader: DebugUtils,
 }
 
 struct SyncObjects {
@@ -132,8 +131,7 @@ pub struct Renderer {
     pub framebuffer_height: u32,
     next_image_index: u32,
 
-    #[allow(dead_code)]
-    debug_messenger: Option<DebugMessengerInfo>,
+    pub(crate) debug_messenger: Option<DebugMessengerInfo>,
 
     pub(crate) default_texture_ref: ThreadSafeRef<Texture>,
 
@@ -153,10 +151,10 @@ pub struct Renderer {
     pub device_properties: vk::PhysicalDeviceProperties,
     physical_device: vk::PhysicalDevice,
     surface: SurfaceInfo,
-    instance: ash::Instance,
+    pub(crate) instance: Instance,
     #[allow(dead_code)]
     // This field is never read, but we need to keep it alive longer than the instance
-    entry: ash::Entry,
+    entry: Entry,
 }
 
 pub struct RendererBuilder<'a> {
@@ -174,15 +172,16 @@ fn create_swapchain(
     mut width: u32,
     mut height: u32,
     preferred_present_mode: vk::PresentModeKHR,
-    instance: &ash::Instance,
+    instance: &Instance,
     physical_device: vk::PhysicalDevice,
     device: &ash::Device,
     surface: &SurfaceInfo,
-    surface_loader: &Surface,
     allocator: &mut Allocator,
 ) -> SwapchainInfo {
     let capabilities = unsafe {
-        surface_loader.get_physical_device_surface_capabilities(physical_device, surface.handle)
+        surface
+            .loader
+            .get_physical_device_surface_capabilities(physical_device, surface.handle)
     }
     .expect("Failed to query surface capabilities");
     let mut requested_image_count = capabilities.min_image_count + 1;
@@ -191,7 +190,7 @@ fn create_swapchain(
     }
 
     let surface_extent = match capabilities.current_extent.width {
-        std::u32::MAX => vk::Extent2D { width, height },
+        u32::MAX => vk::Extent2D { width, height },
         _ => {
             width = capabilities.current_extent.width;
             height = capabilities.current_extent.height;
@@ -201,7 +200,9 @@ fn create_swapchain(
     };
 
     let present_modes = unsafe {
-        surface_loader.get_physical_device_surface_present_modes(physical_device, surface.handle)
+        surface
+            .loader
+            .get_physical_device_surface_present_modes(physical_device, surface.handle)
     }
     .expect("Failed to query surface present modes");
     let present_mode = present_modes
@@ -248,7 +249,7 @@ fn create_swapchain(
             })
             .image(image);
         unsafe { device.create_image_view(&create_view_info, None) }
-            .expect("Failed to ceate swapchain image views")
+            .expect("Failed to create swapchain image views")
     };
 
     let swapchain_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }
@@ -357,12 +358,12 @@ fn create_framebuffers(
 }
 
 impl<'a> RendererBuilder<'a> {
-    fn create_instance(&self, entry: &ash::Entry) -> Instance {
+    fn create_instance(&self, entry: &Entry) -> Instance {
         let engine_name = CString::new("Morrigu").unwrap();
         let app_info = vk::ApplicationInfo::builder()
             .application_name(self.application_name.as_c_str())
             .application_version(self.application_version)
-            .engine_name(engine_name.as_c_str())
+            .engine_name(&engine_name)
             .engine_version(vk::make_api_version(0, 1, 0, 0))
             .api_version(vk::make_api_version(0, 1, 2, 0));
 
@@ -381,7 +382,7 @@ impl<'a> RendererBuilder<'a> {
                 [CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap()];
             raw_layer_names = layer_names.iter().map(|layer| layer.as_ptr()).collect();
 
-            required_extensions.push(ash::extensions::ext::DebugUtils::name().as_ptr());
+            required_extensions.push(DebugUtils::name().as_ptr());
         }
 
         let instance_info = vk::InstanceCreateInfo::builder()
@@ -397,8 +398,8 @@ impl<'a> RendererBuilder<'a> {
 
     fn create_debug_messenger(
         &self,
-        _entry: &ash::Entry,
-        _instance: &ash::Instance,
+        _entry: &Entry,
+        _instance: &Instance,
     ) -> Option<DebugMessengerInfo> {
         #[allow(unused_assignments)]
         #[allow(unused_mut)]
@@ -436,7 +437,7 @@ impl<'a> RendererBuilder<'a> {
     fn select_physical_device(
         &self,
         surface: vk::SurfaceKHR,
-        instance: &ash::Instance,
+        instance: &Instance,
         surface_loader: &Surface,
         required_version: u32,
     ) -> (vk::PhysicalDevice, u32) {
@@ -470,10 +471,33 @@ impl<'a> RendererBuilder<'a> {
                     }
                     .expect("Failed to query surface compatibility");
 
+                    let mut meets_rt_requirements = true;
+                    if cfg!(feature = "ray_tracing") {
+                        let mut as_features =
+                            vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default();
+                        let mut rtp_features =
+                            vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default();
+                        let mut features = vk::PhysicalDeviceFeatures2::builder()
+                            .push_next(&mut as_features)
+                            .push_next(&mut rtp_features);
+                        unsafe {
+                            instance
+                                .get_physical_device_features2(raw_physical_device, &mut features)
+                        };
+
+                        meets_rt_requirements = as_features.acceleration_structure == 1
+                            && rtp_features.ray_tracing_pipeline == 1;
+
+                        log::debug!("Ray tracing extensions features:");
+                        log::debug!("\t acceleration structure: {:#?}", as_features);
+                        log::debug!("\t ray tracing pipeline: {:#?}", rtp_features);
+                    }
+
                     if supports_required_version
                         && supports_graphics
                         && supports_compute
                         && is_compatible_with_surface
+                        && meets_rt_requirements
                     {
                         Some((raw_physical_device, queue_index as u32))
                     } else {
@@ -491,13 +515,13 @@ impl<'a> RendererBuilder<'a> {
             let device_b_info = unsafe { instance.get_physical_device_properties(*b) };
 
             let mut ordering = Ordering::Equal;
-            if device_a_info.device_type == vk::PhysicalDeviceType::DISCRETE_GPU
-                && device_b_info.device_type != vk::PhysicalDeviceType::DISCRETE_GPU
+            if device_a_info.device_type == PhysicalDeviceType::DISCRETE_GPU
+                && device_b_info.device_type != PhysicalDeviceType::DISCRETE_GPU
             {
                 ordering = Ordering::Less;
             }
-            if device_b_info.device_type == vk::PhysicalDeviceType::DISCRETE_GPU
-                && device_a_info.device_type != vk::PhysicalDeviceType::DISCRETE_GPU
+            if device_b_info.device_type == PhysicalDeviceType::DISCRETE_GPU
+                && device_a_info.device_type != PhysicalDeviceType::DISCRETE_GPU
             {
                 ordering = Ordering::Greater;
             }
@@ -545,30 +569,55 @@ impl<'a> RendererBuilder<'a> {
 
     fn create_device(
         &self,
-        instance: &ash::Instance,
+        instance: &Instance,
         physical_device: vk::PhysicalDevice,
         queue_family_index: u32,
     ) -> ash::Device {
-        let raw_extensions_name = [Swapchain::name().as_ptr()];
+        let mut raw_extensions_names = vec![Swapchain::name().as_ptr()];
         let features = vk::PhysicalDeviceFeatures::default();
+        let mut vk12features = vk::PhysicalDeviceVulkan12Features::default();
         let priorities = [1.0];
+
+        if cfg!(feature = "ray_tracing") {
+            // For rt acceleration structures
+            raw_extensions_names.push(ash::extensions::khr::AccelerationStructure::name().as_ptr());
+            // For vkCmdTraceRaysKHR
+            raw_extensions_names.push(ash::extensions::khr::RayTracingPipeline::name().as_ptr());
+            // Required by RayTracingPipeline
+            raw_extensions_names
+                .push(ash::extensions::khr::DeferredHostOperations::name().as_ptr());
+
+            vk12features.buffer_device_address = vk::TRUE;
+        }
 
         let queue_info = vk::DeviceQueueCreateInfo::builder()
             .queue_family_index(queue_family_index)
             .queue_priorities(&priorities);
 
-        let device_create_info = vk::DeviceCreateInfo::builder()
+        let mut device_create_info = vk::DeviceCreateInfo::builder()
             .enabled_features(&features)
-            .enabled_extension_names(&raw_extensions_name)
-            .queue_create_infos(std::slice::from_ref(&queue_info));
+            .enabled_extension_names(&raw_extensions_names)
+            .queue_create_infos(std::slice::from_ref(&queue_info))
+            .push_next(&mut vk12features);
+
+        let mut as_features = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
+            .acceleration_structure(true)
+            .build();
+        let mut rtp_features = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
+            .ray_tracing_pipeline(true)
+            .build();
+        if cfg!(feature = "ray_tracing") {
+            device_create_info = device_create_info.push_next(&mut as_features);
+            device_create_info = device_create_info.push_next(&mut rtp_features);
+        }
 
         unsafe { instance.create_device(physical_device, &device_create_info, None) }
-            .expect("Failed to create logial device")
+            .expect("Failed to create logical device")
     }
 
     fn create_allocator(
         &self,
-        instance: ash::Instance,
+        instance: Instance,
         physical_device: vk::PhysicalDevice,
         device: ash::Device,
     ) -> Allocator {
@@ -577,7 +626,7 @@ impl<'a> RendererBuilder<'a> {
             physical_device,
             device,
             debug_settings: Default::default(),
-            buffer_device_address: false,
+            buffer_device_address: cfg!(feature = "ray_tracing"),
             allocation_sizes: AllocationSizes::default(),
         })
         .expect("Failed to create GPU allocator")
@@ -818,7 +867,7 @@ impl<'a> RendererBuilder<'a> {
         };
         let surface_loader = Surface::new(&entry, &instance);
 
-        let required_api_version = (1, 1, 0);
+        let required_api_version = (1, 2, 0);
         let (physical_device, queue_family_index) = self.select_physical_device(
             surface_handle,
             &instance,
@@ -882,7 +931,6 @@ impl<'a> RendererBuilder<'a> {
             physical_device,
             &device,
             &surface,
-            &surface.loader,
             &mut gpu_allocator,
         );
         self.width = swapchain.extent.width;
@@ -1119,7 +1167,7 @@ impl Renderer {
         }
 
         //    - the depth image
-        let mut swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
+        let mut swapchain_depth_image = mem::take(&mut self.swapchain.depth_image);
         swapchain_depth_image.destroy(self);
 
         //    - the swapchain image views
@@ -1146,7 +1194,6 @@ impl Renderer {
             self.physical_device,
             &self.device,
             &self.surface,
-            &self.surface.loader,
             &mut self.allocator.as_ref().unwrap().lock(),
         );
 
@@ -1208,7 +1255,7 @@ impl Drop for Renderer {
             self.device
                 .destroy_render_pass(self.primary_render_pass, None);
 
-            let mut swapchain_depth_image = std::mem::take(&mut self.swapchain.depth_image);
+            let mut swapchain_depth_image = mem::take(&mut self.swapchain.depth_image);
             swapchain_depth_image.destroy(self);
 
             for image_view in &self.swapchain.image_views {
@@ -1223,7 +1270,7 @@ impl Drop for Renderer {
                 drop(allocator);
             }
 
-            let command_uploader = std::mem::take(&mut self.command_uploader);
+            let command_uploader = mem::take(&mut self.command_uploader);
             command_uploader.destroy(&self.device);
 
             self.device.destroy_device(None);

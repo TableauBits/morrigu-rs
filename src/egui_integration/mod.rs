@@ -6,7 +6,6 @@ use crate::renderer::Renderer;
 use self::painter::PainterCreationError;
 
 pub struct EguiIntegration {
-    pub context: egui::Context,
     pub egui_platform_state: egui_winit::State,
     pub painter: Painter,
 
@@ -16,14 +15,15 @@ pub struct EguiIntegration {
 
 impl EguiIntegration {
     pub fn new(
-        event_loop: &winit::event_loop::EventLoopWindowTarget<()>,
+        window: &winit::window::Window,
         renderer: &mut Renderer,
     ) -> Result<Self, PainterCreationError> {
         let painter = Painter::new(renderer)?;
-        let egui_platform_state = egui_winit::State::new(event_loop);
+        let context = egui::Context::default();
+        let egui_platform_state =
+            egui_winit::State::new(context.clone(), egui::ViewportId::ROOT, window, None, None);
 
         Ok(Self {
-            context: Default::default(),
             egui_platform_state,
             painter,
             shapes: vec![],
@@ -31,14 +31,18 @@ impl EguiIntegration {
         })
     }
 
-    pub fn handle_event(&mut self, event: &winit::event::Event<()>) -> bool {
+    pub fn handle_event(
+        &mut self,
+        window: &winit::window::Window,
+        event: &winit::event::Event<()>,
+    ) -> bool {
         match event {
             winit::event::Event::WindowEvent {
                 window_id: _,
                 event,
             } => {
                 self.egui_platform_state
-                    .on_event(&self.context, event)
+                    .on_window_event(window, event)
                     .consumed
             }
 
@@ -46,34 +50,34 @@ impl EguiIntegration {
         }
     }
 
-    pub fn run(
-        &mut self,
-        window: &winit::window::Window,
-        ui_callback: impl FnMut(&egui::Context),
-    ) -> std::time::Duration {
+    pub fn run(&mut self, window: &winit::window::Window, ui_callback: impl FnMut(&egui::Context)) {
         let raw_input = self.egui_platform_state.take_egui_input(window);
         let egui::FullOutput {
             platform_output,
-            repaint_after,
             textures_delta,
             shapes,
-        } = self.context.run(raw_input, ui_callback);
+            ..
+        } = self
+            .egui_platform_state
+            .egui_ctx()
+            .run(raw_input, ui_callback);
 
         self.egui_platform_state
-            .handle_platform_output(window, &self.context, platform_output);
+            .handle_platform_output(window, platform_output);
         self.shapes = shapes;
         self.textures_delta.append(textures_delta);
-
-        repaint_after
     }
 
     pub fn paint(&mut self, renderer: &mut Renderer) {
         let shapes = std::mem::take(&mut self.shapes);
-        let clipped_primitives = self.context.tessellate(shapes);
+        let clipped_primitives = self.egui_platform_state.egui_ctx().tessellate(
+            shapes,
+            self.egui_platform_state.egui_ctx().pixels_per_point(),
+        );
         let textures_delta = std::mem::take(&mut self.textures_delta);
 
         self.painter.paint_and_update_textures(
-            self.context.pixels_per_point(),
+            self.egui_platform_state.egui_ctx().pixels_per_point(),
             &clipped_primitives,
             textures_delta,
             renderer,

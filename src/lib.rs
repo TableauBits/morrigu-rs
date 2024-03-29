@@ -8,16 +8,25 @@ pub mod math_types;
 pub mod mesh;
 pub mod pipeline_barrier;
 pub mod renderer;
-pub mod vertices;
 pub mod shader;
 pub mod texture;
 pub mod utils;
+pub mod vertices;
 
 pub mod components;
 pub mod ecs_manager;
 pub mod systems;
 
 #[cfg(feature = "egui")]
-pub mod egui;
+pub mod egui_integration;
 
 mod pipeline_builder;
+
+// Core re-exports
+pub use ash;
+pub use bevy_ecs;
+pub use winit;
+pub use winit_input_helper;
+
+#[cfg(feature = "egui")]
+pub use egui;

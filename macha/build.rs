@@ -114,7 +114,13 @@ fn compile_shader(entry: DirEntry, output_path: &Path) {
 fn main() {
     println!("Running build script");
 
-    build_shaders(PathBuf::from("src/compute_shader_test/shaders"));
-    build_shaders(PathBuf::from("src/editor/shaders"));
-    build_shaders(PathBuf::from("src/gltf_loader/shaders"));
+    let dirs = [
+        "src/compute_shader_test/shaders",
+        "src/editor/shaders",
+        "src/gltf_loader/shaders",
+    ];
+
+    for dir in dirs {
+        build_shaders(PathBuf::from(dir));
+    }
 }

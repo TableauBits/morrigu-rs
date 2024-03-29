@@ -40,6 +40,14 @@ pub enum TextureBuildError {
 
     #[error("Vulkan creation of texture sampler failed with result: {0}.")]
     VulkanSamplerCreationFailed(vk::Result),
+
+    #[cfg(debug_assertions)]
+    #[error("Could not convert texture path \"{0}\" to an FFI string")]
+    InvalidPathConversion(String),
+
+    #[cfg(debug_assertions)]
+    #[error("Failed to set texture handle name to handle with result: {0}")]
+    VulkanObjectNameAssignationFailed(vk::Result),
 }
 
 impl TextureBuilder {
@@ -105,7 +113,46 @@ impl TextureBuilder {
 
         let new_texture =
             self.build_from_data(image.as_bytes(), dimensions.0, dimensions.1, renderer)?;
-        new_texture.lock().path = Some(path.to_str().unwrap_or("invalid path").to_owned());
+        let path_str = path.to_str().unwrap_or("invalid path").to_owned();
+        new_texture.lock().path = Some(path_str.clone());
+
+        #[cfg(debug_assertions)]
+        {
+            use ash::vk::Handle;
+
+            let ffi_string = std::ffi::CString::new(path_str.clone())
+                .map_err(|_| TextureBuildError::InvalidPathConversion(path_str))?;
+            let temp_new_texture = new_texture.lock();
+            let new_image = temp_new_texture.image_ref.lock();
+            let name_info = vk::DebugUtilsObjectNameInfoEXT::builder()
+                .object_handle(new_image.handle.as_raw())
+                .object_type(vk::ObjectType::IMAGE)
+                .object_name(ffi_string.as_c_str());
+
+            unsafe {
+                crate::utils::debug_name_vk_object(renderer, &name_info)
+                    .map_err(TextureBuildError::VulkanObjectNameAssignationFailed)?
+            };
+
+            let name_info = name_info
+                .object_handle(new_image.view.as_raw())
+                .object_type(vk::ObjectType::IMAGE_VIEW);
+
+            unsafe {
+                crate::utils::debug_name_vk_object(renderer, &name_info)
+                    .map_err(TextureBuildError::VulkanObjectNameAssignationFailed)?
+            };
+
+            let name_info = name_info
+                .object_handle(temp_new_texture.sampler.as_raw())
+                .object_type(vk::ObjectType::SAMPLER);
+
+            unsafe {
+                crate::utils::debug_name_vk_object(renderer, &name_info)
+                    .map_err(TextureBuildError::VulkanObjectNameAssignationFailed)?
+            };
+        }
+
         Ok(new_texture)
     }
 

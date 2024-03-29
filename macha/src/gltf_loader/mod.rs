@@ -1,11 +1,12 @@
-mod camera;
 mod loader;
 mod scene;
 
 use std::{iter::zip, path::Path};
 
 use morrigu::{
-    application::{ApplicationState, BuildableApplicationState, EguiUpdateContext, Event},
+    application::{ApplicationState, BuildableApplicationState, Event},
+    ash::vk,
+    bevy_ecs,
     components::{
         camera::{Camera, PerspectiveData},
         mesh_rendering::default_descriptor_resources,
@@ -17,17 +18,19 @@ use morrigu::{
     shader::Shader,
     systems::mesh_renderer,
     utils::ThreadSafeRef,
+    winit,
 };
 
+use crate::utils::camera::MachaCamera;
+
 use self::{
-    camera::ViewerCamera,
     loader::LightData,
     scene::{Material, Scene, Vertex},
 };
 
 pub struct GLTFViewerState {
     light_data: LightData,
-    camera: ViewerCamera,
+    camera: MachaCamera,
     scene: Scene,
     skybox_entity_ref: bevy_ecs::entity::Entity,
     skybox: ThreadSafeRef<SkyboxMeshRendering>,
@@ -49,7 +52,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             &Vec2::new(1280.0, 720.0),
         );
 
-        let mut camera = ViewerCamera::new(camera);
+        let mut camera = MachaCamera::new(camera);
         camera.set_distance(0.0);
 
         let pbr_shader = Shader::from_spirv_u8(
@@ -88,6 +91,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
         .expect("Failed to create skybox shader");
         let skybox_material: ThreadSafeRef<SkyboxMaterial> = Material::builder()
             .z_write(false)
+            .cull_mode(vk::CullModeFlags::FRONT)
             .build(
                 &skybox_shader,
                 DescriptorResources {
@@ -195,7 +199,7 @@ impl ApplicationState for GLTFViewerState {
             .ecs_manager
             .world
             .get_entity_mut(self.skybox_entity_ref)
-            .expect("Failed to retreive skybox entity");
+            .expect("Failed to retrieve skybox entity");
         if let Some(mut transform) = entity_ref.get_mut::<Transform>() {
             transform.set_translation(cam_pos);
         }
@@ -216,7 +220,7 @@ impl ApplicationState for GLTFViewerState {
     fn on_event(&mut self, event: Event<()>, _context: &mut morrigu::application::StateContext) {
         #[allow(clippy::single_match)] // Temporary
         match event {
-            morrigu::application::Event::WindowEvent {
+            Event::WindowEvent {
                 event:
                     winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize {
                         width, height, ..
@@ -227,10 +231,6 @@ impl ApplicationState for GLTFViewerState {
             }
             _ => (),
         }
-    }
-
-    fn on_update_egui(&mut self, _dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        puffin_egui::profiler_window(context.egui_context);
     }
 
     fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {

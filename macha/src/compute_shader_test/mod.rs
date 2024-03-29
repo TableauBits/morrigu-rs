@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use ash::vk;
+use morrigu::ash::vk;
+use morrigu::material::CullModeFlags;
 use morrigu::{
     application::{ApplicationState, BuildableApplicationState, EguiUpdateContext},
     components::{
@@ -10,6 +11,7 @@ use morrigu::{
     },
     compute_shader::ComputeShader,
     descriptor_resources::DescriptorResources,
+    egui,
     math_types::{EulerRot, Quat, Vec2, Vec3},
     pipeline_barrier::PipelineBarrier,
     shader::Shader,
@@ -20,7 +22,7 @@ use morrigu::{
 
 type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;
-type MeshRendering = morrigu::components::mesh_rendering::MeshRendering<Vertex>;
+type MeshRendering = mesh_rendering::MeshRendering<Vertex>;
 
 pub struct CSTState {
     input_texture: ThreadSafeRef<Texture>,
@@ -66,6 +68,7 @@ impl BuildableApplicationState<()> for CSTState {
         .expect("Failed to create shader");
 
         let material_ref = Material::builder()
+            .cull_mode(CullModeFlags::NONE)
             .build::<Vertex>(&shader_ref, DescriptorResources::empty(), context.renderer)
             .expect("Failed to create material");
 

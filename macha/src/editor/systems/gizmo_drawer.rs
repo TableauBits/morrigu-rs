@@ -1,11 +1,13 @@
-use bevy_ecs::prelude::{Query, Res};
-use egui::LayerId;
 use egui_gizmo::{Gizmo, GizmoVisuals};
+use morrigu::bevy_ecs::prelude::{Query, Res};
+use morrigu::winit_input_helper::WinitInputHelper;
 use morrigu::{
     components::{camera::Camera, resource_wrapper::ResourceWrapper, transform::Transform},
+    egui,
     math_types::Mat4,
 };
-use winit_input_helper::WinitInputHelper;
+
+use egui::LayerId;
 
 use crate::editor::components::{
     macha_options::MachaGlobalOptions, selected_entity::SelectedEntity,
@@ -38,9 +40,9 @@ pub fn draw_gizmo(
                     visuals.inactive_alpha += 0.25;
 
                     let gizmo = Gizmo::new("Selected entity gizmo")
-                        .view_matrix(camera.view().to_cols_array_2d())
-                        .projection_matrix(camera.projection().to_cols_array_2d())
-                        .model_matrix(transform.matrix().to_cols_array_2d())
+                        .view_matrix((*camera.view()).into())
+                        .projection_matrix((*camera.projection()).into())
+                        .model_matrix(transform.matrix().into())
                         .mode(macha_options.preferred_gizmo)
                         .visuals(visuals)
                         .snap_distance(0.5)
@@ -49,8 +51,7 @@ pub fn draw_gizmo(
                         .snapping(is_snapping_enabled);
 
                     if let Some(response) = gizmo.interact(ui) {
-                        *transform =
-                            Mat4::from_cols_array_2d(&response.transform_cols_array_2d()).into();
+                        *transform = Mat4::from(response.transform()).into();
                     }
                 });
             });
