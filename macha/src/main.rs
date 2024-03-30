@@ -37,12 +37,11 @@ fn init_logging() {
 fn main() {
     init_logging();
 
-    let mut application = ApplicationBuilder::new()
+    ApplicationBuilder::new()
         .with_window_name("Macha editor")
         .with_dimensions(1280, 720)
         .with_application_name("Macha")
         .with_application_version(0, 1, 0)
-        .build_with_state::<MachaState, ()>(());
-
-    application.run();
+        .build_with_state::<MachaState, ()>(())
+        .run();
 }

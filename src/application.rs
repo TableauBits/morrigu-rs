@@ -284,6 +284,7 @@ impl<'a> ApplicationBuilder<'a> {
         self
     }
 
+    #[must_use = "you are building an application, but doing nothing with it, consider calling `run` on the return value of this function"]
     pub fn build_with_state<'state, StateType, UserData>(
         self,
         data: UserData,
