@@ -144,48 +144,6 @@ impl BuildableApplicationState<()> for MachaState {
         )
         .expect("Failed to create mesh rendering");
 
-        let mut transform = Transform::default();
-        transform.rotate(&Quat::from_euler(
-            EulerRot::XYZ,
-            f32::to_radians(-90.0),
-            0.0,
-            0.0,
-        ));
-
-        camera.set_focal_point(transform.translation());
-
-        context.ecs_manager.world.insert_resource(ECSBuffer::new());
-        context
-            .ecs_manager
-            .world
-            .insert_resource(MachaGlobalOptions::new());
-
-        context.ecs_manager.world.spawn((
-            transform.clone(),
-            mesh_rendering_ref.clone(),
-            MachaEntityOptions {
-                name: "planet".to_owned(),
-            },
-        ));
-
-        context.ecs_manager.world.spawn((
-            transform,
-            MachaEntityOptions {
-                name: "empty".to_owned(),
-            },
-        ));
-
-        context.ecs_manager.redefine_systems_schedule(|schedule| {
-            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
-        });
-
-        context
-            .ecs_manager
-            .redefine_ui_systems_schedule(|schedule| {
-                schedule.add_systems(hierarchy_panel::draw_hierarchy_panel_stable);
-                schedule.add_systems(gizmo_drawer::draw_gizmo);
-            });
-
         MachaState {
             camera,
             shader_ref,
@@ -203,6 +161,48 @@ impl BuildableApplicationState<()> for MachaState {
 
 impl ApplicationState for MachaState {
     fn on_attach(&mut self, context: &mut StateContext) {
+        context.ecs_manager.redefine_systems_schedule(|schedule| {
+            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
+        });
+
+        let mut transform = Transform::default();
+        transform.rotate(&Quat::from_euler(
+            EulerRot::XYZ,
+            f32::to_radians(-90.0),
+            0.0,
+            0.0,
+        ));
+
+        self.camera.set_focal_point(transform.translation());
+
+        context.ecs_manager.world.insert_resource(ECSBuffer::new());
+        context
+            .ecs_manager
+            .world
+            .insert_resource(MachaGlobalOptions::new());
+
+        context.ecs_manager.world.spawn((
+            transform.clone(),
+            self.mesh_rendering_ref.clone(),
+            MachaEntityOptions {
+                name: "planet".to_owned(),
+            },
+        ));
+
+        context.ecs_manager.world.spawn((
+            transform,
+            MachaEntityOptions {
+                name: "empty".to_owned(),
+            },
+        ));
+
+        context
+            .ecs_manager
+            .redefine_ui_systems_schedule(|schedule| {
+                schedule.add_systems(hierarchy_panel::draw_hierarchy_panel_stable);
+                schedule.add_systems(gizmo_drawer::draw_gizmo);
+            });
+
         let selection_style = egui::style::Selection {
             bg_fill: egui::Color32::from_rgb(165, 20, 61),
             ..Default::default()

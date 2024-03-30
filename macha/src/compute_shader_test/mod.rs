@@ -25,6 +25,7 @@ type Material = morrigu::material::Material<Vertex>;
 type MeshRendering = mesh_rendering::MeshRendering<Vertex>;
 
 pub struct CSTState {
+    camera: Camera,
     input_texture: ThreadSafeRef<Texture>,
     output_texture: ThreadSafeRef<Texture>,
 
@@ -104,7 +105,24 @@ impl BuildableApplicationState<()> for CSTState {
         )
         .expect("Failed to create mesh rendering");
 
-        context.ecs_manager.world.insert_resource(camera);
+        Self {
+            camera,
+            input_texture,
+            output_texture,
+            material_ref,
+            output_mesh_rendering_ref,
+            input_mesh_rendering_ref,
+        }
+    }
+}
+
+impl ApplicationState for CSTState {
+    fn on_attach(&mut self, context: &mut morrigu::application::StateContext) {
+        context.ecs_manager.redefine_systems_schedule(|schedule| {
+            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
+        });
+
+        context.ecs_manager.world.insert_resource(self.camera);
 
         let mut transform = Transform::default();
         transform.rotate(&Quat::from_euler(
@@ -118,30 +136,14 @@ impl BuildableApplicationState<()> for CSTState {
         context
             .ecs_manager
             .world
-            .spawn((transform.clone(), input_mesh_rendering_ref.clone()));
+            .spawn((transform.clone(), self.input_mesh_rendering_ref.clone()));
 
         transform.set_translation(&Vec3::new(0.5, 0.0, -1.0));
         context
             .ecs_manager
             .world
-            .spawn((transform, output_mesh_rendering_ref.clone()));
+            .spawn((transform, self.output_mesh_rendering_ref.clone()));
 
-        context.ecs_manager.redefine_systems_schedule(|schedule| {
-            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
-        });
-
-        Self {
-            input_texture,
-            output_texture,
-            material_ref,
-            output_mesh_rendering_ref,
-            input_mesh_rendering_ref,
-        }
-    }
-}
-
-impl ApplicationState for CSTState {
-    fn on_attach(&mut self, context: &mut morrigu::application::StateContext) {
         let compute_shader = ComputeShader::builder()
             .build_from_spirv_u8(
                 include_bytes!("shaders/gen/blur.comp"),

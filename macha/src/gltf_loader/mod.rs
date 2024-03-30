@@ -130,31 +130,6 @@ impl BuildableApplicationState<()> for GLTFViewerState {
         )
         .expect("Failed to load GLTF scene");
 
-        for (transform, mesh_rendering_ref) in zip(&scene.transforms, &scene.mesh_renderings) {
-            context
-                .ecs_manager
-                .world
-                .spawn((transform.clone(), mesh_rendering_ref.clone()));
-        }
-
-        let skybox_entity_ref = context
-            .ecs_manager
-            .world
-            .spawn((
-                Transform::from_trs(
-                    camera.mrg_camera.position(),
-                    &Quat::default(),
-                    &Vec3::new(1.0, 1.0, 1.0),
-                ),
-                skybox.clone(),
-            ))
-            .id();
-
-        context.ecs_manager.redefine_systems_schedule(|schedule| {
-            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
-            schedule.add_systems(mesh_renderer::render_meshes::<SkyboxVertex>);
-        });
-
         let light_data = LightData {
             light_direction: Vec4::new(-1.0, -1.0, 0.0, 0.0).normalize(),
             light_color: Vec4::new(0.68, 0.68, 0.68, 1.0),
@@ -175,7 +150,7 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             light_data,
             camera,
             scene,
-            skybox_entity_ref,
+            skybox_entity_ref: bevy_ecs::entity::Entity::PLACEHOLDER,
             skybox,
         }
     }
@@ -183,7 +158,34 @@ impl BuildableApplicationState<()> for GLTFViewerState {
 
 #[profiling::all_functions]
 impl ApplicationState for GLTFViewerState {
-    fn on_attach(&mut self, _context: &mut morrigu::application::StateContext) {}
+    fn on_attach(&mut self, context: &mut morrigu::application::StateContext) {
+        context.ecs_manager.redefine_systems_schedule(|schedule| {
+            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
+            schedule.add_systems(mesh_renderer::render_meshes::<SkyboxVertex>);
+        });
+
+        for (transform, mesh_rendering_ref) in
+            zip(&self.scene.transforms, &self.scene.mesh_renderings)
+        {
+            context
+                .ecs_manager
+                .world
+                .spawn((transform.clone(), mesh_rendering_ref.clone()));
+        }
+
+        self.skybox_entity_ref = context
+            .ecs_manager
+            .world
+            .spawn((
+                Transform::from_trs(
+                    self.camera.mrg_camera.position(),
+                    &Quat::default(),
+                    &Vec3::new(1.0, 1.0, 1.0),
+                ),
+                self.skybox.clone(),
+            ))
+            .id();
+    }
 
     fn on_update(
         &mut self,

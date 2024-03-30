@@ -3,7 +3,6 @@ use morrigu::{
     components::ray_tracing::{mesh_rendering::MeshRendering, tlas::TLAS},
     utils::ThreadSafeRef,
     vertices::simple::SimpleVertex,
-    winit,
 };
 
 pub struct RayTracerState {
@@ -48,41 +47,6 @@ impl BuildableApplicationState<()> for RayTracerState {
 
 impl ApplicationState for RayTracerState {
     fn on_attach(&mut self, _context: &mut morrigu::application::StateContext) {}
-
-    fn on_update(
-        &mut self,
-        _dt: std::time::Duration,
-        _context: &mut morrigu::application::StateContext,
-    ) {
-    }
-
-    fn after_systems(
-        &mut self,
-        _dt: std::time::Duration,
-        _context: &mut morrigu::application::StateContext,
-    ) {
-    }
-
-    fn on_update_egui(
-        &mut self,
-        _dt: std::time::Duration,
-        _context: &mut morrigu::application::EguiUpdateContext,
-    ) {
-    }
-
-    fn after_ui_systems(
-        &mut self,
-        _dt: std::time::Duration,
-        _context: &mut morrigu::application::EguiUpdateContext,
-    ) {
-    }
-
-    fn on_event(
-        &mut self,
-        _event: winit::event::Event<()>,
-        _context: &mut morrigu::application::StateContext,
-    ) {
-    }
 
     fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
         self.tlas.lock().destroy(context.renderer);

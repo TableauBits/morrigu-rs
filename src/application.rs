@@ -42,8 +42,20 @@ pub struct EguiUpdateContext<'a> {
     pub window_input_state: &'a WinitInputHelper,
 }
 
+pub enum StateFlow<'state> {
+    Continue,
+    Exit,
+    SwitchState(Box<dyn ApplicationState + 'state>),
+}
+
 pub trait ApplicationState {
     fn on_attach(&mut self, _context: &mut StateContext) {}
+    fn on_drop(&mut self, _context: &mut StateContext) {}
+
+    fn flow<'flow>(&mut self, _context: &mut StateContext) -> StateFlow<'flow> {
+        StateFlow::Continue
+    }
+
     fn on_update(&mut self, _dt: Duration, _context: &mut StateContext) {}
     fn after_systems(&mut self, _dt: Duration, _context: &mut StateContext) {}
     #[cfg(feature = "egui")]
@@ -51,7 +63,6 @@ pub trait ApplicationState {
     #[cfg(feature = "egui")]
     fn after_ui_systems(&mut self, _dt: Duration, _context: &mut EguiUpdateContext) {}
     fn on_event(&mut self, _event: Event<()>, _context: &mut StateContext) {}
-    fn on_drop(&mut self, _context: &mut StateContext) {}
 }
 
 pub trait BuildableApplicationState<UserData>: ApplicationState {
@@ -78,12 +89,12 @@ impl<'state> Application<'state> {
         self.event_loop.set_control_flow(ControlFlow::Poll);
         self.event_loop
             .run_on_demand(|event, target| {
-                let events_cleared = self.window_input_state.update(&event);
-
                 #[cfg(feature = "egui")]
                 if self.egui.handle_event(&self.window, &event) {
                     return;
                 }
+
+                let events_cleared = self.window_input_state.update(&event);
 
                 if events_cleared {
                     if self.window_input_state.close_requested()
@@ -177,6 +188,33 @@ impl<'state> Application<'state> {
                     window_input_state: &self.window_input_state,
                 };
                 self.state.on_event(event, &mut state_context);
+
+                match self.state.flow(&mut state_context) {
+                    StateFlow::Continue => (),
+                    StateFlow::Exit => target.exit(),
+                    StateFlow::SwitchState(new_state) => {
+                        log::info!("Switching states !");
+
+                        self.state.on_drop(&mut state_context);
+                        let camera = Camera::builder().build(
+                            Projection::Perspective(PerspectiveData {
+                                horizontal_fov: f32::to_radians(90.0),
+                                near_plane: 0.001,
+                                far_plane: 1000.0,
+                            }),
+                            &Vec2::new(
+                                self.window.inner_size().width as f32,
+                                self.window.inner_size().height as f32,
+                            ),
+                        );
+                        *state_context.ecs_manager = ECSManager::new(&self.renderer_ref, camera);
+
+                        self.state = new_state;
+                        self.state.on_attach(&mut state_context);
+                    }
+                }
+
+                drop(renderer);
             })
             .expect("Error encountered during main loop");
     }
@@ -285,7 +323,7 @@ impl<'a> ApplicationBuilder<'a> {
     }
 
     #[must_use = "you are building an application, but doing nothing with it, consider calling `run` on the return value of this function"]
-    pub fn build_with_state<'state, StateType, UserData>(
+    pub fn build_with_state<'state, 'flow, StateType, UserData>(
         self,
         data: UserData,
     ) -> Application<'state>
