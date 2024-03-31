@@ -2,6 +2,8 @@ mod components;
 mod ecs_buffer;
 mod systems;
 
+use crate::utils::switcher::{draw_state_switcher, SwitchableStates};
+
 use super::utils::camera::MachaCamera;
 use bevy_ecs::prelude::Entity;
 use components::{
@@ -56,6 +58,7 @@ pub struct MachaState {
     egui_texture_id: egui::TextureId,
 
     shader_options: Vec2,
+    desired_state: SwitchableStates,
 }
 
 impl BuildableApplicationState<()> for MachaState {
@@ -146,6 +149,7 @@ impl BuildableApplicationState<()> for MachaState {
 
         MachaState {
             camera,
+
             shader_ref,
             material_ref,
             mesh_ref,
@@ -154,7 +158,9 @@ impl BuildableApplicationState<()> for MachaState {
             flowmap_ref,
             gradient_ref,
             egui_texture_id: egui::TextureId::default(),
+
             shader_options,
+            desired_state: SwitchableStates::Editor,
         }
     }
 }
@@ -225,6 +231,24 @@ impl ApplicationState for MachaState {
         self.egui_texture_id = context.egui.painter.register_user_texture(egui_texture);
     }
 
+    fn flow<'flow>(
+        &mut self,
+        context: &mut morrigu::application::StateContext,
+    ) -> morrigu::application::StateFlow<'flow> {
+        match self.desired_state {
+            SwitchableStates::GLTFLoader => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::gltf_loader::GLTFViewerState::build(context, ()),
+            )),
+            SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::compute_shader_test::CSTState::build(context, ()),
+            )),
+            SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::rt_test::RayTracerState::build(context, ()),
+            )),
+            SwitchableStates::Editor => morrigu::application::StateFlow::Continue,
+        }
+    }
+
     fn on_update(&mut self, dt: std::time::Duration, context: &mut StateContext) {
         self.camera.on_update(dt, context.window_input_state);
         context
@@ -238,6 +262,7 @@ impl ApplicationState for MachaState {
     }
 
     fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        draw_state_switcher(context.egui_context, &mut self.desired_state);
         egui::Window::new("Debug info").show(context.egui_context, |ui| {
             let color = match dt.as_millis() {
                 0..=25 => [51, 204, 51],

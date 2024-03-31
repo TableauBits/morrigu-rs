@@ -4,7 +4,7 @@ mod scene;
 use std::{iter::zip, path::Path};
 
 use morrigu::{
-    application::{ApplicationState, BuildableApplicationState, Event},
+    application::{ApplicationState, BuildableApplicationState, EguiUpdateContext, Event},
     ash::vk,
     bevy_ecs,
     components::{
@@ -21,7 +21,10 @@ use morrigu::{
     winit,
 };
 
-use crate::utils::camera::MachaCamera;
+use crate::utils::{
+    camera::MachaCamera,
+    switcher::{draw_state_switcher, SwitchableStates},
+};
 
 use self::{
     loader::LightData,
@@ -34,6 +37,8 @@ pub struct GLTFViewerState {
     scene: Scene,
     skybox_entity_ref: bevy_ecs::entity::Entity,
     skybox: ThreadSafeRef<SkyboxMeshRendering>,
+
+    desired_state: SwitchableStates,
 }
 
 type SkyboxVertex = morrigu::vertices::simple::SimpleVertex;
@@ -152,6 +157,8 @@ impl BuildableApplicationState<()> for GLTFViewerState {
             scene,
             skybox_entity_ref: bevy_ecs::entity::Entity::PLACEHOLDER,
             skybox,
+
+            desired_state: SwitchableStates::GLTFLoader,
         }
     }
 }
@@ -187,6 +194,24 @@ impl ApplicationState for GLTFViewerState {
             .id();
     }
 
+    fn flow<'flow>(
+        &mut self,
+        context: &mut morrigu::application::StateContext,
+    ) -> morrigu::application::StateFlow<'flow> {
+        match self.desired_state {
+            SwitchableStates::Editor => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::editor::MachaState::build(context, ()),
+            )),
+            SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::compute_shader_test::CSTState::build(context, ()),
+            )),
+            SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::rt_test::RayTracerState::build(context, ()),
+            )),
+            SwitchableStates::GLTFLoader => morrigu::application::StateFlow::Continue,
+        }
+    }
+
     fn on_update(
         &mut self,
         dt: std::time::Duration,
@@ -217,6 +242,10 @@ impl ApplicationState for GLTFViewerState {
             .ecs_manager
             .world
             .insert_resource(self.camera.mrg_camera);
+    }
+
+    fn on_update_egui(&mut self, _dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        draw_state_switcher(context.egui_context, &mut self.desired_state);
     }
 
     fn on_event(&mut self, event: Event<()>, _context: &mut morrigu::application::StateContext) {

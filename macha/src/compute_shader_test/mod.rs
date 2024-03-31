@@ -20,6 +20,8 @@ use morrigu::{
     utils::ThreadSafeRef,
 };
 
+use crate::utils::switcher::{draw_state_switcher, SwitchableStates};
+
 type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;
 type MeshRendering = mesh_rendering::MeshRendering<Vertex>;
@@ -32,6 +34,8 @@ pub struct CSTState {
     material_ref: ThreadSafeRef<Material>,
     input_mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
     output_mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
+
+    desired_state: SwitchableStates,
 }
 
 impl BuildableApplicationState<()> for CSTState {
@@ -112,6 +116,7 @@ impl BuildableApplicationState<()> for CSTState {
             material_ref,
             output_mesh_rendering_ref,
             input_mesh_rendering_ref,
+            desired_state: SwitchableStates::CSTest,
         }
     }
 }
@@ -209,7 +214,27 @@ impl ApplicationState for CSTState {
         compute_shader.lock().destroy(context.renderer);
     }
 
+    fn flow<'flow>(
+        &mut self,
+        context: &mut morrigu::application::StateContext,
+    ) -> morrigu::application::StateFlow<'flow> {
+        match self.desired_state {
+            SwitchableStates::Editor => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::editor::MachaState::build(context, ()),
+            )),
+            SwitchableStates::GLTFLoader => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::gltf_loader::GLTFViewerState::build(context, ()),
+            )),
+            SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::rt_test::RayTracerState::build(context, ()),
+            )),
+            SwitchableStates::CSTest => morrigu::application::StateFlow::Continue,
+        }
+    }
+
     fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        draw_state_switcher(context.egui_context, &mut self.desired_state);
+
         egui::Window::new("Debug info").show(context.egui_context, |ui| {
             let color = match dt.as_millis() {
                 0..=25 => [51, 204, 51],

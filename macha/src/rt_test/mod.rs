@@ -1,14 +1,18 @@
 use morrigu::{
-    application::{ApplicationState, BuildableApplicationState},
+    application::{ApplicationState, BuildableApplicationState, EguiUpdateContext},
     components::ray_tracing::{mesh_rendering::MeshRendering, tlas::TLAS},
     utils::ThreadSafeRef,
     vertices::simple::SimpleVertex,
 };
 
+use crate::utils::switcher::{draw_state_switcher, SwitchableStates};
+
 pub struct RayTracerState {
     monkey_mr: ThreadSafeRef<MeshRendering<SimpleVertex>>,
     rock_mr: ThreadSafeRef<MeshRendering<SimpleVertex>>,
     tlas: ThreadSafeRef<TLAS>,
+
+    desired_state: SwitchableStates,
 }
 
 impl BuildableApplicationState<()> for RayTracerState {
@@ -41,6 +45,8 @@ impl BuildableApplicationState<()> for RayTracerState {
             monkey_mr: monkey_mesh,
             rock_mr: rock_mesh,
             tlas,
+
+            desired_state: SwitchableStates::RTTest,
         }
     }
 }
@@ -63,5 +69,27 @@ impl ApplicationState for RayTracerState {
             .mesh_ref
             .lock()
             .destroy(context.renderer);
+    }
+
+    fn flow<'flow>(
+        &mut self,
+        context: &mut morrigu::application::StateContext,
+    ) -> morrigu::application::StateFlow<'flow> {
+        match self.desired_state {
+            SwitchableStates::Editor => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::editor::MachaState::build(context, ()),
+            )),
+            SwitchableStates::GLTFLoader => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::gltf_loader::GLTFViewerState::build(context, ()),
+            )),
+            SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::compute_shader_test::CSTState::build(context, ()),
+            )),
+            SwitchableStates::RTTest => morrigu::application::StateFlow::Continue,
+        }
+    }
+
+    fn on_update_egui(&mut self, _dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        draw_state_switcher(context.egui_context, &mut self.desired_state);
     }
 }
