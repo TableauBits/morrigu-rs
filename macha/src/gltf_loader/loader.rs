@@ -189,7 +189,7 @@ pub fn load_gltf(
         .map(|image| {
             let image = image
                 .convert_format(gltf::image::Format::R8G8B8A8)
-                .context("Failed to convert GLTF image to RGAB8")?;
+                .context("Failed to convert GLTF image to RGBA8")?;
             Texture::builder()
                 .build_from_data(&image.pixels, image.width, image.height, renderer)
                 .context("Failed to create texture form GTLF data")

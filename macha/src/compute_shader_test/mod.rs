@@ -11,7 +11,6 @@ use morrigu::{
     },
     compute_shader::ComputeShader,
     descriptor_resources::DescriptorResources,
-    egui,
     math_types::{EulerRot, Quat, Vec2, Vec3},
     pipeline_barrier::PipelineBarrier,
     shader::Shader,
@@ -20,7 +19,7 @@ use morrigu::{
     utils::ThreadSafeRef,
 };
 
-use crate::utils::switcher::{draw_state_switcher, SwitchableStates};
+use crate::utils::ui::{draw_debug_utils, draw_state_switcher, SwitchableStates};
 
 type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;
@@ -214,40 +213,6 @@ impl ApplicationState for CSTState {
         compute_shader.lock().destroy(context.renderer);
     }
 
-    fn flow<'flow>(
-        &mut self,
-        context: &mut morrigu::application::StateContext,
-    ) -> morrigu::application::StateFlow<'flow> {
-        match self.desired_state {
-            SwitchableStates::Editor => morrigu::application::StateFlow::SwitchState(Box::new(
-                crate::editor::MachaState::build(context, ()),
-            )),
-            SwitchableStates::GLTFLoader => morrigu::application::StateFlow::SwitchState(Box::new(
-                crate::gltf_loader::GLTFViewerState::build(context, ()),
-            )),
-            SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
-                crate::rt_test::RayTracerState::build(context, ()),
-            )),
-            SwitchableStates::CSTest => morrigu::application::StateFlow::Continue,
-        }
-    }
-
-    fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        draw_state_switcher(context.egui_context, &mut self.desired_state);
-
-        egui::Window::new("Debug info").show(context.egui_context, |ui| {
-            let color = match dt.as_millis() {
-                0..=25 => [51, 204, 51],
-                26..=50 => [255, 153, 0],
-                _ => [204, 51, 51],
-            };
-            ui.colored_label(
-                egui::Color32::from_rgb(color[0], color[1], color[2]),
-                format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()),
-            );
-        });
-    }
-
     fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
         self.output_mesh_rendering_ref
             .lock()
@@ -282,5 +247,28 @@ impl ApplicationState for CSTState {
 
         self.output_texture.lock().destroy(context.renderer);
         self.input_texture.lock().destroy(context.renderer);
+    }
+
+    fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        draw_state_switcher(context.egui_context, &mut self.desired_state);
+        draw_debug_utils(context.egui_context, dt);
+    }
+
+    fn flow<'flow>(
+        &mut self,
+        context: &mut morrigu::application::StateContext,
+    ) -> morrigu::application::StateFlow<'flow> {
+        match self.desired_state {
+            SwitchableStates::Editor => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::editor::MachaState::build(context, ()),
+            )),
+            SwitchableStates::GLTFLoader => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::gltf_loader::GLTFViewerState::build(context, ()),
+            )),
+            SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::rt_test::RayTracerState::build(context, ()),
+            )),
+            SwitchableStates::CSTest => morrigu::application::StateFlow::Continue,
+        }
     }
 }

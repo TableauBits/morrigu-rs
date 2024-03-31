@@ -35,3 +35,17 @@ pub fn draw_state_switcher(ctx: &egui::Context, current_state: &mut SwitchableSt
             });
     });
 }
+
+pub fn draw_debug_utils(ctx: &egui::Context, dt: std::time::Duration) {
+    egui::Window::new("Debug info").show(ctx, |ui| {
+        let color = match dt.as_millis() {
+            0..=25 => [51, 204, 51],
+            26..=50 => [255, 153, 0],
+            _ => [204, 51, 51],
+        };
+        ui.colored_label(
+            egui::Color32::from_rgb(color[0], color[1], color[2]),
+            format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()),
+        );
+    });
+}

@@ -52,10 +52,6 @@ pub trait ApplicationState {
     fn on_attach(&mut self, _context: &mut StateContext) {}
     fn on_drop(&mut self, _context: &mut StateContext) {}
 
-    fn flow<'flow>(&mut self, _context: &mut StateContext) -> StateFlow<'flow> {
-        StateFlow::Continue
-    }
-
     fn on_update(&mut self, _dt: Duration, _context: &mut StateContext) {}
     fn after_systems(&mut self, _dt: Duration, _context: &mut StateContext) {}
     #[cfg(feature = "egui")]
@@ -63,6 +59,10 @@ pub trait ApplicationState {
     #[cfg(feature = "egui")]
     fn after_ui_systems(&mut self, _dt: Duration, _context: &mut EguiUpdateContext) {}
     fn on_event(&mut self, _event: Event<()>, _context: &mut StateContext) {}
+
+    fn flow<'flow>(&mut self, _context: &mut StateContext) -> StateFlow<'flow> {
+        StateFlow::Continue
+    }
 }
 
 pub trait BuildableApplicationState<UserData>: ApplicationState {

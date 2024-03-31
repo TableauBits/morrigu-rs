@@ -1,3 +1,3 @@
 pub mod camera;
-pub mod switcher;
+pub mod ui;
 

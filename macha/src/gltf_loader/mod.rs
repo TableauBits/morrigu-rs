@@ -23,7 +23,7 @@ use morrigu::{
 
 use crate::utils::{
     camera::MachaCamera,
-    switcher::{draw_state_switcher, SwitchableStates},
+    ui::{draw_state_switcher, SwitchableStates},
 };
 
 use self::{
@@ -194,22 +194,32 @@ impl ApplicationState for GLTFViewerState {
             .id();
     }
 
-    fn flow<'flow>(
-        &mut self,
-        context: &mut morrigu::application::StateContext,
-    ) -> morrigu::application::StateFlow<'flow> {
-        match self.desired_state {
-            SwitchableStates::Editor => morrigu::application::StateFlow::SwitchState(Box::new(
-                crate::editor::MachaState::build(context, ()),
-            )),
-            SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
-                crate::compute_shader_test::CSTState::build(context, ()),
-            )),
-            SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
-                crate::rt_test::RayTracerState::build(context, ()),
-            )),
-            SwitchableStates::GLTFLoader => morrigu::application::StateFlow::Continue,
-        }
+    fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
+        let mut skybox = self.skybox.lock();
+        skybox.destroy(context.renderer);
+        skybox
+            .descriptor_resources
+            .uniform_buffers
+            .values()
+            .for_each(|buffer| {
+                buffer
+                    .lock()
+                    .destroy(&context.renderer.device, &mut context.renderer.allocator())
+            });
+        let mut skybox_material = skybox.material_ref.lock();
+        skybox_material.destroy(context.renderer);
+        skybox_material
+            .descriptor_resources
+            .cubemap_images
+            .values()
+            .for_each(|image| image.lock().destroy(context.renderer));
+        skybox_material
+            .shader_ref
+            .lock()
+            .destroy(&context.renderer.device);
+        skybox.mesh_ref.lock().destroy(context.renderer);
+
+        self.scene.destroy(context.renderer);
     }
 
     fn on_update(
@@ -264,31 +274,21 @@ impl ApplicationState for GLTFViewerState {
         }
     }
 
-    fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
-        let mut skybox = self.skybox.lock();
-        skybox.destroy(context.renderer);
-        skybox
-            .descriptor_resources
-            .uniform_buffers
-            .values()
-            .for_each(|buffer| {
-                buffer
-                    .lock()
-                    .destroy(&context.renderer.device, &mut context.renderer.allocator())
-            });
-        let mut skybox_material = skybox.material_ref.lock();
-        skybox_material.destroy(context.renderer);
-        skybox_material
-            .descriptor_resources
-            .cubemap_images
-            .values()
-            .for_each(|image| image.lock().destroy(context.renderer));
-        skybox_material
-            .shader_ref
-            .lock()
-            .destroy(&context.renderer.device);
-        skybox.mesh_ref.lock().destroy(context.renderer);
-
-        self.scene.destroy(context.renderer);
+    fn flow<'flow>(
+        &mut self,
+        context: &mut morrigu::application::StateContext,
+    ) -> morrigu::application::StateFlow<'flow> {
+        match self.desired_state {
+            SwitchableStates::Editor => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::editor::MachaState::build(context, ()),
+            )),
+            SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::compute_shader_test::CSTState::build(context, ()),
+            )),
+            SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::rt_test::RayTracerState::build(context, ()),
+            )),
+            SwitchableStates::GLTFLoader => morrigu::application::StateFlow::Continue,
+        }
     }
 }

@@ -2,7 +2,7 @@ mod components;
 mod ecs_buffer;
 mod systems;
 
-use crate::utils::switcher::{draw_state_switcher, SwitchableStates};
+use crate::utils::ui::{draw_debug_utils, draw_state_switcher, SwitchableStates};
 
 use super::utils::camera::MachaCamera;
 use bevy_ecs::prelude::Entity;
@@ -231,22 +231,40 @@ impl ApplicationState for MachaState {
         self.egui_texture_id = context.egui.painter.register_user_texture(egui_texture);
     }
 
-    fn flow<'flow>(
-        &mut self,
-        context: &mut morrigu::application::StateContext,
-    ) -> morrigu::application::StateFlow<'flow> {
-        match self.desired_state {
-            SwitchableStates::GLTFLoader => morrigu::application::StateFlow::SwitchState(Box::new(
-                crate::gltf_loader::GLTFViewerState::build(context, ()),
-            )),
-            SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
-                crate::compute_shader_test::CSTState::build(context, ()),
-            )),
-            SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
-                crate::rt_test::RayTracerState::build(context, ()),
-            )),
-            SwitchableStates::Editor => morrigu::application::StateFlow::Continue,
+    fn on_drop(&mut self, context: &mut StateContext) {
+        if let Some(texture) = context
+            .egui
+            .painter
+            .retrieve_user_texture(self.egui_texture_id)
+        {
+            texture.lock().destroy(context.renderer);
         }
+
+        self.mesh_rendering_ref
+            .lock()
+            .descriptor_resources
+            .uniform_buffers
+            .get(&0)
+            .unwrap()
+            .lock()
+            .destroy(&context.renderer.device, &mut context.renderer.allocator());
+
+        self.mesh_rendering_ref
+            .lock()
+            .descriptor_resources
+            .uniform_buffers
+            .get(&4)
+            .unwrap()
+            .lock()
+            .destroy(&context.renderer.device, &mut context.renderer.allocator());
+
+        self.gradient_ref.lock().destroy(context.renderer);
+        self.flowmap_ref.lock().destroy(context.renderer);
+        self.texture_ref.lock().destroy(context.renderer);
+        self.mesh_rendering_ref.lock().destroy(context.renderer);
+        self.mesh_ref.lock().destroy(context.renderer);
+        self.material_ref.lock().destroy(context.renderer);
+        self.shader_ref.lock().destroy(&context.renderer.device);
     }
 
     fn on_update(&mut self, dt: std::time::Duration, context: &mut StateContext) {
@@ -263,17 +281,8 @@ impl ApplicationState for MachaState {
 
     fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
         draw_state_switcher(context.egui_context, &mut self.desired_state);
-        egui::Window::new("Debug info").show(context.egui_context, |ui| {
-            let color = match dt.as_millis() {
-                0..=25 => [51, 204, 51],
-                26..=50 => [255, 153, 0],
-                _ => [204, 51, 51],
-            };
-            ui.colored_label(
-                egui::Color32::from_rgb(color[0], color[1], color[2]),
-                format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()),
-            );
-        });
+        draw_debug_utils(context.egui_context, dt);
+
         egui::Window::new("Shader uniforms").show(context.egui_context, |ui| {
             let image = egui::ImageSource::Texture(
                 (self.egui_texture_id, egui::Vec2::new(128.0, 128.0)).into(),
@@ -355,40 +364,22 @@ impl ApplicationState for MachaState {
         }
     }
 
-    fn on_drop(&mut self, context: &mut StateContext) {
-        if let Some(texture) = context
-            .egui
-            .painter
-            .retrieve_user_texture(self.egui_texture_id)
-        {
-            texture.lock().destroy(context.renderer);
+    fn flow<'flow>(
+        &mut self,
+        context: &mut StateContext,
+    ) -> morrigu::application::StateFlow<'flow> {
+        match self.desired_state {
+            SwitchableStates::GLTFLoader => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::gltf_loader::GLTFViewerState::build(context, ()),
+            )),
+            SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::compute_shader_test::CSTState::build(context, ()),
+            )),
+            SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::rt_test::RayTracerState::build(context, ()),
+            )),
+            SwitchableStates::Editor => morrigu::application::StateFlow::Continue,
         }
-
-        self.mesh_rendering_ref
-            .lock()
-            .descriptor_resources
-            .uniform_buffers
-            .get(&0)
-            .unwrap()
-            .lock()
-            .destroy(&context.renderer.device, &mut context.renderer.allocator());
-
-        self.mesh_rendering_ref
-            .lock()
-            .descriptor_resources
-            .uniform_buffers
-            .get(&4)
-            .unwrap()
-            .lock()
-            .destroy(&context.renderer.device, &mut context.renderer.allocator());
-
-        self.gradient_ref.lock().destroy(context.renderer);
-        self.flowmap_ref.lock().destroy(context.renderer);
-        self.texture_ref.lock().destroy(context.renderer);
-        self.mesh_rendering_ref.lock().destroy(context.renderer);
-        self.mesh_ref.lock().destroy(context.renderer);
-        self.material_ref.lock().destroy(context.renderer);
-        self.shader_ref.lock().destroy(&context.renderer.device);
     }
 }
 
