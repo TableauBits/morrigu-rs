@@ -193,21 +193,27 @@ impl<'state> Application<'state> {
                     StateFlow::Continue => (),
                     StateFlow::Exit => target.exit(),
                     StateFlow::SwitchState(new_state) => {
-                        log::info!("Switching states !");
+                        log::debug!("Switching states !");
 
                         self.state.on_drop(&mut state_context);
+
+                        let res = match self.window_input_state.resolution() {
+                            Some((x, y)) => (x, y),
+                            None => (
+                                self.window.inner_size().width,
+                                self.window.inner_size().height,
+                            ),
+                        };
                         let camera = Camera::builder().build(
                             Projection::Perspective(PerspectiveData {
                                 horizontal_fov: f32::to_radians(90.0),
                                 near_plane: 0.001,
                                 far_plane: 1000.0,
                             }),
-                            &Vec2::new(
-                                self.window.inner_size().width as f32,
-                                self.window.inner_size().height as f32,
-                            ),
+                            &Vec2::new(res.0 as f32, res.1 as f32),
                         );
                         *state_context.ecs_manager = ECSManager::new(&self.renderer_ref, camera);
+                        state_context.ecs_manager.on_resize(res.0, res.1);
 
                         self.state = new_state;
                         self.state.on_attach(&mut state_context);

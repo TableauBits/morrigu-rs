@@ -171,6 +171,9 @@ impl ApplicationState for MachaState {
             schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
         });
 
+        let res = context.renderer.window_resolution();
+        self.camera.on_resize(res.0, res.1);
+
         let mut transform = Transform::default();
         transform.rotate(&Quat::from_euler(
             EulerRot::XYZ,
@@ -178,7 +181,6 @@ impl ApplicationState for MachaState {
             0.0,
             0.0,
         ));
-
         self.camera.set_focal_point(transform.translation());
 
         context.ecs_manager.world.insert_resource(ECSBuffer::new());

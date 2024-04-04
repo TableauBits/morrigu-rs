@@ -126,6 +126,8 @@ impl ApplicationState for CSTState {
             schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
         });
 
+        let res = context.renderer.window_resolution();
+        self.camera.on_resize(res.0, res.1);
         context.ecs_manager.world.insert_resource(self.camera);
 
         let mut transform = Transform::default();

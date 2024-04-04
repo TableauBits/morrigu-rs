@@ -180,6 +180,8 @@ impl ApplicationState for GLTFViewerState {
                 .spawn((transform.clone(), mesh_rendering_ref.clone()));
         }
 
+        let res = context.renderer.window_resolution();
+        self.camera.on_resize(res.0, res.1);
         self.skybox_entity_ref = context
             .ecs_manager
             .world
