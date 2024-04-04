@@ -5,15 +5,7 @@ mod editor;
 mod gltf_loader;
 mod rt_test;
 
-#[allow(unused_imports)]
-use compute_shader_test::CSTState;
-#[allow(unused_imports)]
 use editor::MachaState;
-#[allow(unused_imports)]
-use gltf_loader::GLTFViewerState;
-#[allow(unused_imports)]
-use rt_test::RayTracerState;
-
 use morrigu::application::ApplicationBuilder;
 
 fn init_logging() {
