@@ -270,15 +270,16 @@ impl ApplicationState for MachaState {
     }
 
     fn on_update(&mut self, dt: std::time::Duration, context: &mut StateContext) {
+        // https://github.com/urholaukkarinen/egui-gizmo/issues/29
         self.camera.on_update(dt, context.window_input_state);
         context
             .ecs_manager
             .world
-            .insert_resource(ResourceWrapper::new(context.window_input_state.clone()));
+            .insert_resource(self.camera.mrg_camera);
         context
             .ecs_manager
             .world
-            .insert_resource(self.camera.mrg_camera);
+            .insert_resource(ResourceWrapper::new(context.window_input_state.clone()));
     }
 
     fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
