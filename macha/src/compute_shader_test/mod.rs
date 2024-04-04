@@ -11,7 +11,6 @@ use morrigu::{
     },
     compute_shader::ComputeShader,
     descriptor_resources::DescriptorResources,
-    egui,
     math_types::{EulerRot, Quat, Vec2, Vec3},
     pipeline_barrier::PipelineBarrier,
     shader::Shader,
@@ -20,17 +19,22 @@ use morrigu::{
     utils::ThreadSafeRef,
 };
 
+use crate::utils::ui::{draw_debug_utils, draw_state_switcher, SwitchableStates};
+
 type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;
 type MeshRendering = mesh_rendering::MeshRendering<Vertex>;
 
 pub struct CSTState {
+    camera: Camera,
     input_texture: ThreadSafeRef<Texture>,
     output_texture: ThreadSafeRef<Texture>,
 
     material_ref: ThreadSafeRef<Material>,
     input_mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
     output_mesh_rendering_ref: ThreadSafeRef<MeshRendering>,
+
+    desired_state: SwitchableStates,
 }
 
 impl BuildableApplicationState<()> for CSTState {
@@ -104,7 +108,27 @@ impl BuildableApplicationState<()> for CSTState {
         )
         .expect("Failed to create mesh rendering");
 
-        context.ecs_manager.world.insert_resource(camera);
+        Self {
+            camera,
+            input_texture,
+            output_texture,
+            material_ref,
+            output_mesh_rendering_ref,
+            input_mesh_rendering_ref,
+            desired_state: SwitchableStates::CSTest,
+        }
+    }
+}
+
+impl ApplicationState for CSTState {
+    fn on_attach(&mut self, context: &mut morrigu::application::StateContext) {
+        context.ecs_manager.redefine_systems_schedule(|schedule| {
+            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
+        });
+
+        let res = context.renderer.window_resolution();
+        self.camera.on_resize(res.0, res.1);
+        context.ecs_manager.world.insert_resource(self.camera);
 
         let mut transform = Transform::default();
         transform.rotate(&Quat::from_euler(
@@ -118,30 +142,14 @@ impl BuildableApplicationState<()> for CSTState {
         context
             .ecs_manager
             .world
-            .spawn((transform.clone(), input_mesh_rendering_ref.clone()));
+            .spawn((transform.clone(), self.input_mesh_rendering_ref.clone()));
 
         transform.set_translation(&Vec3::new(0.5, 0.0, -1.0));
         context
             .ecs_manager
             .world
-            .spawn((transform, output_mesh_rendering_ref.clone()));
+            .spawn((transform, self.output_mesh_rendering_ref.clone()));
 
-        context.ecs_manager.redefine_systems_schedule(|schedule| {
-            schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
-        });
-
-        Self {
-            input_texture,
-            output_texture,
-            material_ref,
-            output_mesh_rendering_ref,
-            input_mesh_rendering_ref,
-        }
-    }
-}
-
-impl ApplicationState for CSTState {
-    fn on_attach(&mut self, context: &mut morrigu::application::StateContext) {
         let compute_shader = ComputeShader::builder()
             .build_from_spirv_u8(
                 include_bytes!("shaders/gen/blur.comp"),
@@ -207,20 +215,6 @@ impl ApplicationState for CSTState {
         compute_shader.lock().destroy(context.renderer);
     }
 
-    fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        egui::Window::new("Debug info").show(context.egui_context, |ui| {
-            let color = match dt.as_millis() {
-                0..=25 => [51, 204, 51],
-                26..=50 => [255, 153, 0],
-                _ => [204, 51, 51],
-            };
-            ui.colored_label(
-                egui::Color32::from_rgb(color[0], color[1], color[2]),
-                format!("FPS: {} ({}ms)", 1.0 / dt.as_secs_f32(), dt.as_millis()),
-            );
-        });
-    }
-
     fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
         self.output_mesh_rendering_ref
             .lock()
@@ -255,5 +249,28 @@ impl ApplicationState for CSTState {
 
         self.output_texture.lock().destroy(context.renderer);
         self.input_texture.lock().destroy(context.renderer);
+    }
+
+    fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        draw_state_switcher(context.egui_context, &mut self.desired_state);
+        draw_debug_utils(context.egui_context, dt);
+    }
+
+    fn flow<'flow>(
+        &mut self,
+        context: &mut morrigu::application::StateContext,
+    ) -> morrigu::application::StateFlow<'flow> {
+        match self.desired_state {
+            SwitchableStates::Editor => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::editor::MachaState::build(context, ()),
+            )),
+            SwitchableStates::GLTFLoader => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::gltf_loader::GLTFViewerState::build(context, ()),
+            )),
+            SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::rt_test::RayTracerState::build(context, ()),
+            )),
+            SwitchableStates::CSTest => morrigu::application::StateFlow::Continue,
+        }
     }
 }

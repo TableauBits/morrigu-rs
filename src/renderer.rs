@@ -1020,6 +1020,10 @@ impl Renderer {
         self.default_texture_ref.clone()
     }
 
+    pub fn window_resolution(&self) -> (u32, u32) {
+        (self.window_width, self.window_height)
+    }
+
     pub(crate) fn begin_frame(&mut self) -> bool {
         if self.window_width == 0 || self.window_height == 0 {
             return false;

@@ -86,6 +86,19 @@ pub struct Camera {
     size: Vec2,
 }
 
+impl Default for Camera {
+    fn default() -> Self {
+        Self::builder().build(
+            Projection::Perspective(PerspectiveData {
+                horizontal_fov: f32::to_radians(90.0),
+                near_plane: 0.0001,
+                far_plane: 1000.0,
+            }),
+            &Vec2::new(1280.0, 720.0),
+        )
+    }
+}
+
 #[profiling::all_functions]
 impl Camera {
     #[profiling::skip]
