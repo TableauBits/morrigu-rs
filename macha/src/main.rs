@@ -3,6 +3,7 @@ mod utils;
 mod compute_shader_test;
 mod editor;
 mod gltf_loader;
+mod pbr_test;
 mod rt_test;
 
 use editor::MachaState;

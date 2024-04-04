@@ -7,6 +7,7 @@ pub enum SwitchableStates {
     Editor,
     GLTFLoader,
     CSTest,
+    PBRTest,
     RTTest,
 }
 
@@ -16,6 +17,7 @@ impl Display for SwitchableStates {
             SwitchableStates::Editor => "Macha Editor",
             SwitchableStates::GLTFLoader => "GLTF Loader and Viewer",
             SwitchableStates::CSTest => "Compute Shader Test",
+            SwitchableStates::PBRTest => "PBR Test",
             SwitchableStates::RTTest => "Ray Tracing Test",
         };
 
@@ -28,10 +30,31 @@ pub fn draw_state_switcher(ctx: &egui::Context, current_state: &mut SwitchableSt
         egui::ComboBox::from_label("Select desired state:")
             .selected_text(format!("{current_state}"))
             .show_ui(ui, |ui| {
-                ui.selectable_value(current_state, SwitchableStates::Editor, format!("{}", SwitchableStates::Editor));
-                ui.selectable_value(current_state, SwitchableStates::GLTFLoader, format!("{}", SwitchableStates::GLTFLoader));
-                ui.selectable_value(current_state, SwitchableStates::CSTest, format!("{}", SwitchableStates::CSTest));
-                ui.selectable_value(current_state, SwitchableStates::RTTest, format!("{}", SwitchableStates::RTTest));
+                ui.selectable_value(
+                    current_state,
+                    SwitchableStates::Editor,
+                    format!("{}", SwitchableStates::Editor),
+                );
+                ui.selectable_value(
+                    current_state,
+                    SwitchableStates::GLTFLoader,
+                    format!("{}", SwitchableStates::GLTFLoader),
+                );
+                ui.selectable_value(
+                    current_state,
+                    SwitchableStates::CSTest,
+                    format!("{}", SwitchableStates::CSTest),
+                );
+                ui.selectable_value(
+                    current_state,
+                    SwitchableStates::PBRTest,
+                    format!("{}", SwitchableStates::PBRTest),
+                );
+                ui.selectable_value(
+                    current_state,
+                    SwitchableStates::RTTest,
+                    format!("{}", SwitchableStates::RTTest),
+                );
             });
     });
 }

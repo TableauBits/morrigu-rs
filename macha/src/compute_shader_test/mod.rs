@@ -267,6 +267,9 @@ impl ApplicationState for CSTState {
             SwitchableStates::GLTFLoader => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::gltf_loader::GLTFViewerState::build(context, ()),
             )),
+            SwitchableStates::PBRTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::pbr_test::PBRState::build(context, ()),
+            )),
             SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::rt_test::RayTracerState::build(context, ()),
             )),

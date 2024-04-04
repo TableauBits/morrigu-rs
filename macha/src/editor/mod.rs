@@ -171,6 +171,13 @@ impl ApplicationState for MachaState {
             schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
         });
 
+        context
+            .ecs_manager
+            .redefine_ui_systems_schedule(|schedule| {
+                schedule.add_systems(hierarchy_panel::draw_hierarchy_panel_stable);
+                schedule.add_systems(gizmo_drawer::draw_gizmo);
+            });
+
         let res = context.renderer.window_resolution();
         self.camera.on_resize(res.0, res.1);
 
@@ -203,13 +210,6 @@ impl ApplicationState for MachaState {
                 name: "empty".to_owned(),
             },
         ));
-
-        context
-            .ecs_manager
-            .redefine_ui_systems_schedule(|schedule| {
-                schedule.add_systems(hierarchy_panel::draw_hierarchy_panel_stable);
-                schedule.add_systems(gizmo_drawer::draw_gizmo);
-            });
 
         let selection_style = egui::style::Selection {
             bg_fill: egui::Color32::from_rgb(165, 20, 61),
@@ -377,6 +377,9 @@ impl ApplicationState for MachaState {
             )),
             SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::compute_shader_test::CSTState::build(context, ()),
+            )),
+            SwitchableStates::PBRTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::pbr_test::PBRState::build(context, ()),
             )),
             SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::rt_test::RayTracerState::build(context, ()),
