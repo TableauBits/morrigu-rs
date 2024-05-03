@@ -101,7 +101,7 @@ pub fn render_meshes<VertexType>(
                 .expect("Invalid width")
                 .into();
 
-            let viewport = vk::Viewport::builder()
+            let viewport = vk::Viewport::default()
                 .x(0.0)
                 .y(y)
                 .width(
@@ -112,7 +112,7 @@ pub fn render_meshes<VertexType>(
                 .height(-y)
                 .min_depth(0.0)
                 .max_depth(1.0);
-            let scissor = vk::Rect2D::builder()
+            let scissor = vk::Rect2D::default()
                 .offset(vk::Offset2D::default())
                 .extent(vk::Extent2D {
                     width: renderer.framebuffer_width,

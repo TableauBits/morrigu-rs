@@ -108,7 +108,7 @@ where
 
     renderer
         .immediate_command(|cmd_buffer| {
-            let copy_info = vk::BufferCopy::builder().size(vertex_data_size);
+            let copy_info = vk::BufferCopy::default().size(vertex_data_size);
 
             unsafe {
                 renderer.device.cmd_copy_buffer(
@@ -164,7 +164,7 @@ pub fn upload_index_buffer(
 
     renderer
         .immediate_command(|cmd_buffer| {
-            let copy_info = vk::BufferCopy::builder().size(index_data_size);
+            let copy_info = vk::BufferCopy::default().size(index_data_size);
 
             unsafe {
                 renderer.device.cmd_copy_buffer(

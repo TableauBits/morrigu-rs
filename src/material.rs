@@ -159,13 +159,13 @@ impl MaterialBuilder {
                 descriptor_count: std::cmp::max(sampled_image_count, 1),
             },
         ];
-        let pool_info = vk::DescriptorPoolCreateInfo::builder()
+        let pool_info = vk::DescriptorPoolCreateInfo::default()
             .max_sets(1)
             .pool_sizes(&pool_sizes);
         let descriptor_pool = unsafe { renderer.device.create_descriptor_pool(&pool_info, None) }
             .map_err(MaterialBuildError::VulkanDescriptorPoolCreationFailed)?;
 
-        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::builder()
+        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::default()
             .descriptor_pool(descriptor_pool)
             .set_layouts(std::slice::from_ref(&shader.level_2_dsl));
         let descriptor_set = unsafe {
@@ -197,11 +197,10 @@ impl MaterialBuilder {
 
         let mut pc_ranges = vec![];
         if !pc_shader_stages.is_empty() {
-            pc_ranges = vec![vk::PushConstantRange::builder()
+            pc_ranges = vec![vk::PushConstantRange::default()
                 .stage_flags(pc_shader_stages)
                 .offset(0)
-                .size(size.ok_or(MaterialBuildError::InvalidPushConstantSize)?)
-                .build()]
+                .size(size.ok_or(MaterialBuildError::InvalidPushConstantSize)?)]
         }
         let layouts = [
             renderer.descriptors[0].layout,
@@ -209,44 +208,44 @@ impl MaterialBuilder {
             shader.level_2_dsl,
             shader.level_3_dsl,
         ];
-        let layout_info = vk::PipelineLayoutCreateInfo::builder()
+        let layout_info = vk::PipelineLayoutCreateInfo::default()
             .set_layouts(&layouts)
             .push_constant_ranges(&pc_ranges);
         let layout = unsafe { renderer.device.create_pipeline_layout(&layout_info, None) }
             .map_err(MaterialBuildError::VulkanPipelineLayoutCreationFailed)?;
 
         let vertex_info = VertexType::vertex_input_description();
-        let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::builder()
+        let vertex_input_state_info = vk::PipelineVertexInputStateCreateInfo::default()
             .vertex_binding_descriptions(&vertex_info.bindings)
             .vertex_attribute_descriptions(&vertex_info.attributes);
 
         let shader_module_entry_point = std::ffi::CString::new("main").unwrap();
-        let vertex_shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+        let vertex_shader_stage = vk::PipelineShaderStageCreateInfo::default()
             .stage(vk::ShaderStageFlags::VERTEX)
             .module(shader.vertex_module)
             .name(&shader_module_entry_point);
-        let fragment_shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+        let fragment_shader_stage = vk::PipelineShaderStageCreateInfo::default()
             .stage(vk::ShaderStageFlags::FRAGMENT)
             .module(shader.fragment_module)
             .name(&shader_module_entry_point);
 
-        let input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
+        let input_assembly_state_info = vk::PipelineInputAssemblyStateCreateInfo::default()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
-        let rasterizer_state_info = vk::PipelineRasterizationStateCreateInfo::builder()
+        let rasterizer_state_info = vk::PipelineRasterizationStateCreateInfo::default()
             .polygon_mode(vk::PolygonMode::FILL)
             .cull_mode(self.cull_mode)
             .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .line_width(1.0);
-        let multisampling_state_info = vk::PipelineMultisampleStateCreateInfo::builder()
+        let multisampling_state_info = vk::PipelineMultisampleStateCreateInfo::default()
             .rasterization_samples(vk::SampleCountFlags::TYPE_1)
             .min_sample_shading(1.0);
-        let depth_stencil_state_info = vk::PipelineDepthStencilStateCreateInfo::builder()
+        let depth_stencil_state_info = vk::PipelineDepthStencilStateCreateInfo::default()
             .depth_test_enable(self.z_test)
             .depth_write_enable(self.z_write)
             .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
             .min_depth_bounds(0.0)
             .max_depth_bounds(1.0);
-        let color_blend_attachment_state = vk::PipelineColorBlendAttachmentState::builder()
+        let color_blend_attachment_state = vk::PipelineColorBlendAttachmentState::default()
             .blend_enable(true)
             .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
             .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
@@ -257,13 +256,13 @@ impl MaterialBuilder {
             .color_write_mask(vk::ColorComponentFlags::RGBA);
 
         let pipeline = PipelineBuilder {
-            shader_stages: vec![*vertex_shader_stage, *fragment_shader_stage],
-            vertex_input_state_info: *vertex_input_state_info,
-            input_assembly_state_info: *input_assembly_state_info,
-            rasterizer_state_info: *rasterizer_state_info,
-            multisampling_state_info: *multisampling_state_info,
-            depth_stencil_state_info: *depth_stencil_state_info,
-            color_blend_attachment_state: *color_blend_attachment_state,
+            shader_stages: vec![vertex_shader_stage, fragment_shader_stage],
+            vertex_input_state_info,
+            input_assembly_state_info,
+            rasterizer_state_info,
+            multisampling_state_info,
+            depth_stencil_state_info,
+            color_blend_attachment_state,
             layout,
             cache: None, // @TODO(Ithyx): use pipeline cache plz
         }
@@ -318,17 +317,16 @@ where
 
         let buffer = buffer_ref.lock();
 
-        let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
+        let descriptor_buffer_info = vk::DescriptorBufferInfo::default()
             .buffer(buffer.handle)
             .offset(0)
             .range(buffer.allocation.as_ref().unwrap().size());
 
-        let set_write = vk::WriteDescriptorSet::builder()
+        let set_write = vk::WriteDescriptorSet::default()
             .dst_set(self.descriptor_set)
             .dst_binding(binding_slot)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(std::slice::from_ref(&descriptor_buffer_info))
-            .build();
+            .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
 
         unsafe {
             renderer
@@ -375,16 +373,15 @@ where
 
         let image = image_ref.lock();
 
-        let descriptor_image_info = vk::DescriptorImageInfo::builder()
+        let descriptor_image_info = vk::DescriptorImageInfo::default()
             .image_view(image.view)
             .image_layout(vk::ImageLayout::GENERAL);
 
-        let set_write = vk::WriteDescriptorSet::builder()
+        let set_write = vk::WriteDescriptorSet::default()
             .dst_set(self.descriptor_set)
             .dst_binding(binding_slot)
             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-            .image_info(std::slice::from_ref(&descriptor_image_info))
-            .build();
+            .image_info(std::slice::from_ref(&descriptor_image_info));
 
         unsafe {
             renderer
@@ -414,12 +411,12 @@ where
 
         let texture = texture_ref.lock();
 
-        let descriptor_image_info = vk::DescriptorImageInfo::builder()
+        let descriptor_image_info = vk::DescriptorImageInfo::default()
             .sampler(texture.sampler)
             .image_view(texture.image_ref.lock().view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
 
-        let set_write = vk::WriteDescriptorSet::builder()
+        let set_write = vk::WriteDescriptorSet::default()
             .dst_set(self.descriptor_set)
             .dst_binding(binding_slot)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)

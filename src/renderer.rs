@@ -6,10 +6,7 @@ use crate::{
 };
 
 use ash::{
-    extensions::{
-        ext::DebugUtils,
-        khr::{Surface, Swapchain},
-    },
+    ext, khr,
     vk::{self, PhysicalDeviceType},
     Entry, Instance,
 };
@@ -17,7 +14,7 @@ use gpu_allocator::{
     vulkan::{Allocator, AllocatorCreateDesc},
     AllocationSizes,
 };
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winit::window::Window;
 
 use std::{
@@ -90,7 +87,7 @@ pub struct QueueInfo {
 struct SurfaceInfo {
     handle: vk::SurfaceKHR,
     format: vk::SurfaceFormatKHR,
-    loader: Surface,
+    loader: khr::surface::Instance,
 }
 
 struct SwapchainInfo {
@@ -100,13 +97,13 @@ struct SwapchainInfo {
     image_views: Vec<vk::ImageView>,
     depth_image: AllocatedImage,
     preferred_present_mode: vk::PresentModeKHR,
-    loader: Swapchain,
+    loader: khr::swapchain::Device,
     extent: vk::Extent2D,
 }
 
 pub(crate) struct DebugMessengerInfo {
     pub handle: vk::DebugUtilsMessengerEXT,
-    pub loader: DebugUtils,
+    pub instance_loader: ext::debug_utils::Instance,
 }
 
 struct SyncObjects {
@@ -211,9 +208,9 @@ fn create_swapchain(
         .find(|&mode| mode == preferred_present_mode)
         .unwrap_or(vk::PresentModeKHR::FIFO);
 
-    let swapchain_loader = Swapchain::new(instance, device);
+    let swapchain_loader = khr::swapchain::Device::new(instance, device);
 
-    let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
+    let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
         .surface(surface.handle)
         .min_image_count(requested_image_count)
         .image_color_space(surface.format.color_space)
@@ -231,7 +228,7 @@ fn create_swapchain(
         .expect("Failed to create swapchain");
 
     let image_view_creator = |&image: &vk::Image| {
-        let create_view_info = vk::ImageViewCreateInfo::builder()
+        let create_view_info = vk::ImageViewCreateInfo::default()
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(surface.format.format)
             .components(vk::ComponentMapping {
@@ -262,7 +259,7 @@ fn create_swapchain(
         depth: 1,
     };
 
-    let depth_image_create_info_builder = vk::ImageCreateInfo::builder()
+    let depth_image_create_info = vk::ImageCreateInfo::default()
         .extent(depth_extent)
         .image_type(vk::ImageType::TYPE_2D)
         .format(vk::Format::D32_SFLOAT)
@@ -272,7 +269,7 @@ fn create_swapchain(
         .tiling(vk::ImageTiling::OPTIMAL)
         .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
         .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    let depth_image_handle = unsafe { device.create_image(&depth_image_create_info_builder, None) }
+    let depth_image_handle = unsafe { device.create_image(&depth_image_create_info, None) }
         .expect("Failed to create image");
 
     let memory_requirements = unsafe { device.get_image_memory_requirements(depth_image_handle) };
@@ -296,7 +293,7 @@ fn create_swapchain(
     }
     .expect("Failed to bind depth image memory");
 
-    let depth_image_view_create_info_builder = vk::ImageViewCreateInfo::builder()
+    let depth_image_view_create_info = vk::ImageViewCreateInfo::default()
         .view_type(vk::ImageViewType::TYPE_2D)
         .format(vk::Format::D32_SFLOAT)
         .subresource_range(vk::ImageSubresourceRange {
@@ -307,9 +304,8 @@ fn create_swapchain(
             layer_count: 1,
         })
         .image(depth_image_handle);
-    let depth_image_view =
-        unsafe { device.create_image_view(&depth_image_view_create_info_builder, None) }
-            .expect("Failed to create depth image view");
+    let depth_image_view = unsafe { device.create_image_view(&depth_image_view_create_info, None) }
+        .expect("Failed to create depth image view");
 
     SwapchainInfo {
         handle: swapchain,
@@ -320,7 +316,7 @@ fn create_swapchain(
             view: depth_image_view,
             allocation: Some(depth_allocation),
             layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            format: depth_image_create_info_builder.format,
+            format: depth_image_create_info.format,
             extent: depth_extent,
             layer_count: 1,
         },
@@ -337,7 +333,7 @@ fn create_framebuffers(
     swapchain: &SwapchainInfo,
     device: &ash::Device,
 ) -> Vec<vk::Framebuffer> {
-    let mut framebuffer_create_info = vk::FramebufferCreateInfo::builder()
+    let mut framebuffer_create_info = vk::FramebufferCreateInfo::default()
         .render_pass(render_pass)
         .width(width)
         .height(height)
@@ -360,7 +356,7 @@ fn create_framebuffers(
 impl<'a> RendererBuilder<'a> {
     fn create_instance(&self, entry: &Entry) -> Instance {
         let engine_name = CString::new("Morrigu").unwrap();
-        let app_info = vk::ApplicationInfo::builder()
+        let app_info = vk::ApplicationInfo::default()
             .application_name(self.application_name.as_c_str())
             .application_version(self.application_version)
             .engine_name(&engine_name)
@@ -368,10 +364,14 @@ impl<'a> RendererBuilder<'a> {
             .api_version(vk::make_api_version(0, 1, 2, 0));
 
         #[allow(unused_mut)]
-        let mut required_extensions =
-            ash_window::enumerate_required_extensions(self.window_handle.raw_display_handle())
-                .expect("Failed to query extensions")
-                .to_vec();
+        let mut required_extensions = ash_window::enumerate_required_extensions(
+            self.window_handle
+                .display_handle()
+                .expect("window has no display handle")
+                .as_raw(),
+        )
+        .expect("Failed to query extensions")
+        .to_vec();
 
         #[allow(unused_assignments)]
         #[allow(unused_mut)]
@@ -382,10 +382,10 @@ impl<'a> RendererBuilder<'a> {
                 [CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap()];
             raw_layer_names = layer_names.iter().map(|layer| layer.as_ptr()).collect();
 
-            required_extensions.push(DebugUtils::name().as_ptr());
+            required_extensions.push(ext::debug_utils::NAME.as_ptr());
         }
 
-        let instance_info = vk::InstanceCreateInfo::builder()
+        let instance_info = vk::InstanceCreateInfo::default()
             .application_info(&app_info)
             .enabled_layer_names(&raw_layer_names)
             .enabled_extension_names(&required_extensions);
@@ -398,15 +398,15 @@ impl<'a> RendererBuilder<'a> {
 
     fn create_debug_messenger(
         &self,
-        _entry: &Entry,
-        _instance: &Instance,
+        entry: &Entry,
+        instance: &Instance,
     ) -> Option<DebugMessengerInfo> {
         #[allow(unused_assignments)]
         #[allow(unused_mut)]
         let mut debug_messenger = None;
         #[cfg(debug_assertions)]
         {
-            let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+            let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
                 .message_severity(
                     vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
                         | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING,
@@ -418,16 +418,15 @@ impl<'a> RendererBuilder<'a> {
                 )
                 .pfn_user_callback(Some(vulkan_debug_callback));
 
-            let debug_messenger_loader = DebugUtils::new(_entry, _instance);
+            let instance_loader = ext::debug_utils::Instance::new(entry, instance);
             let debug_messenger_handle =
-                unsafe { debug_messenger_loader.create_debug_utils_messenger(&debug_info, None) }
-                    .expect(
-                        "Failed to create debug messenger. Try compiling a release build instead?",
-                    );
+                unsafe { instance_loader.create_debug_utils_messenger(&debug_info, None) }.expect(
+                    "Failed to create debug messenger. Try compiling a release build instead?",
+                );
 
             debug_messenger = Some(DebugMessengerInfo {
                 handle: debug_messenger_handle,
-                loader: debug_messenger_loader,
+                instance_loader,
             });
         }
 
@@ -438,7 +437,7 @@ impl<'a> RendererBuilder<'a> {
         &self,
         surface: vk::SurfaceKHR,
         instance: &Instance,
-        surface_loader: &Surface,
+        surface_loader: &khr::surface::Instance,
         required_version: u32,
     ) -> (vk::PhysicalDevice, u32) {
         let mut physical_devices = unsafe { instance.enumerate_physical_devices() }
@@ -477,7 +476,7 @@ impl<'a> RendererBuilder<'a> {
                             vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default();
                         let mut rtp_features =
                             vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default();
-                        let mut features = vk::PhysicalDeviceFeatures2::builder()
+                        let mut features = vk::PhysicalDeviceFeatures2::default()
                             .push_next(&mut as_features)
                             .push_next(&mut rtp_features);
                         unsafe {
@@ -573,39 +572,36 @@ impl<'a> RendererBuilder<'a> {
         physical_device: vk::PhysicalDevice,
         queue_family_index: u32,
     ) -> ash::Device {
-        let mut raw_extensions_names = vec![Swapchain::name().as_ptr()];
+        let mut raw_extensions_names = vec![khr::swapchain::NAME.as_ptr()];
         let features = vk::PhysicalDeviceFeatures::default();
         let mut vk12features = vk::PhysicalDeviceVulkan12Features::default();
         let priorities = [1.0];
 
         if cfg!(feature = "ray_tracing") {
             // For rt acceleration structures
-            raw_extensions_names.push(ash::extensions::khr::AccelerationStructure::name().as_ptr());
+            raw_extensions_names.push(khr::acceleration_structure::NAME.as_ptr());
             // For vkCmdTraceRaysKHR
-            raw_extensions_names.push(ash::extensions::khr::RayTracingPipeline::name().as_ptr());
+            raw_extensions_names.push(khr::ray_tracing_pipeline::NAME.as_ptr());
             // Required by RayTracingPipeline
-            raw_extensions_names
-                .push(ash::extensions::khr::DeferredHostOperations::name().as_ptr());
+            raw_extensions_names.push(khr::deferred_host_operations::NAME.as_ptr());
 
             vk12features.buffer_device_address = vk::TRUE;
         }
 
-        let queue_info = vk::DeviceQueueCreateInfo::builder()
+        let queue_info = vk::DeviceQueueCreateInfo::default()
             .queue_family_index(queue_family_index)
             .queue_priorities(&priorities);
 
-        let mut device_create_info = vk::DeviceCreateInfo::builder()
+        let mut device_create_info = vk::DeviceCreateInfo::default()
             .enabled_features(&features)
             .enabled_extension_names(&raw_extensions_names)
             .queue_create_infos(std::slice::from_ref(&queue_info))
             .push_next(&mut vk12features);
 
-        let mut as_features = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
-            .acceleration_structure(true)
-            .build();
-        let mut rtp_features = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
-            .ray_tracing_pipeline(true)
-            .build();
+        let mut as_features = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default()
+            .acceleration_structure(true);
+        let mut rtp_features =
+            vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default().ray_tracing_pipeline(true);
         if cfg!(feature = "ray_tracing") {
             device_create_info = device_create_info.push_next(&mut as_features);
             device_create_info = device_create_info.push_next(&mut rtp_features);
@@ -689,7 +685,7 @@ impl<'a> RendererBuilder<'a> {
             .map(|pair| pair.1)
             .collect();
 
-        let subpass_description = vk::SubpassDescription::builder()
+        let subpass_description = vk::SubpassDescription::default()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
             .input_attachments(&input_attachment_ref)
             .color_attachments(&color_attachment_refs)
@@ -705,7 +701,7 @@ impl<'a> RendererBuilder<'a> {
                 .collect::<Vec<vk::AttachmentDescription>>(),
         );
 
-        let renderpass_info = vk::RenderPassCreateInfo::builder()
+        let renderpass_info = vk::RenderPassCreateInfo::default()
             .attachments(&attachment_descriptions)
             .subpasses(std::slice::from_ref(&subpass_description));
 
@@ -743,7 +739,7 @@ impl<'a> RendererBuilder<'a> {
         device: &ash::Device,
         allocator: &mut Allocator,
     ) -> (vk::DescriptorPool, [DescriptorInfo; 2]) {
-        let descriptor_pool_info = vk::DescriptorPoolCreateInfo::builder()
+        let descriptor_pool_info = vk::DescriptorPoolCreateInfo::default()
             .max_sets(2)
             .pool_sizes(&[vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::UNIFORM_BUFFER,
@@ -760,11 +756,11 @@ impl<'a> RendererBuilder<'a> {
             ..Default::default()
         }];
         let level_0_layout_info =
-            vk::DescriptorSetLayoutCreateInfo::builder().bindings(&level_0_bindings);
+            vk::DescriptorSetLayoutCreateInfo::default().bindings(&level_0_bindings);
         let level_0_layout =
             unsafe { device.create_descriptor_set_layout(&level_0_layout_info, None) }
                 .expect("Failed to create descriptor set 0 layout");
-        let level_0_allocation_info = vk::DescriptorSetAllocateInfo::builder()
+        let level_0_allocation_info = vk::DescriptorSetAllocateInfo::default()
             .descriptor_pool(descriptor_pool)
             .set_layouts(std::slice::from_ref(&level_0_layout));
         let level_0_handle = unsafe { device.allocate_descriptor_sets(&level_0_allocation_info) }
@@ -788,11 +784,11 @@ impl<'a> RendererBuilder<'a> {
         };
         unsafe { device.update_descriptor_sets(&[time_set_write], &[]) };
 
-        let level_1_layout_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&[]);
+        let level_1_layout_info = vk::DescriptorSetLayoutCreateInfo::default().bindings(&[]);
         let level_1_layout =
             unsafe { device.create_descriptor_set_layout(&level_1_layout_info, None) }
                 .expect("Failed to create descriptor set 0 layout");
-        let level_1_allocation_info = vk::DescriptorSetAllocateInfo::builder()
+        let level_1_allocation_info = vk::DescriptorSetAllocateInfo::default()
             .descriptor_pool(descriptor_pool)
             .set_layouts(std::slice::from_ref(&level_1_layout));
         let level_1_handle = unsafe { device.allocate_descriptor_sets(&level_1_allocation_info) }
@@ -859,13 +855,19 @@ impl<'a> RendererBuilder<'a> {
             ash_window::create_surface(
                 &entry,
                 &instance,
-                self.window_handle.raw_display_handle(),
-                self.window_handle.raw_window_handle(),
+                self.window_handle
+                    .display_handle()
+                    .expect("window has no display_handle")
+                    .as_raw(),
+                self.window_handle
+                    .window_handle()
+                    .expect("window has no window handle")
+                    .as_raw(),
                 None,
             )
             .expect("Failed to create rendering surface")
         };
-        let surface_loader = Surface::new(&entry, &instance);
+        let surface_loader = khr::surface::Instance::new(&entry, &instance);
 
         let required_api_version = (1, 2, 0);
         let (physical_device, queue_family_index) = self.select_physical_device(
@@ -947,12 +949,12 @@ impl<'a> RendererBuilder<'a> {
             &device,
         );
 
-        let command_pool_create_info = vk::CommandPoolCreateInfo::builder()
+        let command_pool_create_info = vk::CommandPoolCreateInfo::default()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(graphics_queue.family_index);
         let command_pool = unsafe { device.create_command_pool(&command_pool_create_info, None) }
             .expect("Failed to create renderer command pool");
-        let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
+        let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::default()
             .command_pool(command_pool)
             .command_buffer_count(1)
             .level(vk::CommandBufferLevel::PRIMARY);
@@ -1087,7 +1089,7 @@ impl Renderer {
                         },
                     },
                 ];
-                let rp_begin_info = vk::RenderPassBeginInfo::builder()
+                let rp_begin_info = vk::RenderPassBeginInfo::default()
                     .render_pass(self.primary_render_pass)
                     .framebuffer(self.swapchain_framebuffers[next_image_index])
                     .render_area(vk::Rect2D {
@@ -1117,7 +1119,7 @@ impl Renderer {
         unsafe { self.device.end_command_buffer(self.primary_command_buffer) }
             .expect("Failed to record command buffer");
 
-        let submit_info = vk::SubmitInfo::builder()
+        let submit_info = vk::SubmitInfo::default()
             .wait_semaphores(std::slice::from_ref(&self.sync_objects.present_semaphore))
             .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
             .command_buffers(std::slice::from_ref(&self.primary_command_buffer))
@@ -1125,13 +1127,13 @@ impl Renderer {
         unsafe {
             self.device.queue_submit(
                 self.graphics_queue.handle,
-                &[submit_info.build()],
+                &[submit_info],
                 self.sync_objects.render_fence,
             )
         }
         .expect("Failed to submit command buffer to present queue");
 
-        let present_info = vk::PresentInfoKHR::builder()
+        let present_info = vk::PresentInfoKHR::default()
             .wait_semaphores(std::slice::from_ref(&self.sync_objects.render_semaphore))
             .swapchains(std::slice::from_ref(&self.swapchain.handle))
             .image_indices(std::slice::from_ref(&self.next_image_index));
@@ -1285,7 +1287,7 @@ impl Drop for Renderer {
 
             if let Some(debug_messenger) = &self.debug_messenger {
                 debug_messenger
-                    .loader
+                    .instance_loader
                     .destroy_debug_utils_messenger(debug_messenger.handle, None);
             }
 

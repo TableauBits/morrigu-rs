@@ -97,7 +97,7 @@ pub(crate) fn create_dsl(
         bindings_infos.push(binding_info);
     }
 
-    let dsl_create_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings_infos);
+    let dsl_create_info = vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings_infos);
 
     Ok(unsafe { device.create_descriptor_set_layout(&dsl_create_info, None)? })
 }
@@ -154,18 +154,18 @@ impl DescriptorResources {
                     )?;
                     let buffer = buffer_ref.lock();
 
-                    let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
+                    let descriptor_buffer_info = vk::DescriptorBufferInfo::default()
                         .buffer(buffer.handle)
                         .offset(0)
                         .range(buffer.size());
 
-                    let set_write = vk::WriteDescriptorSet::builder()
+                    let set_write = vk::WriteDescriptorSet::default()
                         .dst_set(*descriptor_set)
                         .dst_binding(binding.slot)
                         .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                         .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
 
-                    unsafe { renderer.device.update_descriptor_sets(&[*set_write], &[]) };
+                    unsafe { renderer.device.update_descriptor_sets(&[set_write], &[]) };
                 }
                 vk::DescriptorType::STORAGE_IMAGE => {
                     let image_ref = self.storage_images.get(&binding.slot).ok_or(
@@ -183,17 +183,17 @@ impl DescriptorResources {
                         renderer,
                     )?;
 
-                    let descriptor_image_info = vk::DescriptorImageInfo::builder()
+                    let descriptor_image_info = vk::DescriptorImageInfo::default()
                         .image_view(image.view)
                         .image_layout(vk::ImageLayout::GENERAL);
 
-                    let set_write = vk::WriteDescriptorSet::builder()
+                    let set_write = vk::WriteDescriptorSet::default()
                         .dst_set(*descriptor_set)
                         .dst_binding(binding.slot)
                         .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
                         .image_info(std::slice::from_ref(&descriptor_image_info));
 
-                    unsafe { renderer.device.update_descriptor_sets(&[*set_write], &[]) };
+                    unsafe { renderer.device.update_descriptor_sets(&[set_write], &[]) };
 
                     self.update_layout(
                         image.handle,
@@ -236,18 +236,18 @@ impl DescriptorResources {
                         renderer,
                     )?;
 
-                    let descriptor_image_info = vk::DescriptorImageInfo::builder()
+                    let descriptor_image_info = vk::DescriptorImageInfo::default()
                         .sampler(sampler)
                         .image_view(image.view)
                         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
 
-                    let set_write = vk::WriteDescriptorSet::builder()
+                    let set_write = vk::WriteDescriptorSet::default()
                         .dst_set(*descriptor_set)
                         .dst_binding(binding.slot)
                         .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                         .image_info(std::slice::from_ref(&descriptor_image_info));
 
-                    unsafe { renderer.device.update_descriptor_sets(&[*set_write], &[]) };
+                    unsafe { renderer.device.update_descriptor_sets(&[set_write], &[]) };
 
                     self.update_layout(
                         image.handle,
@@ -272,19 +272,19 @@ impl DescriptorResources {
     ) -> Result<(), ImmediateCommandError> {
         if from != to {
             renderer.immediate_command(|cmd_buffer| {
-                let range = vk::ImageSubresourceRange::builder()
+                let range = vk::ImageSubresourceRange::default()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
                     .layer_count(1);
-                let shader_read_barrier = vk::ImageMemoryBarrier::builder()
+                let shader_read_barrier = vk::ImageMemoryBarrier::default()
                     .src_access_mask(vk::AccessFlags::NONE)
                     .dst_access_mask(vk::AccessFlags::NONE)
                     .old_layout(from)
                     .new_layout(to)
                     .image(image)
-                    .subresource_range(*range);
+                    .subresource_range(range);
                 unsafe {
                     renderer.device.cmd_pipeline_barrier(
                         *cmd_buffer,

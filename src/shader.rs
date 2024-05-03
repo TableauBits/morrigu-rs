@@ -36,7 +36,7 @@ pub(crate) fn create_shader_module(
     device: &Device,
     source: &[u32],
 ) -> Result<vk::ShaderModule, vk::Result> {
-    let module_info = vk::ShaderModuleCreateInfo::builder().code(source);
+    let module_info = vk::ShaderModuleCreateInfo::default().code(source);
 
     unsafe { device.create_shader_module(&module_info, None) }
 }
