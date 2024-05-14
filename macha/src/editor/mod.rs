@@ -11,7 +11,6 @@ use components::{
     selected_entity::SelectedEntity,
 };
 use ecs_buffer::ECSBuffer;
-use egui_gizmo::GizmoMode;
 use morrigu::{
     allocated_types::AllocatedBuffer,
     application::{
@@ -34,6 +33,7 @@ use morrigu::{
     winit,
 };
 use systems::hierarchy_panel;
+use transform_gizmo::GizmoMode;
 use winit::{event::KeyEvent, keyboard::KeyCode};
 
 use std::path::Path;
@@ -390,12 +390,16 @@ impl ApplicationState for MachaState {
 }
 
 fn set_gizmo(context: &mut StateContext, new_gizmo: GizmoMode) {
-    context
+    let gizmo = &mut context
         .ecs_manager
         .world
         .get_resource_mut::<MachaGlobalOptions>()
         .unwrap()
-        .preferred_gizmo = new_gizmo;
+        .gizmo;
+
+    let mut config = *gizmo.config();
+    config.modes = new_gizmo.into();
+    gizmo.update_config(config);
 }
 
 impl MachaState {

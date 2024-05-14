@@ -178,7 +178,7 @@ impl ApplicationState for CSTState {
                     memory_barriers: vec![],
                     buffer_memory_barriers: vec![],
                     image_memory_barriers: vec![
-                        vk::ImageMemoryBarrier::builder()
+                        vk::ImageMemoryBarrier::default()
                             .old_layout(vk::ImageLayout::GENERAL)
                             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                             .image(self.input_texture.lock().image_ref.lock().handle)
@@ -190,9 +190,8 @@ impl ApplicationState for CSTState {
                                 layer_count: 1,
                             })
                             .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-                            .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                            .build(),
-                        vk::ImageMemoryBarrier::builder()
+                            .dst_access_mask(vk::AccessFlags::SHADER_READ),
+                        vk::ImageMemoryBarrier::default()
                             .old_layout(vk::ImageLayout::GENERAL)
                             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                             .image(self.output_texture.lock().image_ref.lock().handle)
@@ -204,8 +203,7 @@ impl ApplicationState for CSTState {
                                 layer_count: 1,
                             })
                             .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-                            .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                            .build(),
+                            .dst_access_mask(vk::AccessFlags::SHADER_READ),
                     ],
                 },
                 context.renderer,
