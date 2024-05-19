@@ -29,7 +29,7 @@ ash = { version = "0.38.0", default-features = false, features = [
 ] }
 ash-window = "0.13.0"
 gpu-allocator = { git = "https://github.com/Ithyx/gpu-allocator", rev = "b0bb0c99e28798870e543e10e2fe6564ef9e32a5" }
-spirv-reflect = "0.2.3"
+spirv-reflect = { git = "https://github.com/Ithyx/spirv-reflect-rs", rev = "8ef41dee362a61a563b64a9fcda4b4a201b5b4cc" }
 
 glam = { version = "0.27.0", features = ["bytemuck", "mint"] }
 
