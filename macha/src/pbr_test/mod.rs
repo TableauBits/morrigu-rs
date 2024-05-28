@@ -4,7 +4,7 @@ use morrigu::{
     application::{ApplicationState, BuildableApplicationState},
     components::transform::Transform,
     descriptor_resources::DescriptorResources,
-    math_types::{EulerRot, Quat},
+    math_types::{EulerRot, Quat, Vec3},
     shader::Shader,
     utils::ThreadSafeRef,
 };
@@ -22,7 +22,9 @@ type MeshRendering = morrigu::components::mesh_rendering::MeshRendering<Vertex>;
 pub struct PBRState {
     camera: MachaCamera,
 
-    shader_ref: ThreadSafeRef<Shader>,
+    flat_shader_ref: ThreadSafeRef<Shader>,
+    pbr_shader_ref: ThreadSafeRef<Shader>,
+
     mesh_ref: ThreadSafeRef<Mesh>,
     mesh_renderings_ref: Vec<ThreadSafeRef<MeshRendering>>,
 
@@ -31,16 +33,18 @@ pub struct PBRState {
 
 impl BuildableApplicationState<()> for PBRState {
     fn build(context: &mut morrigu::application::StateContext, _data: ()) -> Self {
-        let shader_ref = Shader::from_spirv_u8(
+        let flat_shader_ref = Shader::from_spirv_u8(
             include_bytes!("shaders/gen/flat/flat.vert"),
             include_bytes!("shaders/gen/flat/flat.frag"),
             &context.renderer.device,
         )
-        .expect("Failed to create shader");
-
-        let material_ref = Material::builder()
-            .build(&shader_ref, DescriptorResources::empty(), context.renderer)
-            .expect("Failed to create material");
+        .expect("Failed to create flat shader");
+        let pbr_shader_ref = Shader::from_spirv_u8(
+            include_bytes!("shaders/gen/pbr/pbr.vert"),
+            include_bytes!("shaders/gen/pbr/pbr.frag"),
+            &context.renderer.device,
+        )
+        .expect("Failed to create pbr shader");
 
         let mesh_ref = Vertex::load_model_from_path_ply(
             Path::new("assets/meshes/sphere.ply"),
@@ -48,27 +52,72 @@ impl BuildableApplicationState<()> for PBRState {
         )
         .expect("Failed to create mesh");
 
-        let mesh_rendering_ref = MeshRendering::new(
-            &mesh_ref,
-            &material_ref,
-            DescriptorResources {
-                uniform_buffers: [morrigu::components::mesh_rendering::default_ubo_bindings(
+        let mut mesh_renderings = vec![];
+
+        {
+            // sample flat material
+            let flat_material_ref = Material::builder()
+                .build(
+                    &flat_shader_ref,
+                    DescriptorResources::empty(),
                     context.renderer,
                 )
-                .unwrap()]
-                .into(),
-                ..Default::default()
-            },
-            context.renderer,
-        )
-        .expect("Failed to create mesh rendering");
+                .expect("Failed to create material");
+
+            let mesh_rendering_ref = MeshRendering::new(
+                &mesh_ref,
+                &flat_material_ref,
+                DescriptorResources {
+                    uniform_buffers: [morrigu::components::mesh_rendering::default_ubo_bindings(
+                        context.renderer,
+                    )
+                    .unwrap()]
+                    .into(),
+                    ..Default::default()
+                },
+                context.renderer,
+            )
+            .expect("Failed to create mesh rendering");
+
+            mesh_renderings.push(mesh_rendering_ref);
+        }
+
+        {
+            // some basic diffuse materials to start
+            let diffuse_material_ref = Material::builder()
+                .build(
+                    &pbr_shader_ref,
+                    DescriptorResources::empty(),
+                    context.renderer,
+                )
+                .expect("Failed to create material");
+
+            let mesh_rendering_ref = MeshRendering::new(
+                &mesh_ref,
+                &diffuse_material_ref,
+                DescriptorResources {
+                    uniform_buffers: [morrigu::components::mesh_rendering::default_ubo_bindings(
+                        context.renderer,
+                    )
+                    .unwrap()]
+                    .into(),
+                    ..Default::default()
+                },
+                context.renderer,
+            )
+            .expect("Failed to create mesh rendering");
+
+            mesh_renderings.push(mesh_rendering_ref);
+        }
 
         Self {
             camera: MachaCamera::new(morrigu::components::camera::Camera::default()),
 
-            shader_ref,
+            flat_shader_ref,
+            pbr_shader_ref,
+
             mesh_ref,
-            mesh_renderings_ref: vec![mesh_rendering_ref],
+            mesh_renderings_ref: mesh_renderings,
 
             desired_state: SwitchableStates::PBRTest,
         }
@@ -94,29 +143,36 @@ impl ApplicationState for PBRState {
         self.camera.set_focal_point(transform.translation());
         self.camera.set_distance(7.0);
 
-        context
-            .ecs_manager
-            .world
-            .spawn((transform, self.mesh_renderings_ref[0].clone()));
+        for (i, mrr) in self.mesh_renderings_ref.iter().enumerate() {
+            let mut transform = transform.clone();
+            transform.translate(&Vec3::new(
+                -10.0 + (((20 / (self.mesh_renderings_ref.len() - 1)) * i) as f32),
+                0.0,
+                0.0,
+            ));
+
+            context.ecs_manager.world.spawn((transform, mrr.clone()));
+        }
     }
 
     fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
-        self.mesh_renderings_ref[0]
-            .lock()
-            .descriptor_resources
-            .uniform_buffers
-            .get(&0)
-            .unwrap()
-            .lock()
-            .destroy(&context.renderer.device, &mut context.renderer.allocator());
-        self.mesh_renderings_ref[0].lock().destroy(context.renderer);
+        for mrr in &mut self.mesh_renderings_ref {
+            mrr.lock()
+                .descriptor_resources
+                .uniform_buffers
+                .get(&0)
+                .unwrap()
+                .lock()
+                .destroy(&context.renderer.device, &mut context.renderer.allocator());
+            mrr.lock().destroy(context.renderer);
+            mrr.lock().material_ref.lock().destroy(context.renderer);
+        }
         self.mesh_ref.lock().destroy(context.renderer);
-        self.mesh_renderings_ref[0]
+
+        self.pbr_shader_ref.lock().destroy(&context.renderer.device);
+        self.flat_shader_ref
             .lock()
-            .material_ref
-            .lock()
-            .destroy(context.renderer);
-        self.shader_ref.lock().destroy(&context.renderer.device);
+            .destroy(&context.renderer.device);
     }
 
     fn on_update(
