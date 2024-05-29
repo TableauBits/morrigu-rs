@@ -21,10 +21,7 @@ use morrigu::{
     winit,
 };
 
-use crate::utils::{
-    camera::MachaCamera,
-    ui::{draw_state_switcher, SwitchableStates},
-};
+use crate::utils::{camera::MachaCamera, startup_state::SwitchableStates, ui::draw_state_switcher};
 
 use self::{
     loader::LightData,

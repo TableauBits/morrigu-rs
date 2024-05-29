@@ -6,8 +6,10 @@ mod gltf_loader;
 mod pbr_test;
 mod rt_test;
 
-use editor::MachaState;
 use morrigu::application::ApplicationBuilder;
+
+use clap::Parser;
+use utils::startup_state::{StartupState, SwitchableStates};
 
 fn init_logging() {
     #[cfg(debug_assertions)]
@@ -27,14 +29,24 @@ fn init_logging() {
         .expect("Failed to build logger");
 }
 
+#[derive(Parser)]
+struct Args {
+    #[arg(value_enum)]
+    startup_state: Option<SwitchableStates>,
+}
+
 fn main() {
+    let args = Args::parse();
+
     init_logging();
+
+    let desired_state = args.startup_state.unwrap_or(SwitchableStates::Editor);
 
     ApplicationBuilder::new()
         .with_window_name("Macha editor")
         .with_dimensions(1280, 720)
         .with_application_name("Macha")
         .with_application_version(0, 1, 0)
-        .build_with_state::<MachaState, ()>(())
+        .build_with_state::<StartupState, SwitchableStates>(desired_state)
         .run();
 }

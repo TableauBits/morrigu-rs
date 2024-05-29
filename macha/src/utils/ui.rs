@@ -1,29 +1,6 @@
-use std::fmt::Display;
-
 use morrigu::egui;
 
-#[derive(PartialEq, Copy, Clone)]
-pub enum SwitchableStates {
-    Editor,
-    GLTFLoader,
-    CSTest,
-    PBRTest,
-    RTTest,
-}
-
-impl Display for SwitchableStates {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = match self {
-            SwitchableStates::Editor => "Macha Editor",
-            SwitchableStates::GLTFLoader => "GLTF Loader and Viewer",
-            SwitchableStates::CSTest => "Compute Shader Test",
-            SwitchableStates::PBRTest => "PBR Test",
-            SwitchableStates::RTTest => "Ray Tracing Test",
-        };
-
-        write!(f, "{}", name)
-    }
-}
+use super::startup_state::SwitchableStates;
 
 pub fn draw_state_switcher(ctx: &egui::Context, current_state: &mut SwitchableStates) {
     egui::Window::new("State Switcher").show(ctx, |ui| {

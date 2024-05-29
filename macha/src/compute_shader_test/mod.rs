@@ -19,7 +19,8 @@ use morrigu::{
     utils::ThreadSafeRef,
 };
 
-use crate::utils::ui::{draw_debug_utils, draw_state_switcher, SwitchableStates};
+use crate::utils::startup_state::SwitchableStates;
+use crate::utils::ui::{draw_debug_utils, draw_state_switcher};
 
 type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;

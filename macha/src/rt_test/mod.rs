@@ -5,7 +5,7 @@ use morrigu::{
     vertices::simple::SimpleVertex,
 };
 
-use crate::utils::ui::{draw_state_switcher, SwitchableStates};
+use crate::utils::{startup_state::SwitchableStates, ui::draw_state_switcher};
 
 pub struct RayTracerState {
     monkey_mr: ThreadSafeRef<MeshRendering<SimpleVertex>>,

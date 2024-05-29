@@ -2,7 +2,10 @@ mod components;
 mod ecs_buffer;
 mod systems;
 
-use crate::utils::ui::{draw_debug_utils, draw_state_switcher, SwitchableStates};
+use crate::utils::{
+    startup_state::SwitchableStates,
+    ui::{draw_debug_utils, draw_state_switcher},
+};
 
 use super::utils::camera::MachaCamera;
 use bevy_ecs::prelude::Entity;

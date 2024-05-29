@@ -17,3 +17,4 @@ morrigu = { path = "../", features = ["egui", "ray_tracing"] }
 transform-gizmo = "0.1.0"
 transform-gizmo-egui = "0.1.0"
 bytemuck = "1.14"
+clap = { version = "4.5", features = ["derive"] }

@@ -10,8 +10,7 @@ use morrigu::{
 };
 
 use crate::utils::{
-    camera::MachaCamera,
-    ui::{draw_debug_utils, draw_state_switcher, SwitchableStates},
+    camera::MachaCamera, startup_state::SwitchableStates, ui::{draw_debug_utils, draw_state_switcher}
 };
 
 type Vertex = morrigu::vertices::textured::TexturedVertex;
