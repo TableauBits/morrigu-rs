@@ -4,13 +4,15 @@ use morrigu::{
     application::{ApplicationState, BuildableApplicationState},
     components::transform::Transform,
     descriptor_resources::DescriptorResources,
-    math_types::{EulerRot, Quat, Vec3},
+    math_types::{EulerRot, Quat, Vec2, Vec3},
     shader::Shader,
     utils::ThreadSafeRef,
 };
 
 use crate::utils::{
-    camera::MachaCamera, startup_state::SwitchableStates, ui::{draw_debug_utils, draw_state_switcher}
+    camera::MachaCamera,
+    startup_state::SwitchableStates,
+    ui::{draw_debug_utils, draw_state_switcher},
 };
 
 type Vertex = morrigu::vertices::textured::TexturedVertex;
@@ -109,8 +111,19 @@ impl BuildableApplicationState<()> for PBRState {
             mesh_renderings.push(mesh_rendering_ref);
         }
 
+        let camera = morrigu::components::camera::Camera::builder().build(
+            morrigu::components::camera::Projection::Orthographic(
+                morrigu::components::camera::OrthographicData {
+                    scale: 15.0,
+                    near_plane: 0.00001,
+                    far_plane: 100.0,
+                },
+            ),
+            &Vec2::new(1280.0, 720.0),
+        );
+
         Self {
-            camera: MachaCamera::new(morrigu::components::camera::Camera::default()),
+            camera: MachaCamera::new(camera),
 
             flat_shader_ref,
             pbr_shader_ref,
@@ -216,6 +229,8 @@ impl ApplicationState for PBRState {
             SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::compute_shader_test::CSTState::build(context, ()),
             )),
+
+            #[cfg(feature = "ray_tracing")]
             SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::rt_test::RayTracerState::build(context, ()),
             )),

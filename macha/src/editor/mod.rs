@@ -384,6 +384,8 @@ impl ApplicationState for MachaState {
             SwitchableStates::PBRTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::pbr_test::PBRState::build(context, ()),
             )),
+
+            #[cfg(feature = "ray_tracing")]
             SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::rt_test::RayTracerState::build(context, ()),
             )),

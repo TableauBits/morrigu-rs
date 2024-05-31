@@ -4,6 +4,8 @@ mod compute_shader_test;
 mod editor;
 mod gltf_loader;
 mod pbr_test;
+
+#[cfg(feature = "ray_tracing")]
 mod rt_test;
 
 use morrigu::application::ApplicationBuilder;

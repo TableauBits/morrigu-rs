@@ -9,6 +9,8 @@ pub enum SwitchableStates {
     GLTFLoader,
     CSTest,
     PBRTest,
+
+    #[cfg(feature = "ray_tracing")]
     RTTest,
 }
 
@@ -19,6 +21,8 @@ impl Display for SwitchableStates {
             SwitchableStates::GLTFLoader => "GLTF Loader and Viewer",
             SwitchableStates::CSTest => "Compute Shader Test",
             SwitchableStates::PBRTest => "PBR Test",
+
+            #[cfg(feature = "ray_tracing")]
             SwitchableStates::RTTest => "Ray Tracing Test",
         };
 
@@ -56,6 +60,8 @@ impl ApplicationState for StartupState {
             SwitchableStates::PBRTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::pbr_test::PBRState::build(context, ()),
             )),
+
+            #[cfg(feature = "ray_tracing")]
             SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::rt_test::RayTracerState::build(context, ()),
             )),

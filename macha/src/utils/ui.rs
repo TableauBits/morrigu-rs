@@ -27,6 +27,8 @@ pub fn draw_state_switcher(ctx: &egui::Context, current_state: &mut SwitchableSt
                     SwitchableStates::PBRTest,
                     format!("{}", SwitchableStates::PBRTest),
                 );
+
+                #[cfg(feature = "ray_tracing")]
                 ui.selectable_value(
                     current_state,
                     SwitchableStates::RTTest,
