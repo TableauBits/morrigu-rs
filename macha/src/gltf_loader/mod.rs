@@ -18,7 +18,6 @@ use morrigu::{
     shader::Shader,
     systems::mesh_renderer,
     utils::ThreadSafeRef,
-    winit,
 };
 
 use crate::utils::{camera::MachaCamera, startup_state::SwitchableStates, ui::draw_state_switcher};
@@ -258,19 +257,7 @@ impl ApplicationState for GLTFViewerState {
     }
 
     fn on_event(&mut self, event: Event<()>, _context: &mut morrigu::application::StateContext) {
-        #[allow(clippy::single_match)] // Temporary
-        match event {
-            Event::WindowEvent {
-                event:
-                    winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize {
-                        width, height, ..
-                    }),
-                ..
-            } => {
-                self.camera.on_resize(width, height);
-            }
-            _ => (),
-        }
+        self.camera.on_event(&event);
     }
 
     fn flow<'flow>(

@@ -351,21 +351,14 @@ impl ApplicationState for MachaState {
     }
 
     fn on_event(&mut self, event: Event<()>, context: &mut StateContext) {
+        self.camera.on_event(&event);
+
         #[allow(clippy::single_match)] // Temporary
         match event {
             Event::WindowEvent {
                 event: winit::event::WindowEvent::KeyboardInput { event, .. },
                 ..
             } => self.on_keyboard_input(event, context),
-            Event::WindowEvent {
-                event:
-                    winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize {
-                        width, height, ..
-                    }),
-                ..
-            } => {
-                self.camera.on_resize(width, height);
-            }
             _ => (),
         }
     }

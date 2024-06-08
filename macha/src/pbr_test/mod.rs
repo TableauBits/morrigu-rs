@@ -210,9 +210,10 @@ impl ApplicationState for PBRState {
 
     fn on_event(
         &mut self,
-        _event: morrigu::application::Event<()>,
+        event: morrigu::application::Event<()>,
         _context: &mut morrigu::application::StateContext,
     ) {
+        self.camera.on_event(&event);
     }
 
     fn flow<'flow>(
