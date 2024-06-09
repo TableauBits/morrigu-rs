@@ -2,6 +2,11 @@
 
 #define M_PI 3.1415926535897932384626433832795
 
+layout(set = 2, binding = 0) uniform LightData {
+    vec4 cameraPos;
+    vec4 lightPos ;
+} u_LightData;
+
 layout(location = 0) in vec3 vs_fragPos;
 layout(location = 1) in vec3 vs_normal;
 
@@ -21,10 +26,12 @@ vec3 diffuse_brdf(vec3 color) {
 }
 
 void main() {
-    // ShadingData data = ShadingData(
-    //     normalize(vs_fragPos)
-    // );
+    vec3 V = normalize(u_LightData.cameraPos.xyz - vs_fragPos);
+    vec3 L = normalize(u_LightData.lightPos.xyz  - vs_fragPos);
+    vec3 H = normalize(L + V);
+    ShadingData data = ShadingData(V, L, vs_normal, H, dot(V, H));
 
-    f_Color = vec4(0.8, 0.8, 0.2, 1);
+    vec3 result = (vec3(0.1) + max(dot(data.N, data.L), 0.0)) * vec3(0.8, 0.8, 0.2);
+    f_Color = vec4(result, 1.0);
 }
 

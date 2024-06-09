@@ -61,6 +61,11 @@ pub fn render_meshes<VertexType>(
     let cmd_buffer = renderer.primary_command_buffer;
     for (transform, mesh_rendering_ref) in query.iter() {
         let mut mesh_rendering = mesh_rendering_ref.lock();
+
+        if !mesh_rendering.visible {
+            continue;
+        };
+
         if mesh_rendering
             .update_uniform_pod(0, transform.matrix())
             .is_err()

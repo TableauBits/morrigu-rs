@@ -20,6 +20,8 @@ pub struct MeshRendering<VertexType>
 where
     VertexType: Vertex,
 {
+    pub visible: bool,
+
     descriptor_pool: vk::DescriptorPool,
     pub descriptor_resources: DescriptorResources,
 
@@ -142,6 +144,7 @@ where
         drop(mesh);
 
         Ok(ThreadSafeRef::new(Self {
+            visible: true,
             descriptor_pool,
             descriptor_resources,
             mesh_ref,

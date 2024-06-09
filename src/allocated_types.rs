@@ -116,6 +116,7 @@ pub struct AllocatedBufferBuilder {
     pub name: String,
 }
 
+/// @TODO(Ithyx): create new type with MemoryLocation::GpuOnly
 impl AllocatedBufferBuilder {
     /// This is equivalent to `uniform_buffer_default`
     pub fn default(size: u64) -> Self {
@@ -151,7 +152,7 @@ impl AllocatedBufferBuilder {
     }
 
     pub fn with_name(mut self, name: &str) -> Self {
-        self.name = name.to_owned();
+        name.clone_into(&mut self.name);
         self
     }
 
@@ -363,11 +364,7 @@ impl AllocatedImage {
         self.destroy_internal(&renderer.device, &mut renderer.allocator())
     }
 
-    pub(crate) fn destroy_internal(
-        &mut self,
-        device: &ash::Device,
-        allocator: &mut Allocator,
-    ) {
+    pub(crate) fn destroy_internal(&mut self, device: &ash::Device, allocator: &mut Allocator) {
         if let Some(allocation) = self.allocation.take() {
             unsafe { device.destroy_image_view(self.view, None) };
             allocator
