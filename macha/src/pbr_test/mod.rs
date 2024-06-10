@@ -82,7 +82,7 @@ impl BuildableApplicationState<()> for PBRState {
 
         let mut mesh_renderings = vec![];
 
-        // sample flat material
+        // sample flat material, for debug model
         let flat_material_ref = Material::builder()
             .build(
                 &flat_shader_ref,
@@ -91,7 +91,7 @@ impl BuildableApplicationState<()> for PBRState {
             )
             .expect("Failed to create material");
 
-        let mesh_rendering_ref = MeshRendering::new(
+        let point_light_debug = MeshRendering::new(
             &mesh_ref,
             &flat_material_ref,
             DescriptorResources {
@@ -105,11 +105,9 @@ impl BuildableApplicationState<()> for PBRState {
             context.renderer,
         )
         .expect("Failed to create mesh rendering");
+        point_light_debug.lock().visible = false;
 
-        mesh_renderings.push(mesh_rendering_ref);
-
-        // some basic diffuse materials to start
-        let diffuse_material_ref = Material::builder()
+        let pbr_material_ref = Material::builder()
             .build(
                 &pbr_shader_ref,
                 DescriptorResources {
@@ -129,37 +127,48 @@ impl BuildableApplicationState<()> for PBRState {
             )
             .expect("Failed to create material");
 
-        let mesh_rendering_ref = MeshRendering::new(
-            &mesh_ref,
-            &diffuse_material_ref,
-            DescriptorResources {
-                uniform_buffers: [
-                    morrigu::components::mesh_rendering::default_ubo_bindings(context.renderer)
-                        .unwrap(),
-                    (
-                        1,
-                        ThreadSafeRef::new(
-                            AllocatedBuffer::builder(size_of::<PBRData>() as u64)
-                                .with_name("PBR data")
-                                .build_with_pod(
-                                    PBRData {
-                                        albedo: Vec4::new(0.6, 0.7, 0.4, 0.0),
-                                        mra: Vec4::new(0.0, 1.0, 1.0, 0.0),
-                                    },
-                                    context.renderer,
-                                )
-                                .expect("Failed to build light data buffer"),
-                        ),
+        let grid_size = 7;
+        for i in 0..grid_size {
+            for j in 0..grid_size {
+                let pbr_data = PBRData {
+                    albedo: Vec4::new(0.8, 0.1, 0.1, 0.0),
+                    mra: Vec4::new(
+                        (1.0 / (grid_size - 1) as f32) * i as f32,
+                        (1.0 / (grid_size - 1) as f32) * j as f32,
+                        1.0,
+                        0.0,
                     ),
-                ]
-                .into(),
-                ..Default::default()
-            },
-            context.renderer,
-        )
-        .expect("Failed to create mesh rendering");
+                };
 
-        mesh_renderings.push(mesh_rendering_ref);
+                let mesh_rendering_ref = MeshRendering::new(
+                    &mesh_ref,
+                    &pbr_material_ref,
+                    DescriptorResources {
+                        uniform_buffers: [
+                            morrigu::components::mesh_rendering::default_ubo_bindings(
+                                context.renderer,
+                            )
+                            .unwrap(),
+                            (
+                                1,
+                                ThreadSafeRef::new(
+                                    AllocatedBuffer::builder(size_of::<PBRData>() as u64)
+                                        .with_name("PBR data")
+                                        .build_with_pod(pbr_data, context.renderer)
+                                        .expect("Failed to build light data buffer"),
+                                ),
+                            ),
+                        ]
+                        .into(),
+                        ..Default::default()
+                    },
+                    context.renderer,
+                )
+                .expect("Failed to create mesh rendering");
+
+                mesh_renderings.push(mesh_rendering_ref);
+            }
+        }
 
         let camera = morrigu::components::camera::Camera::builder().build(
             morrigu::components::camera::Projection::Perspective(
@@ -171,22 +180,6 @@ impl BuildableApplicationState<()> for PBRState {
             ),
             &Vec2::new(1280.0, 720.0),
         );
-
-        let point_light_debug = MeshRendering::new(
-            &mesh_ref,
-            &flat_material_ref,
-            DescriptorResources {
-                uniform_buffers: [morrigu::components::mesh_rendering::default_ubo_bindings(
-                    context.renderer,
-                )
-                .unwrap()]
-                .into(),
-                ..Default::default()
-            },
-            context.renderer,
-        )
-        .expect("Failed to create mesh rendering");
-        point_light_debug.lock().visible = false;
 
         Self {
             camera: MachaCamera::new(camera),
@@ -200,7 +193,7 @@ impl BuildableApplicationState<()> for PBRState {
             pbr_shader_ref,
 
             flat_material_ref,
-            diffuse_material_ref,
+            diffuse_material_ref: pbr_material_ref,
 
             mesh_ref,
             mesh_renderings_ref: mesh_renderings,
@@ -233,11 +226,15 @@ impl ApplicationState for PBRState {
         self.camera.set_focal_point(transform.translation());
         self.camera.set_distance(25.0);
 
-        for (i, mrr) in self.mesh_renderings_ref.iter().enumerate() {
+        for (idx, mrr) in self.mesh_renderings_ref.iter().enumerate() {
+            let grid_size = 7;
+            let i = idx / grid_size;
+            let j = idx % grid_size;
+
             let mut transform = transform.clone();
             transform.translate(&Vec3::new(
-                -10.0 + (((20 / (self.mesh_renderings_ref.len() - 1)) * i) as f32),
-                0.0,
+                ((20.0 / ((grid_size - 1) as f32)) * j as f32) - 10.0,
+                ((20.0 / ((grid_size - 1) as f32)) * i as f32) - 10.0,
                 0.0,
             ));
 
@@ -306,7 +303,7 @@ impl ApplicationState for PBRState {
             .world
             .insert_resource(self.camera.mrg_camera);
 
-        let light_pos = 15.0
+        let light_pos = 17.0
             * Vec3::new(
                 self.point_light_angle.to_radians().cos(),
                 self.point_light_angle.to_radians().sin(),
