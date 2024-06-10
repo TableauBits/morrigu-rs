@@ -13,11 +13,7 @@ use morrigu::{
     utils::ThreadSafeRef,
 };
 
-use crate::utils::{
-    camera::MachaCamera,
-    startup_state::SwitchableStates,
-    ui::{draw_debug_utils, draw_state_switcher},
-};
+use crate::utils::{camera::MachaCamera, startup_state::SwitchableStates, ui::draw_debug_utils};
 
 type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;
@@ -312,8 +308,7 @@ impl ApplicationState for PBRState {
         dt: std::time::Duration,
         context: &mut morrigu::application::EguiUpdateContext,
     ) {
-        draw_state_switcher(context.egui_context, &mut self.desired_state);
-        draw_debug_utils(context.egui_context, dt);
+        draw_debug_utils(context.egui_context, dt, &mut self.desired_state);
 
         egui::Window::new("Light controls").show(context.egui_context, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT), |ui| {

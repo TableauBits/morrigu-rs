@@ -2,10 +2,7 @@ mod components;
 mod ecs_buffer;
 mod systems;
 
-use crate::utils::{
-    startup_state::SwitchableStates,
-    ui::{draw_debug_utils, draw_state_switcher},
-};
+use crate::utils::{startup_state::SwitchableStates, ui::draw_debug_utils};
 
 use super::utils::camera::MachaCamera;
 use bevy_ecs::prelude::Entity;
@@ -28,7 +25,7 @@ use morrigu::{
     },
     descriptor_resources::DescriptorResources,
     egui,
-    math_types::{EulerRot, Quat, Vec2},
+    math_types::Vec2,
     shader::Shader,
     systems::mesh_renderer,
     texture::{Texture, TextureFormat},
@@ -93,8 +90,8 @@ impl BuildableApplicationState<()> for MachaState {
             .build(&shader_ref, DescriptorResources::empty(), context.renderer)
             .expect("Failed to create material");
 
-        let mesh_ref = Vertex::load_model_from_path_ply(
-            Path::new("assets/meshes/sphere.ply"),
+        let mesh_ref = Vertex::load_model_from_path_obj(
+            Path::new("assets/meshes/sphere.obj"),
             context.renderer,
         )
         .expect("Failed to create mesh");
@@ -184,13 +181,7 @@ impl ApplicationState for MachaState {
         let res = context.renderer.window_resolution();
         self.camera.on_resize(res.0, res.1);
 
-        let mut transform = Transform::default();
-        transform.rotate(&Quat::from_euler(
-            EulerRot::XYZ,
-            f32::to_radians(-90.0),
-            0.0,
-            0.0,
-        ));
+        let transform = Transform::default();
         self.camera.set_focal_point(transform.translation());
 
         context.ecs_manager.world.insert_resource(ECSBuffer::new());
@@ -286,8 +277,7 @@ impl ApplicationState for MachaState {
     }
 
     fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        draw_state_switcher(context.egui_context, &mut self.desired_state);
-        draw_debug_utils(context.egui_context, dt);
+        draw_debug_utils(context.egui_context, dt, &mut self.desired_state);
 
         egui::Window::new("Shader uniforms").show(context.egui_context, |ui| {
             let image = egui::ImageSource::Texture(

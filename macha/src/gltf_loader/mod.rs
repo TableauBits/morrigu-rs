@@ -20,7 +20,7 @@ use morrigu::{
     utils::ThreadSafeRef,
 };
 
-use crate::utils::{camera::MachaCamera, startup_state::SwitchableStates, ui::draw_state_switcher};
+use crate::utils::{camera::MachaCamera, startup_state::SwitchableStates, ui::draw_debug_utils};
 
 use self::{
     loader::LightData,
@@ -252,8 +252,8 @@ impl ApplicationState for GLTFViewerState {
             .insert_resource(self.camera.mrg_camera);
     }
 
-    fn on_update_egui(&mut self, _dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        draw_state_switcher(context.egui_context, &mut self.desired_state);
+    fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        draw_debug_utils(context.egui_context, dt, &mut self.desired_state);
     }
 
     fn on_event(&mut self, event: Event<()>, _context: &mut morrigu::application::StateContext) {

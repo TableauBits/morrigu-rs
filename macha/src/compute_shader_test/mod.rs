@@ -20,7 +20,7 @@ use morrigu::{
 };
 
 use crate::utils::startup_state::SwitchableStates;
-use crate::utils::ui::{draw_debug_utils, draw_state_switcher};
+use crate::utils::ui::draw_debug_utils;
 
 type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;
@@ -251,8 +251,7 @@ impl ApplicationState for CSTState {
     }
 
     fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        draw_state_switcher(context.egui_context, &mut self.desired_state);
-        draw_debug_utils(context.egui_context, dt);
+        draw_debug_utils(context.egui_context, dt, &mut self.desired_state);
     }
 
     fn flow<'flow>(

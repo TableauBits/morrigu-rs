@@ -45,7 +45,7 @@ fn main() {
     let desired_state = args.startup_state.unwrap_or(SwitchableStates::Editor);
 
     ApplicationBuilder::new()
-        .with_window_name("Macha editor")
+        .with_window_name("Macha")
         .with_dimensions(1280, 720)
         .with_application_name("Macha")
         .with_application_version(0, 1, 0)
