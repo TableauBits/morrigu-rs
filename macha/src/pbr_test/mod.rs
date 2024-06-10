@@ -6,7 +6,7 @@ use morrigu::{
     bevy_ecs::entity::Entity,
     components::transform::Transform,
     descriptor_resources::DescriptorResources,
-    egui,
+    egui::{self},
     glam::vec3,
     math_types::{Vec2, Vec3, Vec4},
     shader::Shader,
@@ -35,6 +35,8 @@ unsafe impl bytemuck::Pod for LightData {}
 
 pub struct PBRState {
     camera: MachaCamera,
+    camera_focus: Option<usize>,
+
     point_light_angle: f32,
     point_light_debug: ThreadSafeRef<MeshRendering>,
     point_light_entity: Entity,
@@ -47,6 +49,7 @@ pub struct PBRState {
 
     mesh_ref: ThreadSafeRef<Mesh>,
     mesh_renderings_ref: Vec<ThreadSafeRef<MeshRendering>>,
+    entities: Vec<Entity>,
 
     desired_state: SwitchableStates,
 }
@@ -66,8 +69,8 @@ impl BuildableApplicationState<()> for PBRState {
         )
         .expect("Failed to create pbr shader");
 
-        let mesh_ref = Vertex::load_model_from_path_ply(
-            Path::new("assets/meshes/sphere.ply"),
+        let mesh_ref = Vertex::load_model_from_path_obj(
+            Path::new("assets/meshes/sphere.obj"),
             context.renderer,
         )
         .expect("Failed to create mesh");
@@ -139,11 +142,11 @@ impl BuildableApplicationState<()> for PBRState {
         mesh_renderings.push(mesh_rendering_ref);
 
         let camera = morrigu::components::camera::Camera::builder().build(
-            morrigu::components::camera::Projection::Orthographic(
-                morrigu::components::camera::OrthographicData {
-                    scale: 35.0,
-                    near_plane: 0.00001,
-                    far_plane: 100.0,
+            morrigu::components::camera::Projection::Perspective(
+                morrigu::components::camera::PerspectiveData {
+                    horizontal_fov: (60.0_f32).to_radians(),
+                    near_plane: 0.001,
+                    far_plane: 1000.0,
                 },
             ),
             &Vec2::new(1280.0, 720.0),
@@ -167,6 +170,8 @@ impl BuildableApplicationState<()> for PBRState {
 
         Self {
             camera: MachaCamera::new(camera),
+            camera_focus: None,
+
             point_light_angle: 0.0,
             point_light_debug,
             point_light_entity: Entity::PLACEHOLDER,
@@ -179,6 +184,7 @@ impl BuildableApplicationState<()> for PBRState {
 
             mesh_ref,
             mesh_renderings_ref: mesh_renderings,
+            entities: vec![],
 
             desired_state: SwitchableStates::PBRTest,
         }
@@ -205,7 +211,7 @@ impl ApplicationState for PBRState {
 
         let transform = Transform::default();
         self.camera.set_focal_point(transform.translation());
-        self.camera.set_distance(7.0);
+        self.camera.set_distance(25.0);
 
         for (i, mrr) in self.mesh_renderings_ref.iter().enumerate() {
             let mut transform = transform.clone();
@@ -215,7 +221,12 @@ impl ApplicationState for PBRState {
                 0.0,
             ));
 
-            context.ecs_manager.world.spawn((transform, mrr.clone()));
+            let entity = context
+                .ecs_manager
+                .world
+                .spawn((transform, mrr.clone()))
+                .id();
+            self.entities.push(entity);
         }
     }
 
@@ -305,6 +316,42 @@ impl ApplicationState for PBRState {
         draw_debug_utils(context.egui_context, dt);
 
         egui::Window::new("Light controls").show(context.egui_context, |ui| {
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT), |ui| {
+                egui::ComboBox::from_label("Select camera focus")
+                    .selected_text(match self.camera_focus {
+                        Some(idx) => idx.to_string(),
+                        None => "Whole scene".to_owned(),
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.camera_focus, None, "Whole scene");
+                        for target_idx in 0..self.mesh_renderings_ref.len() {
+                            ui.selectable_value(
+                                &mut self.camera_focus,
+                                Some(target_idx),
+                                target_idx.to_string(),
+                            );
+                        }
+                    });
+                if ui.button("Apply camera focus").clicked() {
+                    let (target_pos, distance) = match self.camera_focus {
+                        Some(target_idx) => (
+                            *context
+                                .ecs_manager
+                                .world
+                                .get_entity(*self.entities.get(target_idx).unwrap())
+                                .unwrap()
+                                .get::<Transform>()
+                                .unwrap()
+                                .translation(),
+                            7.0,
+                        ),
+                        None => (Vec3::default(), 25.0),
+                    };
+                    self.camera.set_focal_point(&target_pos);
+                    self.camera.set_distance(distance);
+                }
+            });
+
             ui.add(
                 egui::Slider::new(&mut self.point_light_angle, 0.0..=360.0)
                     .text("point light angle")

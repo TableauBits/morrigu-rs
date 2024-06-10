@@ -29,9 +29,13 @@ void main() {
     vec3 V = normalize(u_LightData.cameraPos.xyz - vs_fragPos);
     vec3 L = normalize(u_LightData.lightPos.xyz  - vs_fragPos);
     vec3 H = normalize(L + V);
-    ShadingData data = ShadingData(V, L, vs_normal, H, dot(V, H));
+    ShadingData data = ShadingData(V, L, normalize(vs_normal), H, dot(V, H));
+    vec3 reflectDir = reflect(-data.L, data.N);
 
-    vec3 result = (vec3(0.1) + max(dot(data.N, data.L), 0.0)) * vec3(0.8, 0.8, 0.2);
+    float ambient  = 0.1;
+    float diffuse  = max(dot(data.N, data.L), 0.0);
+    float specular = 0.5 * pow(max(dot(data.V, reflectDir), 0.0), 32);
+    vec3 result = (ambient + diffuse + specular) * vec3(0.8, 0.8, 0.2);
     f_Color = vec4(result, 1.0);
 }
 
