@@ -65,7 +65,8 @@ void main() {
         u_PBRParams.mra.z
     );
 
-    vec3 result = phong(data);
+    // vec3 result = phong(data);
+    vec3 result = vec3(data.metallic, data.roughness, data.ao);
 
     f_color = vec4(result, 1.0);
 }
