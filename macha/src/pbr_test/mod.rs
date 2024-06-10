@@ -317,7 +317,8 @@ impl ApplicationState for PBRState {
 
         egui::Window::new("Light controls").show(context.egui_context, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT), |ui| {
-                egui::ComboBox::from_label("Select camera focus")
+                ui.label("Select camera focus");
+                egui::ComboBox::from_id_source("Select camera focus")
                     .selected_text(match self.camera_focus {
                         Some(idx) => idx.to_string(),
                         None => "Whole scene".to_owned(),
