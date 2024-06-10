@@ -15,7 +15,7 @@ use utils::startup_state::{StartupState, SwitchableStates};
 
 fn init_logging() {
     #[cfg(debug_assertions)]
-    let log_level = ("trace", flexi_logger::Duplicate::Debug);
+    let log_level = ("debug", flexi_logger::Duplicate::Debug);
     #[cfg(not(debug_assertions))]
     let log_level = ("info", flexi_logger::Duplicate::Info);
 

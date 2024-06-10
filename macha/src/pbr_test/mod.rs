@@ -29,6 +29,15 @@ struct LightData {
 unsafe impl bytemuck::Zeroable for LightData {}
 unsafe impl bytemuck::Pod for LightData {}
 
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+struct PBRData {
+    albedo: Vec4,
+    mra: Vec4,
+}
+unsafe impl bytemuck::Zeroable for PBRData {}
+unsafe impl bytemuck::Pod for PBRData {}
+
 pub struct PBRState {
     camera: MachaCamera,
     camera_focus: Option<usize>,
@@ -108,7 +117,7 @@ impl BuildableApplicationState<()> for PBRState {
                         0,
                         ThreadSafeRef::new(
                             AllocatedBuffer::builder(size_of::<LightData>() as u64)
-                                .with_name("Light Data")
+                                .with_name("Light data")
                                 .build(context.renderer)
                                 .expect("Failed to build light data buffer"),
                         ),
@@ -124,10 +133,25 @@ impl BuildableApplicationState<()> for PBRState {
             &mesh_ref,
             &diffuse_material_ref,
             DescriptorResources {
-                uniform_buffers: [morrigu::components::mesh_rendering::default_ubo_bindings(
-                    context.renderer,
-                )
-                .unwrap()]
+                uniform_buffers: [
+                    morrigu::components::mesh_rendering::default_ubo_bindings(context.renderer)
+                        .unwrap(),
+                    (
+                        1,
+                        ThreadSafeRef::new(
+                            AllocatedBuffer::builder(size_of::<PBRData>() as u64)
+                                .with_name("PBR data")
+                                .build_with_pod(
+                                    PBRData {
+                                        albedo: Vec4::new(0.6, 0.7, 0.4, 0.0),
+                                        mra: Vec4::new(0.0, 1.0, 1.0, 0.0),
+                                    },
+                                    context.renderer,
+                                )
+                                .expect("Failed to build light data buffer"),
+                        ),
+                    ),
+                ]
                 .into(),
                 ..Default::default()
             },
@@ -235,6 +259,11 @@ impl ApplicationState for PBRState {
                 .unwrap()
                 .lock()
                 .destroy(&context.renderer.device, &mut context.renderer.allocator());
+            if let Some(buffer) = mrr.lock().descriptor_resources.uniform_buffers.get(&1) {
+                buffer
+                    .lock()
+                    .destroy(&context.renderer.device, &mut context.renderer.allocator());
+            }
             mrr.lock().destroy(context.renderer);
         }
         self.point_light_debug
