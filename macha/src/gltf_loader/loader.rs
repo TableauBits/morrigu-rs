@@ -191,6 +191,7 @@ pub fn load_gltf(
                 .convert_format(gltf::image::Format::R8G8B8A8)
                 .context("Failed to convert GLTF image to RGBA8")?;
             Texture::builder()
+                .with_format(morrigu::texture::TextureFormat::RGBA8_UNORM)
                 .build_from_data(&image.pixels, image.width, image.height, renderer)
                 .context("Failed to create texture form GTLF data")
         })
