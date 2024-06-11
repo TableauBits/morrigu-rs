@@ -6,7 +6,7 @@ use morrigu::{
     bevy_ecs::entity::Entity,
     components::transform::Transform,
     descriptor_resources::DescriptorResources,
-    egui::{self},
+    egui,
     glam::vec3,
     math_types::{Vec2, Vec3, Vec4},
     shader::Shader,
@@ -25,6 +25,7 @@ type MeshRendering = morrigu::components::mesh_rendering::MeshRendering<Vertex>;
 struct LightData {
     camera_pos: Vec4,
     light_pos: Vec4,
+    light_color_intensity: Vec4,
 }
 unsafe impl bytemuck::Zeroable for LightData {}
 unsafe impl bytemuck::Pod for LightData {}
@@ -43,6 +44,8 @@ pub struct PBRState {
     camera_focus: Option<usize>,
 
     point_light_angle: f32,
+    point_light_color: Vec3,
+    point_light_intensity: f32,
     point_light_debug: ThreadSafeRef<MeshRendering>,
     point_light_entity: Entity,
 
@@ -131,10 +134,10 @@ impl BuildableApplicationState<()> for PBRState {
         for i in 0..grid_size {
             for j in 0..grid_size {
                 let pbr_data = PBRData {
-                    albedo: Vec4::new(0.8, 0.1, 0.1, 0.0),
+                    albedo: Vec4::new(0.95, 0.1, 0.1, 0.0),
                     mra: Vec4::new(
                         (1.0 / (grid_size - 1) as f32) * i as f32,
-                        (1.0 / (grid_size - 1) as f32) * j as f32,
+                        ((1.0 / (grid_size - 1) as f32) * j as f32).max(0.001),
                         1.0,
                         0.0,
                     ),
@@ -186,6 +189,8 @@ impl BuildableApplicationState<()> for PBRState {
             camera_focus: None,
 
             point_light_angle: 0.0,
+            point_light_color: Vec3::splat(1.0),
+            point_light_intensity: 1.0,
             point_light_debug,
             point_light_entity: Entity::PLACEHOLDER,
 
@@ -303,15 +308,16 @@ impl ApplicationState for PBRState {
             .world
             .insert_resource(self.camera.mrg_camera);
 
-        let light_pos = 17.0
+        let light_pos = 5.0
             * Vec3::new(
                 self.point_light_angle.to_radians().cos(),
-                self.point_light_angle.to_radians().sin(),
                 0.0,
+                self.point_light_angle.to_radians().sin(),
             );
         let light_data = LightData {
             camera_pos: (*self.camera.mrg_camera.position(), 0.0).into(),
             light_pos: (light_pos, 0.0).into(),
+            light_color_intensity: (self.point_light_color, self.point_light_intensity).into(),
         };
 
         self.diffuse_material_ref
@@ -373,6 +379,14 @@ impl ApplicationState for PBRState {
                     self.camera.set_distance(distance);
                 }
             });
+
+            ui.color_edit_button_rgb(self.point_light_color.as_mut());
+            ui.add(
+                egui::Slider::new(&mut self.point_light_intensity, 0.0..=10.0)
+                    .text("point light intensity")
+                    .smart_aim(false)
+                    .step_by(0.1),
+            );
 
             ui.add(
                 egui::Slider::new(&mut self.point_light_angle, 0.0..=360.0)

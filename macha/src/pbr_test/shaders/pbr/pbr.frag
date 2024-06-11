@@ -3,8 +3,9 @@
 #define M_PI 3.1415926535897932384626433832795
 
 layout(set = 2, binding = 0) uniform LightData {
-    vec4 cameraPos;
-    vec4 lightPos ;
+    vec4 cameraPos ;
+    vec4 lightPos  ;
+    vec4 lightColor; // intensity in w
 } u_LightData;
 
 layout(set = 3, binding = 1) uniform PBRParams {
@@ -104,19 +105,19 @@ void main() {
 
     float distance = length(u_LightData.lightPos.xyz - vs_fragPos);
     float attenuation = 1.0 / (distance * distance);
-    vec3 radiance = vec3(1.0) * attenuation;
+    vec3 radiance = u_LightData.lightColor.xyz * u_LightData.lightColor.w * attenuation;
 
     float ndf = distributionGGX(data.N, data.H, data.roughness);
     float g = geometrySmith(data.N, data.V, data.L, data.roughness);
     vec3 f = fresnelSchlick(max(dot(data.H, data.V), 0.0), F0);
 
-    vec3 ks = f;
-    vec3 kd = vec3(1.0) - ks;
-    kd *= 1.0 - data.metallic;
-
     vec3 numerator = ndf * g * f;
     float denum = 4.0 * max(dot(data.N, data.V), 0.0) * max(dot(data.N, data.L), 0.0) + 0.0001;
     vec3 specular = numerator / denum;
+
+    vec3 ks = f;
+    vec3 kd = vec3(1.0) - ks;
+    kd *= 1.0 - data.metallic;
 
     float NdotL = max(dot(data.N, data.L), 0.0);
     Lo += (kd * data.albedo / M_PI + specular) * radiance * NdotL;
@@ -124,7 +125,7 @@ void main() {
     vec3 ambient = vec3(0.03) * data.albedo * data.ao;
     vec3 color = ambient + Lo;
 
-    // color = color / (color + vec3(1.0));
+    color = color / (color + vec3(1.0));
     // color = pow(color, vec3(1.0/2.2));
 
     // vec3 color = phong(data);
