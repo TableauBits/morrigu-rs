@@ -8,10 +8,11 @@ layout(set = 2, binding = 0) uniform LightData {
     vec4 lightColor; // intensity in w
 } u_LightData;
 
-layout(set = 3, binding = 1) uniform PBRParams {
-    vec4 albedo;
-    vec4 mra   ; // Packed [metallic, roughness, ao, _padding]
-} u_PBRParams;
+layout(set = 3, binding = 1) uniform sampler2D u_albedoMap   ;
+layout(set = 3, binding = 2) uniform sampler2D u_normalMap   ;
+layout(set = 3, binding = 3) uniform sampler2D u_metallicMap ;
+layout(set = 3, binding = 4) uniform sampler2D u_roughnessMap;
+layout(set = 3, binding = 5) uniform sampler2D u_aoMap       ;
 
 layout(location = 0) in vec3 vs_fragPos;
 layout(location = 1) in vec3 vs_normal;
@@ -80,6 +81,22 @@ float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
     return ggx1 * ggx2;
 }
 
+vec3 getNormalFromMap() {
+    vec3 tangentNormal = texture(u_normalMap, vs_uv).xyz * 2.0 - 1.0;
+
+    vec3 Q1  = dFdx(vs_fragPos);
+    vec3 Q2  = dFdy(vs_fragPos);
+    vec2 st1 = dFdx(vs_uv);
+    vec2 st2 = dFdy(vs_uv);
+
+    vec3 N   = normalize(vs_normal);
+    vec3 T  = normalize(Q1*st2.t - Q2*st1.t);
+    vec3 B  = -normalize(cross(N, T));
+    mat3 TBN = mat3(T, B, N);
+
+    return normalize(TBN * tangentNormal);
+}
+
 void main() {
     vec3 V = normalize(u_LightData.cameraPos.xyz - vs_fragPos);
     vec3 L = normalize(u_LightData.lightPos.xyz  - vs_fragPos);
@@ -87,15 +104,15 @@ void main() {
     ShadingData data = ShadingData(
         V,
         L,
-        normalize(vs_normal),
+        getNormalFromMap(),
 
         H,
         dot(V, H),
 
-        u_PBRParams.albedo.xyz,
-        u_PBRParams.mra.x,
-        u_PBRParams.mra.y,
-        u_PBRParams.mra.z
+        texture(u_albedoMap   , vs_uv).xyz,
+        texture(u_metallicMap , vs_uv).r,
+        texture(u_roughnessMap, vs_uv).r,
+        texture(u_aoMap       , vs_uv).r
     );
 
     vec3 F0 = vec3(0.04);

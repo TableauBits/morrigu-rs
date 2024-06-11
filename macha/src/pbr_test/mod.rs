@@ -10,6 +10,7 @@ use morrigu::{
     glam::vec3,
     math_types::{Vec2, Vec3, Vec4},
     shader::Shader,
+    texture::Texture,
     utils::ThreadSafeRef,
 };
 
@@ -30,15 +31,6 @@ struct LightData {
 unsafe impl bytemuck::Zeroable for LightData {}
 unsafe impl bytemuck::Pod for LightData {}
 
-#[derive(Debug, Copy, Clone)]
-#[repr(C)]
-struct PBRData {
-    albedo: Vec4,
-    mra: Vec4,
-}
-unsafe impl bytemuck::Zeroable for PBRData {}
-unsafe impl bytemuck::Pod for PBRData {}
-
 pub struct PBRState {
     camera: MachaCamera,
     camera_focus: Option<usize>,
@@ -53,7 +45,9 @@ pub struct PBRState {
     pbr_shader_ref: ThreadSafeRef<Shader>,
 
     flat_material_ref: ThreadSafeRef<Material>,
-    diffuse_material_ref: ThreadSafeRef<Material>,
+    pbr_material_ref: ThreadSafeRef<Material>,
+
+    textures: Vec<ThreadSafeRef<Texture>>,
 
     mesh_ref: ThreadSafeRef<Mesh>,
     mesh_renderings_ref: Vec<ThreadSafeRef<MeshRendering>>,
@@ -130,19 +124,46 @@ impl BuildableApplicationState<()> for PBRState {
             )
             .expect("Failed to create material");
 
-        let grid_size = 7;
-        for i in 0..grid_size {
-            for j in 0..grid_size {
-                let pbr_data = PBRData {
-                    albedo: Vec4::new(1.0, 0.0, 0.0, 0.0),
-                    mra: Vec4::new(
-                        (1.0 / (grid_size - 1) as f32) * i as f32,
-                        ((1.0 / (grid_size - 1) as f32) * j as f32).max(0.001),
-                        1.0,
-                        0.0,
-                    ),
-                };
+        let albedo = Texture::builder()
+            .build_from_path(
+                Path::new("assets/textures/rust_pbr/albedo.png"),
+                context.renderer,
+            )
+            .expect("Failed to load albedo texture");
+        let normal = Texture::builder()
+            .with_format(morrigu::texture::TextureFormat::RGBA8_UNORM)
+            .build_from_path(
+                Path::new("assets/textures/rust_pbr/normal.png"),
+                context.renderer,
+            )
+            .expect("Failed to load normal texture");
+        let metallic = Texture::builder()
+            .with_format(morrigu::texture::TextureFormat::RGBA8_UNORM)
+            .build_from_path(
+                Path::new("assets/textures/rust_pbr/metallic.png"),
+                context.renderer,
+            )
+            .expect("Failed to load metallic texture");
+        let roughness = Texture::builder()
+            .with_format(morrigu::texture::TextureFormat::RGBA8_UNORM)
+            .build_from_path(
+                Path::new("assets/textures/rust_pbr/roughness.png"),
+                context.renderer,
+            )
+            .expect("Failed to load roughness texture");
+        let ao = Texture::builder()
+            .with_format(morrigu::texture::TextureFormat::RGBA8_UNORM)
+            .build_from_data(
+                &[u8::MAX, u8::MAX, u8::MAX, u8::MAX],
+                1,
+                1,
+                context.renderer,
+            )
+            .expect("Failed to create ao texture");
 
+        let grid_size = 7;
+        for _ in 0..grid_size {
+            for _ in 0..grid_size {
                 let mesh_rendering_ref = MeshRendering::new(
                     &mesh_ref,
                     &pbr_material_ref,
@@ -152,15 +173,14 @@ impl BuildableApplicationState<()> for PBRState {
                                 context.renderer,
                             )
                             .unwrap(),
-                            (
-                                1,
-                                ThreadSafeRef::new(
-                                    AllocatedBuffer::builder(size_of::<PBRData>() as u64)
-                                        .with_name("PBR data")
-                                        .build_with_pod(pbr_data, context.renderer)
-                                        .expect("Failed to build light data buffer"),
-                                ),
-                            ),
+                        ]
+                        .into(),
+                        sampled_images: [
+                            (1, albedo.clone()),
+                            (2, normal.clone()),
+                            (3, metallic.clone()),
+                            (4, roughness.clone()),
+                            (5, ao.clone()),
                         ]
                         .into(),
                         ..Default::default()
@@ -172,6 +192,7 @@ impl BuildableApplicationState<()> for PBRState {
                 mesh_renderings.push(mesh_rendering_ref);
             }
         }
+        let textures = vec![albedo, normal, metallic, roughness, ao];
 
         let camera = morrigu::components::camera::Camera::builder().build(
             morrigu::components::camera::Projection::Perspective(
@@ -198,7 +219,9 @@ impl BuildableApplicationState<()> for PBRState {
             pbr_shader_ref,
 
             flat_material_ref,
-            diffuse_material_ref: pbr_material_ref,
+            pbr_material_ref,
+
+            textures,
 
             mesh_ref,
             mesh_renderings_ref: mesh_renderings,
@@ -253,6 +276,10 @@ impl ApplicationState for PBRState {
     }
 
     fn on_drop(&mut self, context: &mut morrigu::application::StateContext) {
+        for texture in &self.textures {
+            texture.lock().destroy(context.renderer);
+        }
+
         for mrr in &mut self.mesh_renderings_ref {
             mrr.lock()
                 .descriptor_resources
@@ -281,7 +308,7 @@ impl ApplicationState for PBRState {
 
         self.flat_material_ref.lock().destroy(context.renderer);
 
-        self.diffuse_material_ref
+        self.pbr_material_ref
             .lock()
             .descriptor_resources
             .uniform_buffers
@@ -289,7 +316,7 @@ impl ApplicationState for PBRState {
             .unwrap()
             .lock()
             .destroy(&context.renderer.device, &mut context.renderer.allocator());
-        self.diffuse_material_ref.lock().destroy(context.renderer);
+        self.pbr_material_ref.lock().destroy(context.renderer);
 
         self.pbr_shader_ref.lock().destroy(&context.renderer.device);
         self.flat_shader_ref
@@ -320,7 +347,7 @@ impl ApplicationState for PBRState {
             light_color_intensity: (self.point_light_color, self.point_light_intensity).into(),
         };
 
-        self.diffuse_material_ref
+        self.pbr_material_ref
             .lock()
             .update_uniform(0, light_data)
             .expect("Failed to update ligth data buffer");
