@@ -32,10 +32,6 @@ struct ShadingData {
     float ao       ;
 };
 
-vec3 diffuse_brdf(vec3 color) {
-  return (1 / M_PI) * color;
-}
-
 vec3 phong(ShadingData data) {
     vec3 reflectDir = reflect(-data.L, data.N);
 
@@ -45,6 +41,42 @@ vec3 phong(ShadingData data) {
     vec3 result = (ambient + diffuse + specular) * data.albedo;
 
     return result;
+}
+
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+float distributionGGX(vec3 N, vec3 H, float roughness) {
+    float a      = roughness * roughness;
+    float a2     = a * a;
+    float NdotH  = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+
+    float num   = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = M_PI * denom * denom;
+
+    return num / denom;
+}
+
+float geometrySchlickGGX(float NdotV, float roughness) {
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
+
+    float num   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return num / denom;
+}
+
+float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2  = geometrySchlickGGX(NdotV, roughness);
+    float ggx1  = geometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
 }
 
 void main() {
@@ -65,9 +97,39 @@ void main() {
         u_PBRParams.mra.z
     );
 
-    // vec3 result = phong(data);
-    vec3 result = vec3(data.metallic, data.roughness, data.ao);
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, data.albedo, data.metallic);
 
-    f_color = vec4(result, 1.0);
+    vec3 Lo = vec3(0.0);
+
+    float distance = length(u_LightData.lightPos.xyz - vs_fragPos);
+    float attenuation = 1.0 / (distance * distance);
+    vec3 radiance = vec3(1.0) * attenuation;
+
+    float ndf = distributionGGX(data.N, data.H, data.roughness);
+    float g = geometrySmith(data.N, data.V, data.L, data.roughness);
+    vec3 f = fresnelSchlick(max(dot(data.H, data.V), 0.0), F0);
+
+    vec3 ks = f;
+    vec3 kd = vec3(1.0) - ks;
+    kd *= 1.0 - data.metallic;
+
+    vec3 numerator = ndf * g * f;
+    float denum = 4.0 * max(dot(data.N, data.V), 0.0) * max(dot(data.N, data.L), 0.0) + 0.0001;
+    vec3 specular = numerator / denum;
+
+    float NdotL = max(dot(data.N, data.L), 0.0);
+    Lo += (kd * data.albedo / M_PI + specular) * radiance * NdotL;
+
+    vec3 ambient = vec3(0.03) * data.albedo * data.ao;
+    vec3 color = ambient + Lo;
+
+    // color = color / (color + vec3(1.0));
+    // color = pow(color, vec3(1.0/2.2));
+
+    // vec3 color = phong(data);
+    // vec3 color = vec3(data.metallic, data.roughness, data.ao);
+
+    f_color = vec4(color, 1.0);
 }
 
