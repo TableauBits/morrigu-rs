@@ -134,7 +134,7 @@ impl BuildableApplicationState<()> for PBRState {
         for i in 0..grid_size {
             for j in 0..grid_size {
                 let pbr_data = PBRData {
-                    albedo: Vec4::new(0.95, 0.1, 0.1, 0.0),
+                    albedo: Vec4::new(1.0, 0.0, 0.0, 0.0),
                     mra: Vec4::new(
                         (1.0 / (grid_size - 1) as f32) * i as f32,
                         ((1.0 / (grid_size - 1) as f32) * j as f32).max(0.001),
@@ -308,7 +308,7 @@ impl ApplicationState for PBRState {
             .world
             .insert_resource(self.camera.mrg_camera);
 
-        let light_pos = 5.0
+        let light_pos = 10.0
             * Vec3::new(
                 self.point_light_angle.to_radians().cos(),
                 0.0,
@@ -382,7 +382,7 @@ impl ApplicationState for PBRState {
 
             ui.color_edit_button_rgb(self.point_light_color.as_mut());
             ui.add(
-                egui::Slider::new(&mut self.point_light_intensity, 0.0..=10.0)
+                egui::Slider::new(&mut self.point_light_intensity, 0.0..=100.0)
                     .text("point light intensity")
                     .smart_aim(false)
                     .step_by(0.1),
