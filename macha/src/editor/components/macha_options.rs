@@ -19,7 +19,7 @@ impl MachaGlobalOptions {
         Self {
             gizmo: Gizmo::new(GizmoConfig {
                 viewport: egui::Rect::EVERYTHING,
-                modes: GizmoMode::Translate.into(),
+                modes: GizmoMode::all_translate(),
                 snap_angle: f32::to_radians(45.0),
                 snap_distance: 0.5,
                 snap_scale: 0.5,

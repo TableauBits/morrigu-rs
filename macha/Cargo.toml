@@ -14,8 +14,8 @@ flexi_logger = "0.28"
 anyhow = "1.0"
 gltf = { git = "https://github.com/Ithyx/gltf", rev = "914f71ea0ea657635818151d836d259cd4536880" }
 morrigu = { path = "../", features = ["egui"] }
-transform-gizmo = "0.1.0"
-transform-gizmo-egui = "0.1.0"
+transform-gizmo = "0.2.0"
+transform-gizmo-egui = "0.2.0"
 bytemuck = "1.14"
 clap = { version = "4.5", features = ["derive"] }
 

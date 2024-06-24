@@ -33,7 +33,7 @@ use morrigu::{
     winit,
 };
 use systems::hierarchy_panel;
-use transform_gizmo::GizmoMode;
+use transform_gizmo::{EnumSet, GizmoMode};
 use winit::{event::KeyEvent, keyboard::KeyCode};
 
 use std::path::Path;
@@ -377,7 +377,7 @@ impl ApplicationState for MachaState {
     }
 }
 
-fn set_gizmo(context: &mut StateContext, new_gizmo: GizmoMode) {
+fn set_gizmo(context: &mut StateContext, new_gizmo: EnumSet<GizmoMode>) {
     let gizmo = &mut context
         .ecs_manager
         .world
@@ -386,7 +386,7 @@ fn set_gizmo(context: &mut StateContext, new_gizmo: GizmoMode) {
         .gizmo;
 
     let mut config = *gizmo.config();
-    config.modes = new_gizmo.into();
+    config.modes = new_gizmo;
     gizmo.update_config(config);
 }
 
@@ -394,9 +394,9 @@ impl MachaState {
     fn on_keyboard_input(&mut self, input: KeyEvent, context: &mut StateContext) {
         if let winit::keyboard::PhysicalKey::Code(keycode) = input.physical_key {
             match keycode {
-                KeyCode::KeyQ => set_gizmo(context, GizmoMode::Translate),
-                KeyCode::KeyE => set_gizmo(context, GizmoMode::Rotate),
-                KeyCode::KeyR => set_gizmo(context, GizmoMode::Scale),
+                KeyCode::KeyQ => set_gizmo(context, GizmoMode::all_translate()),
+                KeyCode::KeyE => set_gizmo(context, GizmoMode::all_rotate()),
+                KeyCode::KeyR => set_gizmo(context, GizmoMode::all_scale()),
 
                 _ => (),
             }
