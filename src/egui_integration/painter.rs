@@ -27,17 +27,16 @@ unsafe impl Pod for EguiVertex {}
 
 impl Vertex for EguiVertex {
     fn vertex_input_description() -> VertexInputDescription {
-        let main_binding = vk::VertexInputBindingDescription::builder()
+        let main_binding = vk::VertexInputBindingDescription::default()
             .binding(0)
             .stride(
                 std::mem::size_of::<EguiVertex>()
                     .try_into()
                     .expect("Unsupported architecture"),
             )
-            .input_rate(vk::VertexInputRate::VERTEX)
-            .build();
+            .input_rate(vk::VertexInputRate::VERTEX);
 
-        let position = vk::VertexInputAttributeDescription::builder()
+        let position = vk::VertexInputAttributeDescription::default()
             .location(0)
             .binding(0)
             .format(vk::Format::R32G32_SFLOAT)
@@ -45,10 +44,9 @@ impl Vertex for EguiVertex {
                 memoffset::offset_of!(EguiVertex, position)
                     .try_into()
                     .expect("Unsupported architecture"),
-            )
-            .build();
+            );
 
-        let texture_coords = vk::VertexInputAttributeDescription::builder()
+        let texture_coords = vk::VertexInputAttributeDescription::default()
             .location(1)
             .binding(0)
             .format(vk::Format::R32G32_SFLOAT)
@@ -56,10 +54,9 @@ impl Vertex for EguiVertex {
                 memoffset::offset_of!(EguiVertex, texture_coords)
                     .try_into()
                     .expect("Unsupported architecture"),
-            )
-            .build();
+            );
 
-        let color = vk::VertexInputAttributeDescription::builder()
+        let color = vk::VertexInputAttributeDescription::default()
             .location(2)
             .binding(0)
             .format(vk::Format::R32G32B32A32_SFLOAT)
@@ -67,8 +64,7 @@ impl Vertex for EguiVertex {
                 memoffset::offset_of!(EguiVertex, color)
                     .try_into()
                     .expect("Unsupported architecture"),
-            )
-            .build();
+            );
 
         VertexInputDescription {
             bindings: vec![main_binding],
@@ -257,7 +253,7 @@ impl Painter {
             )
         };
 
-        let viewport = vk::Viewport::builder()
+        let viewport = vk::Viewport::default()
             .x(0.0)
             .y(height)
             .width(width)
@@ -280,7 +276,7 @@ impl Painter {
         let max_x = max_x.round() as u32;
         let max_y = max_y.round() as u32;
 
-        let scissor = vk::Rect2D::builder()
+        let scissor = vk::Rect2D::default()
             .offset(vk::Offset2D {
                 x: min_x as i32,
                 y: min_y as i32,
@@ -415,7 +411,7 @@ impl Painter {
                     base_array_layer: 0,
                     layer_count: 1,
                 };
-                let copy_region = vk::ImageCopy::builder()
+                let copy_region = vk::ImageCopy::default()
                     .src_subresource(subresource)
                     .dst_subresource(subresource)
                     .dst_offset(vk::Offset3D {
@@ -432,41 +428,41 @@ impl Painter {
                 let texture_image = texture.image_ref.lock();
                 let original_texture_image = original_texture.image_ref.lock();
 
-                let range = vk::ImageSubresourceRange::builder()
+                let range = vk::ImageSubresourceRange::default()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
                     .layer_count(1);
-                let transfer_src_barrier = vk::ImageMemoryBarrier::builder()
+                let transfer_src_barrier = vk::ImageMemoryBarrier::default()
                     .src_access_mask(vk::AccessFlags::NONE)
                     .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
                     .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                     .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                     .image(texture_image.handle)
-                    .subresource_range(*range);
-                let transfer_dst_barrier = vk::ImageMemoryBarrier::builder()
+                    .subresource_range(range);
+                let transfer_dst_barrier = vk::ImageMemoryBarrier::default()
                     .src_access_mask(vk::AccessFlags::NONE)
                     .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                     .old_layout(vk::ImageLayout::UNDEFINED)
                     .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                     .image(original_texture_image.handle)
-                    .subresource_range(*range);
+                    .subresource_range(range);
 
-                let shader_read_src_barrier = vk::ImageMemoryBarrier::builder()
+                let shader_read_src_barrier = vk::ImageMemoryBarrier::default()
                     .src_access_mask(vk::AccessFlags::TRANSFER_READ)
                     .dst_access_mask(vk::AccessFlags::SHADER_READ)
                     .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                     .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                     .image(texture_image.handle)
-                    .subresource_range(*range);
-                let shader_read_dst_barrier = vk::ImageMemoryBarrier::builder()
+                    .subresource_range(range);
+                let shader_read_dst_barrier = vk::ImageMemoryBarrier::default()
                     .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                     .dst_access_mask(vk::AccessFlags::SHADER_READ)
                     .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                     .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                     .image(original_texture_image.handle)
-                    .subresource_range(*range);
+                    .subresource_range(range);
 
                 renderer
                     .immediate_command(|cmd_buffer| {
@@ -478,7 +474,7 @@ impl Painter {
                                 vk::DependencyFlags::empty(),
                                 &[],
                                 &[],
-                                &[*transfer_src_barrier, *transfer_dst_barrier],
+                                &[transfer_src_barrier, transfer_dst_barrier],
                             );
                             renderer.device.cmd_copy_image(
                                 *cmd_buffer,
@@ -496,7 +492,7 @@ impl Painter {
                                 vk::DependencyFlags::empty(),
                                 &[],
                                 &[],
-                                &[*shader_read_src_barrier, *shader_read_dst_barrier],
+                                &[shader_read_src_barrier, shader_read_dst_barrier],
                             );
                         };
                     })

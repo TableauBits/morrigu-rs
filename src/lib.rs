@@ -27,6 +27,7 @@ pub use ash;
 pub use bevy_ecs;
 pub use winit;
 pub use winit_input_helper;
+pub use glam;
 
 #[cfg(feature = "egui")]
 pub use egui;

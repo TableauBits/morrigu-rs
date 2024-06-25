@@ -18,13 +18,9 @@ use morrigu::{
     shader::Shader,
     systems::mesh_renderer,
     utils::ThreadSafeRef,
-    winit,
 };
 
-use crate::utils::{
-    camera::MachaCamera,
-    ui::{draw_state_switcher, SwitchableStates},
-};
+use crate::utils::{camera::MachaCamera, startup_state::SwitchableStates, ui::draw_debug_utils};
 
 use self::{
     loader::LightData,
@@ -256,24 +252,12 @@ impl ApplicationState for GLTFViewerState {
             .insert_resource(self.camera.mrg_camera);
     }
 
-    fn on_update_egui(&mut self, _dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        draw_state_switcher(context.egui_context, &mut self.desired_state);
+    fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        draw_debug_utils(context.egui_context, dt, &mut self.desired_state);
     }
 
     fn on_event(&mut self, event: Event<()>, _context: &mut morrigu::application::StateContext) {
-        #[allow(clippy::single_match)] // Temporary
-        match event {
-            Event::WindowEvent {
-                event:
-                    winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize {
-                        width, height, ..
-                    }),
-                ..
-            } => {
-                self.camera.on_resize(width, height);
-            }
-            _ => (),
-        }
+        self.camera.on_event(&event);
     }
 
     fn flow<'flow>(
@@ -287,6 +271,11 @@ impl ApplicationState for GLTFViewerState {
             SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::compute_shader_test::CSTState::build(context, ()),
             )),
+            SwitchableStates::PBRTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::pbr_test::PBRState::build(context, ()),
+            )),
+
+            #[cfg(feature = "ray_tracing")]
             SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::rt_test::RayTracerState::build(context, ()),
             )),

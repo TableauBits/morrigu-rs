@@ -5,7 +5,7 @@ use morrigu::{
     vertices::simple::SimpleVertex,
 };
 
-use crate::utils::ui::{draw_state_switcher, SwitchableStates};
+use crate::utils::{startup_state::SwitchableStates, ui::draw_debug_utils};
 
 pub struct RayTracerState {
     monkey_mr: ThreadSafeRef<MeshRendering<SimpleVertex>>,
@@ -71,8 +71,8 @@ impl ApplicationState for RayTracerState {
             .destroy(context.renderer);
     }
 
-    fn on_update_egui(&mut self, _dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        draw_state_switcher(context.egui_context, &mut self.desired_state);
+    fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
+        draw_debug_utils(context.egui_context, dt, &mut self.desired_state);
     }
 
     fn flow<'flow>(
@@ -88,6 +88,9 @@ impl ApplicationState for RayTracerState {
             )),
             SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::compute_shader_test::CSTState::build(context, ()),
+            )),
+            SwitchableStates::PBRTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::pbr_test::PBRState::build(context, ()),
             )),
             SwitchableStates::RTTest => morrigu::application::StateFlow::Continue,
         }

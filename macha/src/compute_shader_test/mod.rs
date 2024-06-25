@@ -19,7 +19,8 @@ use morrigu::{
     utils::ThreadSafeRef,
 };
 
-use crate::utils::ui::{draw_debug_utils, draw_state_switcher, SwitchableStates};
+use crate::utils::startup_state::SwitchableStates;
+use crate::utils::ui::draw_debug_utils;
 
 type Vertex = morrigu::vertices::textured::TexturedVertex;
 type Material = morrigu::material::Material<Vertex>;
@@ -178,7 +179,7 @@ impl ApplicationState for CSTState {
                     memory_barriers: vec![],
                     buffer_memory_barriers: vec![],
                     image_memory_barriers: vec![
-                        vk::ImageMemoryBarrier::builder()
+                        vk::ImageMemoryBarrier::default()
                             .old_layout(vk::ImageLayout::GENERAL)
                             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                             .image(self.input_texture.lock().image_ref.lock().handle)
@@ -190,9 +191,8 @@ impl ApplicationState for CSTState {
                                 layer_count: 1,
                             })
                             .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-                            .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                            .build(),
-                        vk::ImageMemoryBarrier::builder()
+                            .dst_access_mask(vk::AccessFlags::SHADER_READ),
+                        vk::ImageMemoryBarrier::default()
                             .old_layout(vk::ImageLayout::GENERAL)
                             .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                             .image(self.output_texture.lock().image_ref.lock().handle)
@@ -204,8 +204,7 @@ impl ApplicationState for CSTState {
                                 layer_count: 1,
                             })
                             .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-                            .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                            .build(),
+                            .dst_access_mask(vk::AccessFlags::SHADER_READ),
                     ],
                 },
                 context.renderer,
@@ -252,8 +251,7 @@ impl ApplicationState for CSTState {
     }
 
     fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        draw_state_switcher(context.egui_context, &mut self.desired_state);
-        draw_debug_utils(context.egui_context, dt);
+        draw_debug_utils(context.egui_context, dt, &mut self.desired_state);
     }
 
     fn flow<'flow>(
@@ -267,6 +265,11 @@ impl ApplicationState for CSTState {
             SwitchableStates::GLTFLoader => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::gltf_loader::GLTFViewerState::build(context, ()),
             )),
+            SwitchableStates::PBRTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::pbr_test::PBRState::build(context, ()),
+            )),
+
+            #[cfg(feature = "ray_tracing")]
             SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::rt_test::RayTracerState::build(context, ()),
             )),

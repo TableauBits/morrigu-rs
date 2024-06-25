@@ -2,7 +2,7 @@ mod components;
 mod ecs_buffer;
 mod systems;
 
-use crate::utils::ui::{draw_debug_utils, draw_state_switcher, SwitchableStates};
+use crate::utils::{startup_state::SwitchableStates, ui::draw_debug_utils};
 
 use super::utils::camera::MachaCamera;
 use bevy_ecs::prelude::Entity;
@@ -11,7 +11,6 @@ use components::{
     selected_entity::SelectedEntity,
 };
 use ecs_buffer::ECSBuffer;
-use egui_gizmo::GizmoMode;
 use morrigu::{
     allocated_types::AllocatedBuffer,
     application::{
@@ -26,7 +25,7 @@ use morrigu::{
     },
     descriptor_resources::DescriptorResources,
     egui,
-    math_types::{EulerRot, Quat, Vec2},
+    math_types::Vec2,
     shader::Shader,
     systems::mesh_renderer,
     texture::{Texture, TextureFormat},
@@ -34,6 +33,7 @@ use morrigu::{
     winit,
 };
 use systems::hierarchy_panel;
+use transform_gizmo::{EnumSet, GizmoMode};
 use winit::{event::KeyEvent, keyboard::KeyCode};
 
 use std::path::Path;
@@ -90,8 +90,8 @@ impl BuildableApplicationState<()> for MachaState {
             .build(&shader_ref, DescriptorResources::empty(), context.renderer)
             .expect("Failed to create material");
 
-        let mesh_ref = Vertex::load_model_from_path_ply(
-            Path::new("assets/meshes/sphere.ply"),
+        let mesh_ref = Vertex::load_model_from_path_obj(
+            Path::new("assets/meshes/sphere.obj"),
             context.renderer,
         )
         .expect("Failed to create mesh");
@@ -171,16 +171,17 @@ impl ApplicationState for MachaState {
             schedule.add_systems(mesh_renderer::render_meshes::<Vertex>);
         });
 
+        context
+            .ecs_manager
+            .redefine_ui_systems_schedule(|schedule| {
+                schedule.add_systems(hierarchy_panel::draw_hierarchy_panel_stable);
+                schedule.add_systems(gizmo_drawer::draw_gizmo);
+            });
+
         let res = context.renderer.window_resolution();
         self.camera.on_resize(res.0, res.1);
 
-        let mut transform = Transform::default();
-        transform.rotate(&Quat::from_euler(
-            EulerRot::XYZ,
-            f32::to_radians(-90.0),
-            0.0,
-            0.0,
-        ));
+        let transform = Transform::default();
         self.camera.set_focal_point(transform.translation());
 
         context.ecs_manager.world.insert_resource(ECSBuffer::new());
@@ -203,13 +204,6 @@ impl ApplicationState for MachaState {
                 name: "empty".to_owned(),
             },
         ));
-
-        context
-            .ecs_manager
-            .redefine_ui_systems_schedule(|schedule| {
-                schedule.add_systems(hierarchy_panel::draw_hierarchy_panel_stable);
-                schedule.add_systems(gizmo_drawer::draw_gizmo);
-            });
 
         let selection_style = egui::style::Selection {
             bg_fill: egui::Color32::from_rgb(165, 20, 61),
@@ -283,8 +277,7 @@ impl ApplicationState for MachaState {
     }
 
     fn on_update_egui(&mut self, dt: std::time::Duration, context: &mut EguiUpdateContext) {
-        draw_state_switcher(context.egui_context, &mut self.desired_state);
-        draw_debug_utils(context.egui_context, dt);
+        draw_debug_utils(context.egui_context, dt, &mut self.desired_state);
 
         egui::Window::new("Shader uniforms").show(context.egui_context, |ui| {
             let image = egui::ImageSource::Texture(
@@ -348,21 +341,14 @@ impl ApplicationState for MachaState {
     }
 
     fn on_event(&mut self, event: Event<()>, context: &mut StateContext) {
+        self.camera.on_event(&event);
+
         #[allow(clippy::single_match)] // Temporary
         match event {
             Event::WindowEvent {
                 event: winit::event::WindowEvent::KeyboardInput { event, .. },
                 ..
             } => self.on_keyboard_input(event, context),
-            Event::WindowEvent {
-                event:
-                    winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize {
-                        width, height, ..
-                    }),
-                ..
-            } => {
-                self.camera.on_resize(width, height);
-            }
             _ => (),
         }
     }
@@ -378,6 +364,11 @@ impl ApplicationState for MachaState {
             SwitchableStates::CSTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::compute_shader_test::CSTState::build(context, ()),
             )),
+            SwitchableStates::PBRTest => morrigu::application::StateFlow::SwitchState(Box::new(
+                crate::pbr_test::PBRState::build(context, ()),
+            )),
+
+            #[cfg(feature = "ray_tracing")]
             SwitchableStates::RTTest => morrigu::application::StateFlow::SwitchState(Box::new(
                 crate::rt_test::RayTracerState::build(context, ()),
             )),
@@ -386,22 +377,26 @@ impl ApplicationState for MachaState {
     }
 }
 
-fn set_gizmo(context: &mut StateContext, new_gizmo: GizmoMode) {
-    context
+fn set_gizmo(context: &mut StateContext, new_gizmo: EnumSet<GizmoMode>) {
+    let gizmo = &mut context
         .ecs_manager
         .world
         .get_resource_mut::<MachaGlobalOptions>()
         .unwrap()
-        .preferred_gizmo = new_gizmo;
+        .gizmo;
+
+    let mut config = *gizmo.config();
+    config.modes = new_gizmo;
+    gizmo.update_config(config);
 }
 
 impl MachaState {
     fn on_keyboard_input(&mut self, input: KeyEvent, context: &mut StateContext) {
         if let winit::keyboard::PhysicalKey::Code(keycode) = input.physical_key {
             match keycode {
-                KeyCode::KeyQ => set_gizmo(context, GizmoMode::Translate),
-                KeyCode::KeyE => set_gizmo(context, GizmoMode::Rotate),
-                KeyCode::KeyR => set_gizmo(context, GizmoMode::Scale),
+                KeyCode::KeyQ => set_gizmo(context, GizmoMode::all_translate()),
+                KeyCode::KeyE => set_gizmo(context, GizmoMode::all_rotate()),
+                KeyCode::KeyR => set_gizmo(context, GizmoMode::all_scale()),
 
                 _ => (),
             }

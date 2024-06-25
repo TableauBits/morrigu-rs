@@ -22,17 +22,16 @@ pub struct TexturedVertex {
 
 impl Vertex for TexturedVertex {
     fn vertex_input_description() -> VertexInputDescription {
-        let main_binding = vk::VertexInputBindingDescription::builder()
+        let main_binding = vk::VertexInputBindingDescription::default()
             .binding(0)
             .stride(
                 std::mem::size_of::<TexturedVertex>()
                     .try_into()
                     .expect("Unsupported architecture"),
             )
-            .input_rate(vk::VertexInputRate::VERTEX)
-            .build();
+            .input_rate(vk::VertexInputRate::VERTEX);
 
-        let position = vk::VertexInputAttributeDescription::builder()
+        let position = vk::VertexInputAttributeDescription::default()
             .location(0)
             .binding(0)
             .format(vk::Format::R32G32B32_SFLOAT)
@@ -40,10 +39,9 @@ impl Vertex for TexturedVertex {
                 memoffset::offset_of!(TexturedVertex, position)
                     .try_into()
                     .expect("Unsupported architecture"),
-            )
-            .build();
+            );
 
-        let normal = vk::VertexInputAttributeDescription::builder()
+        let normal = vk::VertexInputAttributeDescription::default()
             .location(1)
             .binding(0)
             .format(vk::Format::R32G32B32_SFLOAT)
@@ -51,10 +49,9 @@ impl Vertex for TexturedVertex {
                 memoffset::offset_of!(TexturedVertex, normal)
                     .try_into()
                     .expect("Unsupported architecture"),
-            )
-            .build();
+            );
 
-        let texture_coords = vk::VertexInputAttributeDescription::builder()
+        let texture_coords = vk::VertexInputAttributeDescription::default()
             .location(2)
             .binding(0)
             .format(vk::Format::R32G32_SFLOAT)
@@ -62,8 +59,7 @@ impl Vertex for TexturedVertex {
                 memoffset::offset_of!(TexturedVertex, texture_coords)
                     .try_into()
                     .expect("Unsupported architecture"),
-            )
-            .build();
+            );
 
         VertexInputDescription {
             bindings: vec![main_binding],

@@ -118,15 +118,12 @@ impl TextureBuilder {
 
         #[cfg(debug_assertions)]
         {
-            use ash::vk::Handle;
-
             let ffi_string = std::ffi::CString::new(path_str.clone())
                 .map_err(|_| TextureBuildError::InvalidPathConversion(path_str))?;
             let temp_new_texture = new_texture.lock();
             let new_image = temp_new_texture.image_ref.lock();
-            let name_info = vk::DebugUtilsObjectNameInfoEXT::builder()
-                .object_handle(new_image.handle.as_raw())
-                .object_type(vk::ObjectType::IMAGE)
+            let name_info = vk::DebugUtilsObjectNameInfoEXT::default()
+                .object_handle(new_image.handle)
                 .object_name(ffi_string.as_c_str());
 
             unsafe {
@@ -135,8 +132,7 @@ impl TextureBuilder {
             };
 
             let name_info = name_info
-                .object_handle(new_image.view.as_raw())
-                .object_type(vk::ObjectType::IMAGE_VIEW);
+                .object_handle(new_image.view);
 
             unsafe {
                 crate::utils::debug_name_vk_object(renderer, &name_info)
@@ -144,8 +140,7 @@ impl TextureBuilder {
             };
 
             let name_info = name_info
-                .object_handle(temp_new_texture.sampler.as_raw())
-                .object_type(vk::ObjectType::SAMPLER);
+                .object_handle(temp_new_texture.sampler);
 
             unsafe {
                 crate::utils::debug_name_vk_object(renderer, &name_info)
@@ -221,7 +216,7 @@ impl TextureBuilder {
         .with_data(data.to_vec())
         .build_internal(device, graphics_queue, allocator, command_uploader)?;
 
-        let sampler_info = vk::SamplerCreateInfo::builder()
+        let sampler_info = vk::SamplerCreateInfo::default()
             .mag_filter(vk::Filter::NEAREST)
             .min_filter(vk::Filter::NEAREST)
             .address_mode_u(vk::SamplerAddressMode::REPEAT)
@@ -287,26 +282,26 @@ impl Texture {
         renderer.immediate_command(|cmd_buffer| {
             let image = self.image_ref.lock();
 
-            let range = vk::ImageSubresourceRange::builder()
+            let range = vk::ImageSubresourceRange::default()
                 .aspect_mask(vk::ImageAspectFlags::COLOR)
                 .base_mip_level(0)
                 .level_count(1)
                 .base_array_layer(0)
                 .layer_count(image.layer_count);
-            let transfer_src_barrier = vk::ImageMemoryBarrier::builder()
+            let transfer_src_barrier = vk::ImageMemoryBarrier::default()
                 .src_access_mask(vk::AccessFlags::NONE)
                 .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
                 .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                 .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                 .image(image.handle)
-                .subresource_range(*range);
-            let transfer_dst_barrier = vk::ImageMemoryBarrier::builder()
+                .subresource_range(range);
+            let transfer_dst_barrier = vk::ImageMemoryBarrier::default()
                 .src_access_mask(vk::AccessFlags::NONE)
                 .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                 .old_layout(vk::ImageLayout::UNDEFINED)
                 .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                 .image(new_image.handle)
-                .subresource_range(*range);
+                .subresource_range(range);
             unsafe {
                 renderer.device.cmd_pipeline_barrier(
                     *cmd_buffer,
@@ -315,11 +310,11 @@ impl Texture {
                     vk::DependencyFlags::empty(),
                     &[],
                     &[],
-                    &[*transfer_src_barrier, *transfer_dst_barrier],
+                    &[transfer_src_barrier, transfer_dst_barrier],
                 )
             };
 
-            let copy_region = vk::ImageCopy::builder()
+            let copy_region = vk::ImageCopy::default()
                 .src_subresource(vk::ImageSubresourceLayers {
                     aspect_mask: vk::ImageAspectFlags::COLOR,
                     mip_level: 0,
@@ -344,20 +339,20 @@ impl Texture {
             };
             let image = self.image_ref.lock();
 
-            let shader_read_src_barrier = vk::ImageMemoryBarrier::builder()
+            let shader_read_src_barrier = vk::ImageMemoryBarrier::default()
                 .src_access_mask(vk::AccessFlags::TRANSFER_READ)
                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
                 .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                 .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                 .image(image.handle)
-                .subresource_range(*range);
-            let shader_read_dst_barrier = vk::ImageMemoryBarrier::builder()
+                .subresource_range(range);
+            let shader_read_dst_barrier = vk::ImageMemoryBarrier::default()
                 .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
                 .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                 .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                 .image(new_image.handle)
-                .subresource_range(*range);
+                .subresource_range(range);
             unsafe {
                 renderer.device.cmd_pipeline_barrier(
                     *cmd_buffer,
@@ -366,12 +361,12 @@ impl Texture {
                     vk::DependencyFlags::empty(),
                     &[],
                     &[],
-                    &[*shader_read_src_barrier, *shader_read_dst_barrier],
+                    &[shader_read_src_barrier, shader_read_dst_barrier],
                 )
             };
         })?;
 
-        let sampler_info = vk::SamplerCreateInfo::builder()
+        let sampler_info = vk::SamplerCreateInfo::default()
             .mag_filter(vk::Filter::NEAREST)
             .min_filter(vk::Filter::NEAREST)
             .address_mode_u(vk::SamplerAddressMode::REPEAT)

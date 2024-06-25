@@ -94,7 +94,7 @@ impl Cubemap {
         .with_data(data)
         .build(renderer)?;
 
-        let sampler_info = vk::SamplerCreateInfo::builder()
+        let sampler_info = vk::SamplerCreateInfo::default()
             .mag_filter(vk::Filter::NEAREST)
             .min_filter(vk::Filter::NEAREST)
             .address_mode_u(vk::SamplerAddressMode::REPEAT)
@@ -107,13 +107,10 @@ impl Cubemap {
 
         #[cfg(debug_assertions)]
         {
-            use ash::vk::Handle;
-
             let ffi_string = std::ffi::CString::new(folder_path.clone())
                 .map_err(|_| CubemapBuildError::InvalidPathConversion(folder_path.clone()))?;
-            let name_info = vk::DebugUtilsObjectNameInfoEXT::builder()
-                .object_handle(final_image.handle.as_raw())
-                .object_type(vk::ObjectType::IMAGE)
+            let name_info = vk::DebugUtilsObjectNameInfoEXT::default()
+                .object_handle(final_image.handle)
                 .object_name(ffi_string.as_c_str());
 
             unsafe {
@@ -122,8 +119,7 @@ impl Cubemap {
             };
 
             let name_info = name_info
-                .object_handle(final_image.view.as_raw())
-                .object_type(vk::ObjectType::IMAGE_VIEW);
+                .object_handle(final_image.view);
 
             unsafe {
                 crate::utils::debug_name_vk_object(renderer, &name_info)
@@ -131,8 +127,7 @@ impl Cubemap {
             };
 
             let name_info = name_info
-                .object_handle(sampler.as_raw())
-                .object_type(vk::ObjectType::SAMPLER);
+                .object_handle(sampler);
 
             unsafe {
                 crate::utils::debug_name_vk_object(renderer, &name_info)

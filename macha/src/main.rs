@@ -3,14 +3,19 @@ mod utils;
 mod compute_shader_test;
 mod editor;
 mod gltf_loader;
+mod pbr_test;
+
+#[cfg(feature = "ray_tracing")]
 mod rt_test;
 
-use editor::MachaState;
 use morrigu::application::ApplicationBuilder;
+
+use clap::Parser;
+use utils::startup_state::{StartupState, SwitchableStates};
 
 fn init_logging() {
     #[cfg(debug_assertions)]
-    let log_level = ("trace", flexi_logger::Duplicate::Debug);
+    let log_level = ("debug", flexi_logger::Duplicate::Debug);
     #[cfg(not(debug_assertions))]
     let log_level = ("info", flexi_logger::Duplicate::Info);
 
@@ -26,14 +31,24 @@ fn init_logging() {
         .expect("Failed to build logger");
 }
 
+#[derive(Parser)]
+struct Args {
+    #[arg(value_enum)]
+    startup_state: Option<SwitchableStates>,
+}
+
 fn main() {
+    let args = Args::parse();
+
     init_logging();
 
+    let desired_state = args.startup_state.unwrap_or(SwitchableStates::Editor);
+
     ApplicationBuilder::new()
-        .with_window_name("Macha editor")
+        .with_window_name("Macha")
         .with_dimensions(1280, 720)
         .with_application_name("Macha")
         .with_application_version(0, 1, 0)
-        .build_with_state::<MachaState, ()>(())
+        .build_with_state::<StartupState, SwitchableStates>(desired_state)
         .run();
 }

@@ -151,7 +151,8 @@ void main()
     // The albedo may be defined from a base texture or a flat color
     vec4 baseColor;
     if (u_MapPresenceInfo.hasBaseColorMap != 0) {
-        baseColor = texture(u_BaseColorSampler, vs_UVPassthrough) * u_PBRData.baseColorFactor;
+        vec4 texel = texture(u_BaseColorSampler, vs_UVPassthrough);
+        baseColor = vec4(pow(texel.rgb, vec3(2.2)), texel.a) * u_PBRData.baseColorFactor;
     } else {
         baseColor = u_PBRData.baseColorFactor;
     }
