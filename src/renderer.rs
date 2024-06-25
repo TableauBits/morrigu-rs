@@ -396,6 +396,7 @@ impl<'a> RendererBuilder<'a> {
         }
     }
 
+    #[allow(unused_variables)]
     fn create_debug_messenger(
         &self,
         entry: &Entry,
