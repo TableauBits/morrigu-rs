@@ -144,9 +144,6 @@ void main() {
 
     color = color / (color + vec3(1.0));
 
-    // vec3 color = phong(data);
-    // vec3 color = vec3(data.metallic, data.roughness, data.ao);
-
     f_color = vec4(color, 1.0);
 }
 
