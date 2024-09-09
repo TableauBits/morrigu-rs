@@ -116,6 +116,7 @@ pub struct AllocatedBufferBuilder {
     pub name: String,
 }
 
+/// @TODO(Ithyx): create new type with MemoryLocation::GpuOnly
 impl AllocatedBufferBuilder {
     /// This is equivalent to `uniform_buffer_default`
     pub fn default(size: u64) -> Self {
@@ -151,7 +152,7 @@ impl AllocatedBufferBuilder {
     }
 
     pub fn with_name(mut self, name: &str) -> Self {
-        self.name = name.to_owned();
+        name.clone_into(&mut self.name);
         self
     }
 
@@ -284,20 +285,20 @@ impl AllocatedImage {
             device,
             graphics_queue,
             |cmd_buffer: &vk::CommandBuffer| {
-                let range = vk::ImageSubresourceRange::builder()
+                let range = vk::ImageSubresourceRange::default()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
                     .base_mip_level(0)
                     .level_count(1)
                     .base_array_layer(0)
                     .layer_count(self.layer_count);
                 if self.layout != vk::ImageLayout::TRANSFER_DST_OPTIMAL {
-                    let transfer_dst_barrier = vk::ImageMemoryBarrier::builder()
+                    let transfer_dst_barrier = vk::ImageMemoryBarrier::default()
                         .src_access_mask(vk::AccessFlags::NONE)
                         .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                         .old_layout(self.layout)
                         .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                         .image(self.handle)
-                        .subresource_range(*range);
+                        .subresource_range(range);
                     unsafe {
                         device.cmd_pipeline_barrier(
                             *cmd_buffer,
@@ -311,7 +312,7 @@ impl AllocatedImage {
                     };
                 }
 
-                let copy_region = vk::BufferImageCopy::builder()
+                let copy_region = vk::BufferImageCopy::default()
                     .image_subresource(vk::ImageSubresourceLayers {
                         aspect_mask: vk::ImageAspectFlags::COLOR,
                         mip_level: 0,
@@ -329,13 +330,13 @@ impl AllocatedImage {
                     )
                 };
 
-                let shader_read_barrier = vk::ImageMemoryBarrier::builder()
+                let shader_read_barrier = vk::ImageMemoryBarrier::default()
                     .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                     .dst_access_mask(vk::AccessFlags::NONE)
                     .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                     .new_layout(new_layout.unwrap_or(self.layout))
                     .image(self.handle)
-                    .subresource_range(*range);
+                    .subresource_range(range);
                 unsafe {
                     device.cmd_pipeline_barrier(
                         *cmd_buffer,
@@ -363,11 +364,7 @@ impl AllocatedImage {
         self.destroy_internal(&renderer.device, &mut renderer.allocator())
     }
 
-    pub(crate) fn destroy_internal(
-        &mut self,
-        device: &ash::Device,
-        allocator: &mut Allocator,
-    ) {
+    pub(crate) fn destroy_internal(&mut self, device: &ash::Device, allocator: &mut Allocator) {
         if let Some(allocation) = self.allocation.take() {
             unsafe { device.destroy_image_view(self.view, None) };
             allocator
@@ -379,8 +376,8 @@ impl AllocatedImage {
 }
 
 pub struct AllocatedImageBuilder<'a> {
-    pub image_create_info_builder: vk::ImageCreateInfoBuilder<'a>,
-    pub image_view_create_info_builder: vk::ImageViewCreateInfoBuilder<'a>,
+    pub image_create_info: vk::ImageCreateInfo<'a>,
+    pub image_view_create_info: vk::ImageViewCreateInfo<'a>,
 
     pub layout: vk::ImageLayout,
     pub usage: vk::ImageUsageFlags,
@@ -408,12 +405,12 @@ pub enum ImageBuildError {
 
 impl<'a> AllocatedImageBuilder<'a> {
     pub fn new(extent: vk::Extent3D) -> Self {
-        let image_create_info_builder = vk::ImageCreateInfo::builder().extent(extent);
-        let image_view_create_info_builder = vk::ImageViewCreateInfo::builder();
+        let image_create_info = vk::ImageCreateInfo::default().extent(extent);
+        let image_view_create_info = vk::ImageViewCreateInfo::default();
 
         AllocatedImageBuilder {
-            image_create_info_builder,
-            image_view_create_info_builder,
+            image_create_info,
+            image_view_create_info,
             layout: vk::ImageLayout::GENERAL,
             usage: vk::ImageUsageFlags::empty(),
             data: None,
@@ -441,8 +438,8 @@ impl<'a> AllocatedImageBuilder<'a> {
     pub fn texture_default(mut self, format: vk::Format) -> Self {
         self.layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
 
-        self.image_create_info_builder = self
-            .image_create_info_builder
+        self.image_create_info = self
+            .image_create_info
             .image_type(vk::ImageType::TYPE_2D)
             .format(format)
             .mip_levels(1)
@@ -452,8 +449,8 @@ impl<'a> AllocatedImageBuilder<'a> {
             .usage(self.usage | vk::ImageUsageFlags::SAMPLED)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-        self.image_view_create_info_builder = self
-            .image_view_create_info_builder
+        self.image_view_create_info = self
+            .image_view_create_info
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(format)
             .subresource_range(vk::ImageSubresourceRange {
@@ -470,8 +467,8 @@ impl<'a> AllocatedImageBuilder<'a> {
     pub fn cubemap_default(mut self, format: vk::Format) -> Self {
         self.layout = vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL;
 
-        self.image_create_info_builder = self
-            .image_create_info_builder
+        self.image_create_info = self
+            .image_create_info
             .image_type(vk::ImageType::TYPE_2D)
             .format(format)
             .mip_levels(1)
@@ -482,8 +479,8 @@ impl<'a> AllocatedImageBuilder<'a> {
             .flags(vk::ImageCreateFlags::CUBE_COMPATIBLE)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-        self.image_view_create_info_builder = self
-            .image_view_create_info_builder
+        self.image_view_create_info = self
+            .image_view_create_info
             .view_type(vk::ImageViewType::CUBE)
             .format(format)
             .subresource_range(vk::ImageSubresourceRange {
@@ -498,8 +495,8 @@ impl<'a> AllocatedImageBuilder<'a> {
     }
 
     pub fn storage_image_default(mut self, format: vk::Format) -> Self {
-        self.image_create_info_builder = self
-            .image_create_info_builder
+        self.image_create_info = self
+            .image_create_info
             .image_type(vk::ImageType::TYPE_2D)
             .format(format)
             .mip_levels(1)
@@ -509,8 +506,8 @@ impl<'a> AllocatedImageBuilder<'a> {
             .usage(self.usage | vk::ImageUsageFlags::STORAGE)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-        self.image_view_create_info_builder = self
-            .image_view_create_info_builder
+        self.image_view_create_info = self
+            .image_view_create_info
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(format)
             .subresource_range(vk::ImageSubresourceRange {
@@ -543,9 +540,9 @@ impl<'a> AllocatedImageBuilder<'a> {
         if self.data.is_some() {
             self.usage |= vk::ImageUsageFlags::TRANSFER_DST;
         }
-        self.image_create_info_builder.usage |= self.usage;
+        self.image_create_info.usage |= self.usage;
 
-        let handle = unsafe { device.create_image(&self.image_create_info_builder, None) }
+        let handle = unsafe { device.create_image(&self.image_create_info, None) }
             .map_err(ImageBuildError::VulkanCreationFailed)?;
 
         let memory_requirements = unsafe { device.get_image_memory_requirements(handle) };
@@ -559,8 +556,8 @@ impl<'a> AllocatedImageBuilder<'a> {
         unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }
             .map_err(ImageBuildError::VulkanAllocationBindingFailed)?;
 
-        self.image_view_create_info_builder = self.image_view_create_info_builder.image(handle);
-        let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }
+        self.image_view_create_info = self.image_view_create_info.image(handle);
+        let view = unsafe { device.create_image_view(&self.image_view_create_info, None) }
             .map_err(ImageBuildError::VulkanViewCreationFailed)?;
 
         let mut image = AllocatedImage {
@@ -568,17 +565,17 @@ impl<'a> AllocatedImageBuilder<'a> {
             allocation: Some(allocation),
             handle,
             layout: vk::ImageLayout::UNDEFINED,
-            format: self.image_create_info_builder.format,
-            extent: self.image_create_info_builder.extent,
-            layer_count: self.image_create_info_builder.array_layers,
+            format: self.image_create_info.format,
+            extent: self.image_create_info.extent,
+            layer_count: self.image_create_info.array_layers,
         };
 
         let data = match self.data {
             Some(data) => data,
             None => std::iter::repeat(u8::MAX)
                 .take(
-                    (self.image_create_info_builder.extent.width
-                        * self.image_create_info_builder.extent.height
+                    (self.image_create_info.extent.width
+                        * self.image_create_info.extent.height
                         * 4)
                     .try_into()
                     .unwrap(),
@@ -605,7 +602,7 @@ impl<'a> AllocatedImageBuilder<'a> {
         device: &ash::Device,
         allocator: &mut Allocator,
     ) -> Result<AllocatedImage, ImageBuildError> {
-        let handle = unsafe { device.create_image(&self.image_create_info_builder, None) }
+        let handle = unsafe { device.create_image(&self.image_create_info, None) }
             .map_err(ImageBuildError::VulkanViewCreationFailed)?;
 
         let memory_requirements = unsafe { device.get_image_memory_requirements(handle) };
@@ -619,8 +616,8 @@ impl<'a> AllocatedImageBuilder<'a> {
         unsafe { device.bind_image_memory(handle, allocation.memory(), allocation.offset()) }
             .map_err(ImageBuildError::VulkanAllocationBindingFailed)?;
 
-        self.image_view_create_info_builder = self.image_view_create_info_builder.image(handle);
-        let view = unsafe { device.create_image_view(&self.image_view_create_info_builder, None) }
+        self.image_view_create_info = self.image_view_create_info.image(handle);
+        let view = unsafe { device.create_image_view(&self.image_view_create_info, None) }
             .map_err(ImageBuildError::VulkanViewCreationFailed)?;
 
         Ok(AllocatedImage {
@@ -628,9 +625,9 @@ impl<'a> AllocatedImageBuilder<'a> {
             allocation: Some(allocation),
             handle,
             layout: vk::ImageLayout::UNDEFINED,
-            format: self.image_create_info_builder.format,
-            extent: self.image_create_info_builder.extent,
-            layer_count: self.image_create_info_builder.array_layers,
+            format: self.image_create_info.format,
+            extent: self.image_create_info.extent,
+            layer_count: self.image_create_info.array_layers,
         })
     }
 }

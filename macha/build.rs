@@ -118,6 +118,7 @@ fn main() {
         "src/compute_shader_test/shaders",
         "src/editor/shaders",
         "src/gltf_loader/shaders",
+        "src/pbr_test/shaders",
     ];
 
     for dir in dirs {

@@ -87,7 +87,7 @@ impl CommandUploader {
         device: &ash::Device,
         queue_index: u32,
     ) -> Result<Self, CommandUploaderCreationError> {
-        let command_pool_info = vk::CommandPoolCreateInfo::builder()
+        let command_pool_info = vk::CommandPoolCreateInfo::default()
             .queue_family_index(queue_index)
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
         let command_pool = unsafe { device.create_command_pool(&command_pool_info, None) }
@@ -99,7 +99,7 @@ impl CommandUploader {
         let fence = unsafe { device.create_fence(&fence_info, None) }
             .map_err(CommandUploaderCreationError::VulkanFenceCreationFailed)?;
 
-        let cmd_buffer_info = vk::CommandBufferAllocateInfo::builder()
+        let cmd_buffer_info = vk::CommandBufferAllocateInfo::default()
             .command_pool(command_pool)
             .level(vk::CommandBufferLevel::PRIMARY)
             .command_buffer_count(1);
@@ -132,7 +132,7 @@ impl CommandUploader {
     where
         F: FnOnce(&vk::CommandBuffer),
     {
-        let begin_info = vk::CommandBufferBeginInfo::builder()
+        let begin_info = vk::CommandBufferBeginInfo::default()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
         unsafe { device.begin_command_buffer(self.command_buffer, &begin_info) }
@@ -142,8 +142,8 @@ impl CommandUploader {
             .map_err(ImmediateCommandError::VulkanCommandBufferEndFailed)?;
 
         let submit_info =
-            vk::SubmitInfo::builder().command_buffers(std::slice::from_ref(&self.command_buffer));
-        unsafe { device.queue_submit(graphics_queue, &[*submit_info], self.fence) }
+            vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&self.command_buffer));
+        unsafe { device.queue_submit(graphics_queue, &[submit_info], self.fence) }
             .map_err(ImmediateCommandError::VulkanCommandBufferSubmissionFailed)?;
 
         unsafe { device.wait_for_fences(std::slice::from_ref(&self.fence), true, u64::MAX) }
@@ -174,10 +174,6 @@ pub unsafe fn debug_name_vk_object(
     renderer: &mut crate::renderer::Renderer,
     name_info: &vk::DebugUtilsObjectNameInfoEXT,
 ) -> ash::prelude::VkResult<()> {
-    renderer
-        .debug_messenger
-        .as_ref()
-        .unwrap()
-        .loader
-        .set_debug_utils_object_name(renderer.device.handle(), name_info)
+    ash::ext::debug_utils::Device::new(&renderer.instance, &renderer.device)
+        .set_debug_utils_object_name(name_info)
 }

@@ -1,4 +1,8 @@
-use morrigu::bevy_ecs::{self, prelude::Component, system::Resource};
+use morrigu::{
+    bevy_ecs::{self, prelude::Component, system::Resource},
+    egui,
+};
+use transform_gizmo::{Gizmo, GizmoConfig, GizmoMode};
 
 #[derive(Component)]
 pub struct MachaEntityOptions {
@@ -7,13 +11,20 @@ pub struct MachaEntityOptions {
 
 #[derive(Resource)]
 pub struct MachaGlobalOptions {
-    pub preferred_gizmo: egui_gizmo::GizmoMode,
+    pub gizmo: Gizmo,
 }
 
 impl MachaGlobalOptions {
     pub fn new() -> Self {
         Self {
-            preferred_gizmo: egui_gizmo::GizmoMode::Translate,
+            gizmo: Gizmo::new(GizmoConfig {
+                viewport: egui::Rect::EVERYTHING,
+                modes: GizmoMode::all_translate(),
+                snap_angle: f32::to_radians(45.0),
+                snap_distance: 0.5,
+                snap_scale: 0.5,
+                ..Default::default()
+            }),
         }
     }
 }

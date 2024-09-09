@@ -76,7 +76,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
             let mesh = mesh_ref.lock();
 
             let buffer_info =
-                vk::BufferDeviceAddressInfo::builder().buffer(mesh.vertex_buffer.handle);
+                vk::BufferDeviceAddressInfo::default().buffer(mesh.vertex_buffer.handle);
             let vertex_address = unsafe { renderer.device.get_buffer_device_address(&buffer_info) };
 
             let buffer_info = buffer_info.buffer(
@@ -87,7 +87,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
             );
             let index_address = unsafe { renderer.device.get_buffer_device_address(&buffer_info) };
 
-            let triangle_data = vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+            let triangle_data = vk::AccelerationStructureGeometryTrianglesDataKHR::default()
                 .vertex_format(
                     VertexType::vertex_input_description().attributes[VertexType::position_index()]
                         .format,
@@ -110,13 +110,13 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
                         .map_err(|_| RTMeshRenderingBuildError::TooManyVertices)?,
                 );
 
-            let geometry = vk::AccelerationStructureGeometryKHR::builder()
+            let geometry = vk::AccelerationStructureGeometryKHR::default()
                 .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
                 .flags(vk::GeometryFlagsKHR::OPAQUE)
                 .geometry(vk::AccelerationStructureGeometryDataKHR {
-                    triangles: *triangle_data,
+                    triangles: triangle_data,
                 });
-            let geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+            let geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::default()
                 .ty(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
                 .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
                 .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
@@ -131,15 +131,15 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
             .try_into()
             .map_err(|_| RTMeshRenderingBuildError::TooManyIndices)?;
 
-            let acceleration_structure_loader = ash::extensions::khr::AccelerationStructure::new(
-                &renderer.instance,
-                &renderer.device,
-            );
-            let necessary_size = unsafe {
+            let acceleration_structure_loader =
+                ash::khr::acceleration_structure::Device::new(&renderer.instance, &renderer.device);
+            let mut necessary_size = Default::default();
+            unsafe {
                 acceleration_structure_loader.get_acceleration_structure_build_sizes(
                     vk::AccelerationStructureBuildTypeKHR::DEVICE,
                     &geometry_info,
                     std::slice::from_ref(&prim_count),
+                    &mut necessary_size,
                 )
             };
 
@@ -151,7 +151,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
                         | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
                 )
                 .build(renderer)?;
-            let sb_info = vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer.handle);
+            let sb_info = vk::BufferDeviceAddressInfo::default().buffer(scratch_buffer.handle);
             let scratch_address = unsafe { renderer.device.get_buffer_device_address(&sb_info) };
 
             data_buffer = AllocatedBuffer::builder(necessary_size.acceleration_structure_size)
@@ -163,7 +163,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
                 .build(renderer)?;
 
             let acceleration_structure_create_info =
-                vk::AccelerationStructureCreateInfoKHR::builder()
+                vk::AccelerationStructureCreateInfoKHR::default()
                     .ty(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
                     .size(necessary_size.acceleration_structure_size)
                     .buffer(data_buffer.handle);
@@ -180,7 +180,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
                 },
             );
 
-            let offset = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+            let offset = vk::AccelerationStructureBuildRangeInfoKHR::default()
                 .primitive_count(prim_count)
                 .primitive_offset(VertexType::position_offset());
             renderer
@@ -193,7 +193,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
                 })
                 .map_err(RTMeshRenderingBuildError::BLASBuildingFailed)?;
 
-            let blas_info = vk::AccelerationStructureDeviceAddressInfoKHR::builder()
+            let blas_info = vk::AccelerationStructureDeviceAddressInfoKHR::default()
                 .acceleration_structure(blas);
             let blas_address = unsafe {
                 acceleration_structure_loader.get_acceleration_structure_device_address(&blas_info)
@@ -223,7 +223,7 @@ impl<VertexType: Vertex> MeshRendering<VertexType> {
 
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         let acceleration_structure_loader =
-            ash::extensions::khr::AccelerationStructure::new(&renderer.instance, &renderer.device);
+            ash::khr::acceleration_structure::Device::new(&renderer.instance, &renderer.device);
         unsafe {
             acceleration_structure_loader.destroy_acceleration_structure(self.blas, None);
         }

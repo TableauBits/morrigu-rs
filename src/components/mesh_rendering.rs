@@ -20,6 +20,8 @@ pub struct MeshRendering<VertexType>
 where
     VertexType: Vertex,
 {
+    pub visible: bool,
+
     descriptor_pool: vk::DescriptorPool,
     pub descriptor_resources: DescriptorResources,
 
@@ -110,7 +112,7 @@ where
                 descriptor_count: std::cmp::max(sampled_image_count, 1),
             },
         ];
-        let pool_info = vk::DescriptorPoolCreateInfo::builder()
+        let pool_info = vk::DescriptorPoolCreateInfo::default()
             .max_sets(1)
             .pool_sizes(&pool_sizes);
         let descriptor_pool = unsafe { renderer.device.create_descriptor_pool(&pool_info, None) }
@@ -118,7 +120,7 @@ where
             MeshRenderingBuildError::VulkanDescriptorPoolCreationFailed(result)
         })?;
 
-        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::builder()
+        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::default()
             .descriptor_pool(descriptor_pool)
             .set_layouts(std::slice::from_ref(&material_shader.level_3_dsl));
         let descriptor_set = unsafe {
@@ -142,6 +144,7 @@ where
         drop(mesh);
 
         Ok(ThreadSafeRef::new(Self {
+            visible: true,
             descriptor_pool,
             descriptor_resources,
             mesh_ref,
@@ -169,17 +172,16 @@ where
 
         let buffer = buffer_ref.lock();
 
-        let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
+        let descriptor_buffer_info = vk::DescriptorBufferInfo::default()
             .buffer(buffer.handle)
             .offset(0)
             .range(buffer.allocation.as_ref().unwrap().size());
 
-        let set_write = vk::WriteDescriptorSet::builder()
+        let set_write = vk::WriteDescriptorSet::default()
             .dst_set(self.descriptor_set)
             .dst_binding(binding_slot)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(std::slice::from_ref(&descriptor_buffer_info))
-            .build();
+            .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
 
         unsafe {
             renderer
@@ -226,16 +228,15 @@ where
 
         let image = image_ref.lock();
 
-        let descriptor_image_info = vk::DescriptorImageInfo::builder()
+        let descriptor_image_info = vk::DescriptorImageInfo::default()
             .image_view(image.view)
             .image_layout(vk::ImageLayout::GENERAL);
 
-        let set_write = vk::WriteDescriptorSet::builder()
+        let set_write = vk::WriteDescriptorSet::default()
             .dst_set(self.descriptor_set)
             .dst_binding(binding_slot)
             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-            .image_info(std::slice::from_ref(&descriptor_image_info))
-            .build();
+            .image_info(std::slice::from_ref(&descriptor_image_info));
 
         unsafe {
             renderer
@@ -265,12 +266,12 @@ where
 
         let texture = texture_ref.lock();
 
-        let descriptor_image_info = vk::DescriptorImageInfo::builder()
+        let descriptor_image_info = vk::DescriptorImageInfo::default()
             .sampler(texture.sampler)
             .image_view(texture.image_ref.lock().view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
 
-        let set_write = vk::WriteDescriptorSet::builder()
+        let set_write = vk::WriteDescriptorSet::default()
             .dst_set(self.descriptor_set)
             .dst_binding(binding_slot)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)

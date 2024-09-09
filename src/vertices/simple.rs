@@ -19,17 +19,16 @@ pub struct SimpleVertex {
 
 impl Vertex for SimpleVertex {
     fn vertex_input_description() -> VertexInputDescription {
-        let main_binding = vk::VertexInputBindingDescription::builder()
+        let main_binding = vk::VertexInputBindingDescription::default()
             .binding(0)
             .stride(
                 std::mem::size_of::<SimpleVertex>()
                     .try_into()
                     .expect("Unsupported architecture"),
             )
-            .input_rate(vk::VertexInputRate::VERTEX)
-            .build();
+            .input_rate(vk::VertexInputRate::VERTEX);
 
-        let position = vk::VertexInputAttributeDescription::builder()
+        let position = vk::VertexInputAttributeDescription::default()
             .location(0)
             .binding(0)
             .format(vk::Format::R32G32B32_SFLOAT)
@@ -37,8 +36,7 @@ impl Vertex for SimpleVertex {
                 memoffset::offset_of!(SimpleVertex, position)
                     .try_into()
                     .expect("Unsupported architecture"),
-            )
-            .build();
+            );
 
         VertexInputDescription {
             bindings: vec![main_binding],

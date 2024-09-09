@@ -67,39 +67,41 @@ impl TLAS {
         .build_with_data(data, renderer)?;
 
         let buffer_address_info =
-            vk::BufferDeviceAddressInfo::builder().buffer(instances_buffer.handle);
+            vk::BufferDeviceAddressInfo::default().buffer(instances_buffer.handle);
         let instances_buffer_address = unsafe {
             renderer
                 .device
                 .get_buffer_device_address(&buffer_address_info)
         };
 
-        let instances_data_info = vk::AccelerationStructureGeometryInstancesDataKHR::builder()
+        let instances_data_info = vk::AccelerationStructureGeometryInstancesDataKHR::default()
             .data(vk::DeviceOrHostAddressConstKHR {
                 device_address: instances_buffer_address,
             });
 
-        let tlas_geometry = vk::AccelerationStructureGeometryKHR::builder()
+        let tlas_geometry = vk::AccelerationStructureGeometryKHR::default()
             .geometry_type(vk::GeometryTypeKHR::INSTANCES)
             .geometry(vk::AccelerationStructureGeometryDataKHR {
-                instances: *instances_data_info,
+                instances: instances_data_info,
             });
 
-        let build_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+        let build_info = vk::AccelerationStructureBuildGeometryInfoKHR::default()
             .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
             .geometries(std::slice::from_ref(&tlas_geometry))
             .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
             .ty(vk::AccelerationStructureTypeKHR::TOP_LEVEL);
 
         let acceleration_structure_loader =
-            ash::extensions::khr::AccelerationStructure::new(&renderer.instance, &renderer.device);
+            ash::khr::acceleration_structure::Device::new(&renderer.instance, &renderer.device);
 
         let blas_count = blas_list.len() as u32;
-        let build_sizes = unsafe {
+        let mut build_sizes = Default::default();
+        unsafe {
             acceleration_structure_loader.get_acceleration_structure_build_sizes(
                 vk::AccelerationStructureBuildTypeKHR::DEVICE,
                 &build_info,
                 &[blas_count],
+                &mut build_sizes,
             )
         };
 
@@ -111,7 +113,7 @@ impl TLAS {
             )
             .build(renderer)
             .map_err(TLASBuildError::MainBufferBuildError)?;
-        let create_info = vk::AccelerationStructureCreateInfoKHR::builder()
+        let create_info = vk::AccelerationStructureCreateInfoKHR::default()
             .ty(vk::AccelerationStructureTypeKHR::TOP_LEVEL)
             .size(build_sizes.acceleration_structure_size)
             .buffer(data_buffer.handle);
@@ -128,7 +130,7 @@ impl TLAS {
             )
             .build(renderer)
             .map_err(TLASBuildError::ScratchBufferBuildError)?;
-        let buffer_info = vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer.handle);
+        let buffer_info = vk::BufferDeviceAddressInfo::default().buffer(scratch_buffer.handle);
         let scratch_address = unsafe { renderer.device.get_buffer_device_address(&buffer_info) };
 
         let build_info =
@@ -139,10 +141,10 @@ impl TLAS {
                 });
 
         let offset_range =
-            vk::AccelerationStructureBuildRangeInfoKHR::builder().primitive_count(blas_count);
+            vk::AccelerationStructureBuildRangeInfoKHR::default().primitive_count(blas_count);
 
         renderer.immediate_command(|cmd_buffer| {
-            let barrier = vk::MemoryBarrier::builder()
+            let barrier = vk::MemoryBarrier::default()
                 .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                 .dst_access_mask(vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR);
 
@@ -186,7 +188,7 @@ impl TLAS {
 
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         let acceleration_structure_loader =
-            ash::extensions::khr::AccelerationStructure::new(&renderer.instance, &renderer.device);
+            ash::khr::acceleration_structure::Device::new(&renderer.instance, &renderer.device);
         unsafe {
             acceleration_structure_loader.destroy_acceleration_structure(self.tlas, None);
         }

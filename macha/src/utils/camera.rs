@@ -120,6 +120,24 @@ impl MachaCamera {
         }
     }
 
+    pub fn on_event(&mut self, event: &morrigu::application::Event<()>) {
+        #[allow(clippy::single_match)] // Temporary
+        match *event {
+            morrigu::application::Event::WindowEvent {
+                event:
+                    morrigu::winit::event::WindowEvent::Resized(morrigu::winit::dpi::PhysicalSize {
+                        width,
+                        height,
+                        ..
+                    }),
+                ..
+            } => {
+                self.on_resize(width, height);
+            }
+            _ => (),
+        }
+    }
+
     fn mouse_rotate(&mut self, delta: &Vec2) {
         let new_pitch = self.mrg_camera.pitch() + -delta.x * 0.8;
         self.mrg_camera.set_pitch(new_pitch);

@@ -186,7 +186,7 @@ impl ComputeShaderBuilder {
                 descriptor_count: std::cmp::max(sampled_image_count, 1),
             },
         ];
-        let pool_info = vk::DescriptorPoolCreateInfo::builder()
+        let pool_info = vk::DescriptorPoolCreateInfo::default()
             .max_sets(1)
             .pool_sizes(&pool_sizes);
         let descriptor_pool = unsafe { renderer.device.create_descriptor_pool(&pool_info, None) }
@@ -194,7 +194,7 @@ impl ComputeShaderBuilder {
             ComputeShaderBuildError::VulkanDescriptorPoolCreationFailed(result)
         })?;
 
-        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::builder()
+        let descriptor_set_alloc_info = vk::DescriptorSetAllocateInfo::default()
             .descriptor_pool(descriptor_pool)
             .set_layouts(std::slice::from_ref(&dsl));
         let descriptor_set = unsafe {
@@ -214,15 +214,14 @@ impl ComputeShaderBuilder {
         let pc_ranges = if push_constants.is_empty() {
             vec![]
         } else {
-            vec![vk::PushConstantRange::builder()
+            vec![vk::PushConstantRange::default()
                 .stage_flags(vk::ShaderStageFlags::COMPUTE)
                 .offset(0)
-                .size(push_constants[0].size)
-                .build()]
+                .size(push_constants[0].size)]
         };
 
         let dsl_list = [dsl];
-        let layout_info = vk::PipelineLayoutCreateInfo::builder()
+        let layout_info = vk::PipelineLayoutCreateInfo::default()
             .set_layouts(&dsl_list)
             .push_constant_ranges(&pc_ranges);
         let layout = unsafe { renderer.device.create_pipeline_layout(&layout_info, None) }
@@ -231,13 +230,13 @@ impl ComputeShaderBuilder {
             })?;
 
         let shader_module_entry_point = std::ffi::CString::new(self.entry_point).unwrap();
-        let shader_stage = vk::PipelineShaderStageCreateInfo::builder()
+        let shader_stage = vk::PipelineShaderStageCreateInfo::default()
             .stage(vk::ShaderStageFlags::COMPUTE)
             .module(shader_module)
             .name(&shader_module_entry_point);
 
         let pipeline = ComputePipelineBuilder {
-            stage: *shader_stage,
+            stage: shader_stage,
             layout,
             cache: None,
         }
@@ -326,17 +325,16 @@ impl ComputeShader {
 
         let buffer = buffer_ref.lock();
 
-        let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
+        let descriptor_buffer_info = vk::DescriptorBufferInfo::default()
             .buffer(buffer.handle)
             .offset(0)
             .range(buffer.allocation.as_ref().unwrap().size());
 
-        let set_write = vk::WriteDescriptorSet::builder()
+        let set_write = vk::WriteDescriptorSet::default()
             .dst_set(self.descriptor_set)
             .dst_binding(binding_slot)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(std::slice::from_ref(&descriptor_buffer_info))
-            .build();
+            .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
 
         unsafe {
             renderer
@@ -366,16 +364,15 @@ impl ComputeShader {
 
         let image = image_ref.lock();
 
-        let descriptor_image_info = vk::DescriptorImageInfo::builder()
+        let descriptor_image_info = vk::DescriptorImageInfo::default()
             .image_view(image.view)
             .image_layout(vk::ImageLayout::GENERAL);
 
-        let set_write = vk::WriteDescriptorSet::builder()
+        let set_write = vk::WriteDescriptorSet::default()
             .dst_set(self.descriptor_set)
             .dst_binding(binding_slot)
             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-            .image_info(std::slice::from_ref(&descriptor_image_info))
-            .build();
+            .image_info(std::slice::from_ref(&descriptor_image_info));
 
         unsafe {
             renderer
@@ -405,12 +402,12 @@ impl ComputeShader {
 
         let texture = texture_ref.lock();
 
-        let descriptor_image_info = vk::DescriptorImageInfo::builder()
+        let descriptor_image_info = vk::DescriptorImageInfo::default()
             .sampler(texture.sampler)
             .image_view(texture.image_ref.lock().view)
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
 
-        let set_write = vk::WriteDescriptorSet::builder()
+        let set_write = vk::WriteDescriptorSet::default()
             .dst_set(self.descriptor_set)
             .dst_binding(binding_slot)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)

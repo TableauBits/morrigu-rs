@@ -61,6 +61,11 @@ pub fn render_meshes<VertexType>(
     let cmd_buffer = renderer.primary_command_buffer;
     for (transform, mesh_rendering_ref) in query.iter() {
         let mut mesh_rendering = mesh_rendering_ref.lock();
+
+        if !mesh_rendering.visible {
+            continue;
+        };
+
         if mesh_rendering
             .update_uniform_pod(0, transform.matrix())
             .is_err()
@@ -101,7 +106,7 @@ pub fn render_meshes<VertexType>(
                 .expect("Invalid width")
                 .into();
 
-            let viewport = vk::Viewport::builder()
+            let viewport = vk::Viewport::default()
                 .x(0.0)
                 .y(y)
                 .width(
@@ -112,7 +117,7 @@ pub fn render_meshes<VertexType>(
                 .height(-y)
                 .min_depth(0.0)
                 .max_depth(1.0);
-            let scissor = vk::Rect2D::builder()
+            let scissor = vk::Rect2D::default()
                 .offset(vk::Offset2D::default())
                 .extent(vk::Extent2D {
                     width: renderer.framebuffer_width,
