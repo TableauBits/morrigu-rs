@@ -266,7 +266,10 @@ impl ApplicationState for MachaState {
 
     fn on_update(&mut self, dt: std::time::Duration, context: &mut StateContext) {
         // https://github.com/urholaukkarinen/egui-gizmo/issues/29
-        self.camera.on_update(dt, context.window_input_state);
+        if !context.window_input_state.held_alt() {
+            self.camera.on_update(dt, context.window_input_state);
+        }
+
         context
             .ecs_manager
             .world
@@ -344,10 +347,12 @@ impl ApplicationState for MachaState {
     fn on_window_event(&mut self, event: WindowEvent, context: &mut StateContext) {
         self.camera.on_event(&event);
 
-        #[allow(clippy::single_match)] // Temporary
-        match event {
-            WindowEvent::KeyboardInput { event, .. } => self.on_keyboard_input(event, context),
-            _ => (),
+        if context.window_input_state.held_alt() {
+            #[allow(clippy::single_match)] // Temporary
+            match event {
+                WindowEvent::KeyboardInput { event, .. } => self.on_keyboard_input(event, context),
+                _ => (),
+            }
         }
     }
 

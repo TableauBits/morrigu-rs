@@ -213,15 +213,15 @@ impl ApplicationData<'_> {
         event_loop: &winit::event_loop::ActiveEventLoop,
         event: event::WindowEvent,
     ) {
-        #[cfg(feature = "egui")]
-        if self.egui.handle_event(&self.window, &event) {
-            return;
-        }
-
         self.window_input_state.process_window_event(&event);
 
         if self.window_input_state.close_requested() || self.window_input_state.destroyed() {
             event_loop.exit();
+        }
+
+        #[cfg(feature = "egui")]
+        if self.egui.handle_event(&self.window, &event) {
+            return;
         }
 
         if let event::WindowEvent::Resized(PhysicalSize { width, height }) = event {
