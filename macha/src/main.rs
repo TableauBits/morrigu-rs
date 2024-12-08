@@ -8,7 +8,7 @@ mod pbr_test;
 #[cfg(feature = "ray_tracing")]
 mod rt_test;
 
-use morrigu::application::ApplicationBuilder;
+use morrigu::application::{Application, ApplicationConfiguration};
 
 use clap::Parser;
 use utils::startup_state::{StartupState, SwitchableStates};
@@ -44,11 +44,11 @@ fn main() {
 
     let desired_state = args.startup_state.unwrap_or(SwitchableStates::Editor);
 
-    ApplicationBuilder::new()
-        .with_window_name("Macha")
+    let app_config = ApplicationConfiguration::new()
+        .with_window_name("Macha".to_owned())
         .with_dimensions(1280, 720)
-        .with_application_name("Macha")
-        .with_application_version(0, 1, 0)
-        .build_with_state::<StartupState, SwitchableStates>(desired_state)
-        .run();
+        .with_application_name("Macha".to_owned())
+        .with_application_version(0, 1, 0);
+
+    Application::<StartupState, SwitchableStates>::run(app_config, desired_state);
 }

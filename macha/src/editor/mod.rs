@@ -14,7 +14,8 @@ use ecs_buffer::ECSBuffer;
 use morrigu::{
     allocated_types::AllocatedBuffer,
     application::{
-        ApplicationState, BuildableApplicationState, EguiUpdateContext, Event, StateContext,
+        event::WindowEvent, ApplicationState, BuildableApplicationState, EguiUpdateContext,
+        StateContext,
     },
     bevy_ecs,
     components::{
@@ -340,15 +341,12 @@ impl ApplicationState for MachaState {
         context.ecs_manager.world.insert_resource(ecs_buffer);
     }
 
-    fn on_event(&mut self, event: Event<()>, context: &mut StateContext) {
+    fn on_event(&mut self, event: WindowEvent, context: &mut StateContext) {
         self.camera.on_event(&event);
 
         #[allow(clippy::single_match)] // Temporary
         match event {
-            Event::WindowEvent {
-                event: winit::event::WindowEvent::KeyboardInput { event, .. },
-                ..
-            } => self.on_keyboard_input(event, context),
+            WindowEvent::KeyboardInput { event, .. } => self.on_keyboard_input(event, context),
             _ => (),
         }
     }

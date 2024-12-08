@@ -372,7 +372,7 @@ impl ApplicationState for PBRState {
         egui::Window::new("Light controls").show(context.egui_context, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT), |ui| {
                 ui.label("Select camera focus");
-                egui::ComboBox::from_id_source("Select camera focus")
+                egui::ComboBox::from_id_salt("Select camera focus")
                     .selected_text(match self.camera_focus {
                         Some(idx) => idx.to_string(),
                         None => "Whole scene".to_owned(),
@@ -438,7 +438,7 @@ impl ApplicationState for PBRState {
 
     fn on_event(
         &mut self,
-        event: morrigu::application::Event<()>,
+        event: morrigu::application::event::WindowEvent,
         _context: &mut morrigu::application::StateContext,
     ) {
         self.camera.on_event(&event);
