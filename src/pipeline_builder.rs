@@ -19,7 +19,7 @@ pub enum PipelineBuildError {
     VulkanPipelineCreationFailed(#[from] vk::Result),
 }
 
-impl<'a> PipelineBuilder<'a> {
+impl PipelineBuilder<'_> {
     pub(crate) fn build(
         self,
         device: &ash::Device,
@@ -72,7 +72,7 @@ pub(crate) struct ComputePipelineBuilder<'a> {
     pub(crate) cache: Option<vk::PipelineCache>,
 }
 
-impl<'a> ComputePipelineBuilder<'a> {
+impl ComputePipelineBuilder<'_> {
     pub(crate) fn build(self, device: &ash::Device) -> Result<vk::Pipeline, PipelineBuildError> {
         let pipeline_info = vk::ComputePipelineCreateInfo::default()
             .stage(self.stage)

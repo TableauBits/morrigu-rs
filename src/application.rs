@@ -82,7 +82,7 @@ pub struct Application<'state> {
     state: Box<dyn ApplicationState + 'state>,
 }
 
-impl<'state> Application<'state> {
+impl Application<'_> {
     fn main_loop(&mut self) {
         let mut prev_time = Instant::now();
 
@@ -421,7 +421,7 @@ impl<'a> ApplicationBuilder<'a> {
     }
 }
 
-impl<'a> Default for ApplicationBuilder<'a> {
+impl Default for ApplicationBuilder<'_> {
     fn default() -> Self {
         Self::new()
     }
