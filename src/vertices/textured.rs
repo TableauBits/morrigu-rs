@@ -1,3 +1,5 @@
+use std::mem::offset_of;
+
 use ash::vk;
 
 use crate::{
@@ -13,7 +15,7 @@ use ply_rs::{parser, ply};
 use super::{Face, VertexModelLoadingError};
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TexturedVertex {
     pub position: Vec3,
     pub normal: Vec3,
@@ -36,7 +38,7 @@ impl Vertex for TexturedVertex {
             .binding(0)
             .format(vk::Format::R32G32B32_SFLOAT)
             .offset(
-                memoffset::offset_of!(TexturedVertex, position)
+                offset_of!(TexturedVertex, position)
                     .try_into()
                     .expect("Unsupported architecture"),
             );
@@ -46,7 +48,7 @@ impl Vertex for TexturedVertex {
             .binding(0)
             .format(vk::Format::R32G32B32_SFLOAT)
             .offset(
-                memoffset::offset_of!(TexturedVertex, normal)
+                offset_of!(TexturedVertex, normal)
                     .try_into()
                     .expect("Unsupported architecture"),
             );
@@ -56,7 +58,7 @@ impl Vertex for TexturedVertex {
             .binding(0)
             .format(vk::Format::R32G32_SFLOAT)
             .offset(
-                memoffset::offset_of!(TexturedVertex, texture_coords)
+                offset_of!(TexturedVertex, texture_coords)
                     .try_into()
                     .expect("Unsupported architecture"),
             );

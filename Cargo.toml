@@ -14,10 +14,10 @@ name = "morrigu"
 shaderc = "0.8"
 
 [dependencies]
-log = "0.4.20"
-profiling = "1.0.13"
+log = "0.4.22"
+profiling = "1.0.16"
 
-thiserror = "1.0.50"
+thiserror = "2.0.5"
 
 winit = { version = "0.29.4" }
 winit_input_helper = "0.16.0"
@@ -31,17 +31,16 @@ ash-window = "0.13.0"
 gpu-allocator = { git = "https://github.com/Ithyx/gpu-allocator", rev = "b0bb0c99e28798870e543e10e2fe6564ef9e32a5" }
 spirv-reflect = { git = "https://github.com/Ithyx/spirv-reflect-rs", rev = "8ef41dee362a61a563b64a9fcda4b4a201b5b4cc" }
 
-glam = { version = "0.28.0", features = ["bytemuck", "mint"] }
+glam = { version = "0.29.2", features = ["bytemuck", "mint"] }
 
-image = "0.25.0"
+image = "0.25.5"
 
-memoffset = "0.9.0"
-bytemuck = "1.14.0"
+bytemuck = "1.20.0"
 
 bevy_ecs = "0.13.0"
 
 ply-rs = "0.1.3"
-tobj = "4.0.0"
+tobj = "4.0.2"
 
 egui = { version = "0.27.2", optional = true, features = ["bytemuck"] }
 egui-winit = { version = "0.27.2", optional = true }

@@ -10,7 +10,7 @@ shaderc = "0.8"
 log = "0.4"
 profiling = { version = "1.0", features = ["profile-with-puffin"] }
 
-flexi_logger = "0.28"
+flexi_logger = "0.29.6"
 anyhow = "1.0"
 gltf = { git = "https://github.com/Ithyx/gltf", rev = "914f71ea0ea657635818151d836d259cd4536880" }
 morrigu = { path = "../", features = ["egui"] }

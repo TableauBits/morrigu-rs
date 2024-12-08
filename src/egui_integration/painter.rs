@@ -1,3 +1,5 @@
+use std::mem::offset_of;
+
 use crate::{
     components::mesh_rendering::MeshRendering,
     descriptor_resources::DescriptorResources,
@@ -16,7 +18,7 @@ use egui::Rect;
 use thiserror::Error;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 struct EguiVertex {
     position: Vec2,
     texture_coords: Vec2,
@@ -41,7 +43,7 @@ impl Vertex for EguiVertex {
             .binding(0)
             .format(vk::Format::R32G32_SFLOAT)
             .offset(
-                memoffset::offset_of!(EguiVertex, position)
+                offset_of!(EguiVertex, position)
                     .try_into()
                     .expect("Unsupported architecture"),
             );
@@ -51,7 +53,7 @@ impl Vertex for EguiVertex {
             .binding(0)
             .format(vk::Format::R32G32_SFLOAT)
             .offset(
-                memoffset::offset_of!(EguiVertex, texture_coords)
+                offset_of!(EguiVertex, texture_coords)
                     .try_into()
                     .expect("Unsupported architecture"),
             );
@@ -61,7 +63,7 @@ impl Vertex for EguiVertex {
             .binding(0)
             .format(vk::Format::R32G32B32A32_SFLOAT)
             .offset(
-                memoffset::offset_of!(EguiVertex, color)
+                offset_of!(EguiVertex, color)
                     .try_into()
                     .expect("Unsupported architecture"),
             );
