@@ -258,7 +258,7 @@ impl ApplicationState for GLTFViewerState {
         draw_debug_utils(context.egui_context, dt, &mut self.desired_state);
     }
 
-    fn on_event(&mut self, event: WindowEvent, _context: &mut morrigu::application::StateContext) {
+    fn on_window_event(&mut self, event: WindowEvent, _context: &mut morrigu::application::StateContext) {
         self.camera.on_event(&event);
     }
 

@@ -436,7 +436,7 @@ impl ApplicationState for PBRState {
         });
     }
 
-    fn on_event(
+    fn on_window_event(
         &mut self,
         event: morrigu::application::event::WindowEvent,
         _context: &mut morrigu::application::StateContext,

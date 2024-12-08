@@ -54,7 +54,8 @@ pub trait ApplicationState {
     fn on_update_egui(&mut self, _dt: Duration, _context: &mut EguiUpdateContext) {}
     #[cfg(feature = "egui")]
     fn after_ui_systems(&mut self, _dt: Duration, _context: &mut EguiUpdateContext) {}
-    fn on_event(&mut self, _event: event::WindowEvent, _context: &mut StateContext) {}
+    fn on_window_event(&mut self, _event: event::WindowEvent, _context: &mut StateContext) {}
+    fn on_device_event(&mut self, _event: event::DeviceEvent, _context: &mut StateContext) {}
 
     fn flow<'flow>(&mut self, _context: &mut StateContext) -> StateFlow<'flow> {
         StateFlow::Continue
@@ -137,7 +138,6 @@ struct ApplicationData<'state> {
 
 impl ApplicationData<'_> {
     fn update(&mut self) {
-        self.window_input_state.step();
         let delta = self.prev_time.elapsed();
         self.prev_time = Instant::now();
 
@@ -204,22 +204,24 @@ impl ApplicationData<'_> {
             renderer.end_frame();
             profiling::finish_frame!();
         }
+
+        self.window_input_state.end_step();
     }
 
-    fn handle_event(
+    fn handle_window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
         event: event::WindowEvent,
     ) {
+        #[cfg(feature = "egui")]
+        if self.egui.handle_event(&self.window, &event) {
+            return;
+        }
+
         self.window_input_state.process_window_event(&event);
 
         if self.window_input_state.close_requested() || self.window_input_state.destroyed() {
             event_loop.exit();
-        }
-
-        #[cfg(feature = "egui")]
-        if self.egui.handle_event(&self.window, &event) {
-            return;
         }
 
         if let event::WindowEvent::Resized(PhysicalSize { width, height }) = event {
@@ -236,7 +238,7 @@ impl ApplicationData<'_> {
             window: &self.window,
             window_input_state: &self.window_input_state,
         };
-        self.state.on_event(event, &mut state_context);
+        self.state.on_window_event(event, &mut state_context);
 
         match self.state.flow(&mut state_context) {
             StateFlow::Continue => (),
@@ -266,8 +268,58 @@ impl ApplicationData<'_> {
                 self.state.on_attach(&mut state_context);
             }
         }
+    }
 
-        drop(renderer);
+    fn handle_device_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        event: event::DeviceEvent,
+    ) {
+        self.window_input_state.process_device_event(&event);
+
+        if self.window_input_state.close_requested() || self.window_input_state.destroyed() {
+            event_loop.exit();
+        }
+
+        let mut renderer = self.renderer_ref.lock();
+        let mut state_context = StateContext {
+            #[cfg(feature = "egui")]
+            egui: &mut self.egui,
+            renderer: &mut renderer,
+            ecs_manager: &mut self.ecs_manager,
+            window: &self.window,
+            window_input_state: &self.window_input_state,
+        };
+        self.state.on_device_event(event, &mut state_context);
+
+        match self.state.flow(&mut state_context) {
+            StateFlow::Continue => (),
+            StateFlow::Exit => event_loop.exit(),
+            StateFlow::SwitchState(new_state) => {
+                log::debug!("Switching states !");
+
+                self.state.on_drop(&mut state_context);
+
+                let res = (
+                    self.window.inner_size().width,
+                    self.window.inner_size().height,
+                );
+
+                let camera = Camera::builder().build(
+                    Projection::Perspective(PerspectiveData {
+                        horizontal_fov: f32::to_radians(90.0),
+                        near_plane: 0.001,
+                        far_plane: 1000.0,
+                    }),
+                    &Vec2::new(res.0 as f32, res.1 as f32),
+                );
+                *state_context.ecs_manager = ECSManager::new(&self.renderer_ref, camera);
+                state_context.ecs_manager.on_resize(res.0, res.1);
+
+                self.state = new_state;
+                self.state.on_attach(&mut state_context);
+            }
+        }
     }
 
     fn on_exit(&mut self) {
@@ -321,7 +373,9 @@ where
                 ApplicationStatus::Uninit(_) => {
                     log::warn!("Attempting to update before initialization")
                 }
-                ApplicationStatus::Running(application_data) => application_data.update(),
+                ApplicationStatus::Running(application_data) => {
+                    application_data.window_input_state.step()
+                }
             },
             event::StartCause::Init => {}
             _ => (),
@@ -330,7 +384,7 @@ where
 
     fn about_to_wait(&mut self, _: &winit::event_loop::ActiveEventLoop) {
         if let ApplicationStatus::Running(application_data) = &mut self.status {
-            application_data.window_input_state.end_step();
+            application_data.update();
         }
     }
 
@@ -363,7 +417,23 @@ where
                 log::warn!("Window even received before initialization")
             }
             ApplicationStatus::Running(application_data) => {
-                application_data.handle_event(event_loop, event)
+                application_data.handle_window_event(event_loop, event)
+            }
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        _: event::DeviceId,
+        event: event::DeviceEvent,
+    ) {
+        match &mut self.status {
+            ApplicationStatus::Uninit(_) => {
+                log::warn!("Device even received before initialization")
+            }
+            ApplicationStatus::Running(application_data) => {
+                application_data.handle_device_event(event_loop, event)
             }
         }
     }

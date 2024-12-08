@@ -341,7 +341,7 @@ impl ApplicationState for MachaState {
         context.ecs_manager.world.insert_resource(ecs_buffer);
     }
 
-    fn on_event(&mut self, event: WindowEvent, context: &mut StateContext) {
+    fn on_window_event(&mut self, event: WindowEvent, context: &mut StateContext) {
         self.camera.on_event(&event);
 
         #[allow(clippy::single_match)] // Temporary
