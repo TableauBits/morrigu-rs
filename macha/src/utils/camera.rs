@@ -120,20 +120,17 @@ impl MachaCamera {
         }
     }
 
-    pub fn on_event(&mut self, event: &morrigu::application::Event<()>) {
+    pub fn on_event(&mut self, event: &morrigu::application::event::WindowEvent) {
         #[allow(clippy::single_match)] // Temporary
         match *event {
-            morrigu::application::Event::WindowEvent {
-                event:
-                    morrigu::winit::event::WindowEvent::Resized(morrigu::winit::dpi::PhysicalSize {
-                        width,
-                        height,
-                        ..
-                    }),
+            morrigu::winit::event::WindowEvent::Resized(morrigu::winit::dpi::PhysicalSize {
+                width,
+                height,
                 ..
-            } => {
+            }) => {
                 self.on_resize(width, height);
             }
+
             _ => (),
         }
     }

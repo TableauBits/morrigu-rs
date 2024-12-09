@@ -15,6 +15,8 @@ use crate::editor::components::{
     macha_options::MachaGlobalOptions, selected_entity::SelectedEntity,
 };
 
+// This is the big problem with this library:
+// https://github.com/urholaukkarinen/transform-gizmo/issues/19
 pub fn draw_gizmo(
     mut query: Query<(&mut Transform, &mut SelectedEntity)>,
     camera: Res<Camera>,

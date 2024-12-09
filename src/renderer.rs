@@ -353,7 +353,7 @@ fn create_framebuffers(
     framebuffers
 }
 
-impl<'a> RendererBuilder<'a> {
+impl RendererBuilder<'_> {
     fn create_instance(&self, entry: &Entry) -> Instance {
         let engine_name = CString::new("Morrigu").unwrap();
         let app_info = vk::ApplicationInfo::default()
@@ -379,7 +379,7 @@ impl<'a> RendererBuilder<'a> {
         #[cfg(debug_assertions)]
         {
             let layer_names =
-                [CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap()];
+                [c"VK_LAYER_KHRONOS_validation"];
             raw_layer_names = layer_names.iter().map(|layer| layer.as_ptr()).collect();
 
             required_extensions.push(ext::debug_utils::NAME.as_ptr());

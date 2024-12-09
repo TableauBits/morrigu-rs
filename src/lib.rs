@@ -25,9 +25,9 @@ mod pipeline_builder;
 // Core re-exports
 pub use ash;
 pub use bevy_ecs;
+pub use glam;
 pub use winit;
 pub use winit_input_helper;
-pub use glam;
 
 #[cfg(feature = "egui")]
 pub use egui;

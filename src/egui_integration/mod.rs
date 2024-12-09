@@ -20,8 +20,14 @@ impl EguiIntegration {
     ) -> Result<Self, PainterCreationError> {
         let painter = Painter::new(renderer)?;
         let context = egui::Context::default();
-        let egui_platform_state =
-            egui_winit::State::new(context.clone(), egui::ViewportId::ROOT, window, None, None);
+        let egui_platform_state = egui_winit::State::new(
+            context.clone(),
+            egui::ViewportId::ROOT,
+            window,
+            None,
+            None,
+            None,
+        );
 
         Ok(Self {
             egui_platform_state,
@@ -34,20 +40,11 @@ impl EguiIntegration {
     pub fn handle_event(
         &mut self,
         window: &winit::window::Window,
-        event: &winit::event::Event<()>,
+        event: &winit::event::WindowEvent,
     ) -> bool {
-        match event {
-            winit::event::Event::WindowEvent {
-                window_id: _,
-                event,
-            } => {
-                self.egui_platform_state
-                    .on_window_event(window, event)
-                    .consumed
-            }
-
-            _ => false,
-        }
+        self.egui_platform_state
+            .on_window_event(window, event)
+            .consumed
     }
 
     pub fn run(&mut self, window: &winit::window::Window, ui_callback: impl FnMut(&egui::Context)) {

@@ -403,7 +403,7 @@ pub enum ImageBuildError {
     DataUploadFailed(#[from] ImageDataUploadError),
 }
 
-impl<'a> AllocatedImageBuilder<'a> {
+impl AllocatedImageBuilder<'_> {
     pub fn new(extent: vk::Extent3D) -> Self {
         let image_create_info = vk::ImageCreateInfo::default().extent(extent);
         let image_view_create_info = vk::ImageViewCreateInfo::default();
@@ -632,8 +632,8 @@ impl<'a> AllocatedImageBuilder<'a> {
     }
 }
 
-impl<'a> AllocatedImage {
-    pub fn builder(extent: vk::Extent3D) -> AllocatedImageBuilder<'a> {
+impl AllocatedImage {
+    pub fn builder<'a>(extent: vk::Extent3D) -> AllocatedImageBuilder<'a> {
         AllocatedImageBuilder::new(extent)
     }
 }

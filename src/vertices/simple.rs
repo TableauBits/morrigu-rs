@@ -1,3 +1,5 @@
+use std::mem::offset_of;
+
 use ash::vk;
 use ply_rs::{parser, ply};
 
@@ -12,7 +14,7 @@ use crate::{
 use super::{Face, VertexModelLoadingError};
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SimpleVertex {
     pub position: Vec3,
 }
@@ -33,7 +35,7 @@ impl Vertex for SimpleVertex {
             .binding(0)
             .format(vk::Format::R32G32B32_SFLOAT)
             .offset(
-                memoffset::offset_of!(SimpleVertex, position)
+                offset_of!(SimpleVertex, position)
                     .try_into()
                     .expect("Unsupported architecture"),
             );
