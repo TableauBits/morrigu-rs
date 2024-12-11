@@ -13,7 +13,7 @@ use ash::vk;
 use winit::{
     dpi::PhysicalSize,
     event_loop::{ControlFlow, EventLoop},
-    platform::{run_on_demand::EventLoopExtRunOnDemand, x11::WindowAttributesExtX11},
+    platform::run_on_demand::EventLoopExtRunOnDemand,
 };
 
 use std::time::{Duration, Instant};
@@ -445,7 +445,7 @@ where
 
                 let window_attributes = winit::window::Window::default_attributes()
                     .with_title(self.app_config.application_name.clone())
-                    .with_base_size(PhysicalSize {
+                    .with_inner_size(PhysicalSize {
                         width: self.app_config.width,
                         height: self.app_config.height,
                     });
