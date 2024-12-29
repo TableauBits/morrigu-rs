@@ -25,6 +25,11 @@ pub fn draw_gizmo(
     window_input: Res<ResourceWrapper<WinitInputHelper>>,
 ) {
     let window_input = &window_input.data;
+
+    if !window_input.held_alt() {
+        return;
+    }
+
     for (mut transform, _) in query.iter_mut() {
         egui::Area::new("Gizmo viewport".into())
             .fixed_pos((0.0, 0.0))
